@@ -9,7 +9,7 @@
     "node": ">=20"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"]
+    "onlyBuiltDependencies": ["esbuild", "msw"]
   },
   "scripts": {
     "build": "pnpm -r build",

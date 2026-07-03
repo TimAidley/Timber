@@ -1,0 +1,28 @@
+{
+  "name": "@timber/github",
+  "version": "0.0.0",
+  "description": "Timber's GitHub read/commit client: load a repo's content into memory, edit files, commit back. Isomorphic (Octokit is fetch-based).",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist *.tsbuildinfo",
+    "record-fixtures": "tsx scripts/record-fixtures.ts"
+  },
+  "dependencies": {
+    "@octokit/rest": "^21.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "msw": "^2.7.0",
+    "tsx": "^4.19.2"
+  }
+}

@@ -1,0 +1,20 @@
+/**
+ * Isomorphic UTF-8 <-> base64 helpers (GitHub's Git Data API speaks base64 blob
+ * content). Deliberately avoids Node's `Buffer` — this package is isomorphic
+ * (Octokit's client is fetch-based), so it must run unchanged in the browser.
+ * `atob`/`btoa` are global in both Node 16+ and all browsers.
+ */
+export function base64ToUtf8(base64: string): string {
+  const binary = atob(base64.replace(/\n/g, ''));
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  return new TextDecoder('utf-8').decode(bytes);
+}
+
+export function utf8ToBase64(text: string): string {
+  const bytes = new TextEncoder().encode(text);
+  let binary = '';
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary);
+}
