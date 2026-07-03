@@ -1,0 +1,151 @@
+[
+  {
+    "method": "GET",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/ref/heads%2Fmain",
+    "status": 200,
+    "responseBody": {
+      "ref": "refs/heads/main",
+      "node_id": "REF_kwDOTNBemq9yZWZzL2hlYWRzL21haW4",
+      "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/refs/heads/main",
+      "object": {
+        "sha": "3a3f22fef651969f763e02ba57e11228dad2ffd1",
+        "type": "commit",
+        "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/commits/3a3f22fef651969f763e02ba57e11228dad2ffd1"
+      }
+    }
+  },
+  {
+    "method": "GET",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/commits/3a3f22fef651969f763e02ba57e11228dad2ffd1",
+    "status": 200,
+    "responseBody": {
+      "sha": "3a3f22fef651969f763e02ba57e11228dad2ffd1",
+      "node_id": "C_kwDOTNBemtoAKDNhM2YyMmZlZjY1MTk2OWY3NjNlMDJiYTU3ZTExMjI4ZGFkMmZmZDE",
+      "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/commits/3a3f22fef651969f763e02ba57e11228dad2ffd1",
+      "html_url": "https://github.com/TimAidley/Timber-test-sandbox/commit/3a3f22fef651969f763e02ba57e11228dad2ffd1",
+      "author": {
+        "name": "Claude",
+        "email": "noreply@anthropic.com",
+        "date": "2026-07-03T23:02:50Z"
+      },
+      "committer": {
+        "name": "Claude",
+        "email": "noreply@anthropic.com",
+        "date": "2026-07-03T23:02:50Z"
+      },
+      "tree": {
+        "sha": "ada764ce3ebdab3c563b27d681f9ada698a0cfbf",
+        "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/trees/ada764ce3ebdab3c563b27d681f9ada698a0cfbf"
+      },
+      "message": "chore: bootstrap minimal content-repo shape for Timber's github-client tests",
+      "parents": [
+        {
+          "sha": "332c2e7b481d00099c40759baf9cf9298ed7ef42",
+          "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/commits/332c2e7b481d00099c40759baf9cf9298ed7ef42",
+          "html_url": "https://github.com/TimAidley/Timber-test-sandbox/commit/332c2e7b481d00099c40759baf9cf9298ed7ef42"
+        }
+      ],
+      "verification": {
+        "verified": true,
+        "reason": "valid",
+        "signature": "-----BEGIN SSH SIGNATURE-----\nU1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgrLzsfFISF4by8Q+FKz27YpkK1USsBB+m\namu1QkJnbDsAAAADZ2l0AAAAAAAAAAZzaGE1MTIAAABTAAAAC3NzaC1lZDI1NTE5AAAAQKV8VdRP\nHxZzTZmNtDahQPyJpf0IoK2uclA1/6Jq/qLfrP/Jt2IPznqeIvhOHhdIT3i/pKNYRtPGHplycuBY\nFwQ=\n-----END SSH SIGNATURE-----",
+        "payload": "tree ada764ce3ebdab3c563b27d681f9ada698a0cfbf\nparent 332c2e7b481d00099c40759baf9cf9298ed7ef42\nauthor Claude <noreply@anthropic.com> 1783119770 +0000\ncommitter Claude <noreply@anthropic.com> 1783119770 +0000\n\nchore: bootstrap minimal content-repo shape for Timber's github-client tests\n",
+        "verified_at": "2026-07-03T23:02:53Z"
+      }
+    }
+  },
+  {
+    "method": "GET",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/trees/ada764ce3ebdab3c563b27d681f9ada698a0cfbf?recursive=1",
+    "status": 200,
+    "responseBody": {
+      "sha": "ada764ce3ebdab3c563b27d681f9ada698a0cfbf",
+      "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/trees/ada764ce3ebdab3c563b27d681f9ada698a0cfbf",
+      "tree": [
+        {
+          "path": "README.md",
+          "mode": "100644",
+          "type": "blob",
+          "sha": "017bcb34f465e71160ab9807eea4f38032ce4a7f",
+          "size": 74,
+          "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/blobs/017bcb34f465e71160ab9807eea4f38032ce4a7f"
+        },
+        {
+          "path": "assets",
+          "mode": "040000",
+          "type": "tree",
+          "sha": "d564d0bc3dd917926892c55e3706cc116d5b165e",
+          "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/trees/d564d0bc3dd917926892c55e3706cc116d5b165e"
+        },
+        {
+          "path": "assets/.gitkeep",
+          "mode": "100644",
+          "type": "blob",
+          "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+          "size": 0,
+          "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/blobs/e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+        },
+        {
+          "path": "config",
+          "mode": "040000",
+          "type": "tree",
+          "sha": "543e603b49ed733bccc4e9fe318ad8d5bb4f738d",
+          "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/trees/543e603b49ed733bccc4e9fe318ad8d5bb4f738d"
+        },
+        {
+          "path": "config/site.yml",
+          "mode": "100644",
+          "type": "blob",
+          "sha": "6adaeb81360352f90901883a1e00c668da381e9e",
+          "size": 95,
+          "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/blobs/6adaeb81360352f90901883a1e00c668da381e9e"
+        },
+        {
+          "path": "content",
+          "mode": "040000",
+          "type": "tree",
+          "sha": "4150bed6b0728456c818cf1038f5b5c37e054b32",
+          "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/trees/4150bed6b0728456c818cf1038f5b5c37e054b32"
+        },
+        {
+          "path": "content/pages",
+          "mode": "040000",
+          "type": "tree",
+          "sha": "b0ad4b5791e4b666003bdd90480afde7965366ee",
+          "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/trees/b0ad4b5791e4b666003bdd90480afde7965366ee"
+        },
+        {
+          "path": "content/pages/hello",
+          "mode": "040000",
+          "type": "tree",
+          "sha": "3cd758bb21e2ad695b2e2da07b43db5b7620d7e0",
+          "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/trees/3cd758bb21e2ad695b2e2da07b43db5b7620d7e0"
+        },
+        {
+          "path": "content/pages/hello/index.md",
+          "mode": "100644",
+          "type": "blob",
+          "sha": "3ea3164bf748ac58804eaf46ea0a5a94f5ffee0a",
+          "size": 351,
+          "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/blobs/3ea3164bf748ac58804eaf46ea0a5a94f5ffee0a"
+        },
+        {
+          "path": "templates",
+          "mode": "040000",
+          "type": "tree",
+          "sha": "eebacf1807b17ec947f4b0cacfe7ec6ba82f7b4b",
+          "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/trees/eebacf1807b17ec947f4b0cacfe7ec6ba82f7b4b"
+        },
+        {
+          "path": "templates/page.liquid",
+          "mode": "100644",
+          "type": "blob",
+          "sha": "d4e3a4b3c5c480997635039e62ab9e6812f05695",
+          "size": 162,
+          "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/blobs/d4e3a4b3c5c480997635039e62ab9e6812f05695"
+        }
+      ],
+      "truncated": false
+    }
+  }
+]

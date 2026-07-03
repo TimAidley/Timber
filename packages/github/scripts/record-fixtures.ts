@@ -106,15 +106,14 @@ async function main(): Promise<void> {
   });
 
   // Ensure EXISTING_BRANCH is actually present before recording that scenario.
-  const existingSha = await client.getBranchSha(EXISTING_BRANCH);
-  if (!existingSha) {
-    await client.commitFiles({
-      branch: EXISTING_BRANCH,
-      baseBranch: DEFAULT_BRANCH,
-      message: 'chore: seed phase2-existing branch for fixture recording',
-      files: [{ path: 'content/pages/hello/index.md', content: 'seed\n' }],
-    });
-  }
+  // commitFiles() already auto-creates the branch from baseBranch when it's
+  // missing, so this unconditionally "seeds" it whether or not it exists yet.
+  await client.commitFiles({
+    branch: EXISTING_BRANCH,
+    baseBranch: DEFAULT_BRANCH,
+    message: 'chore: seed phase2-existing branch for fixture recording',
+    files: [{ path: 'content/pages/hello/index.md', content: 'seed\n' }],
+  });
 
   await recordScenario('commit-files-existing-branch', async () => {
     await client.commitFiles({
@@ -128,10 +127,10 @@ async function main(): Promise<void> {
   });
 
   // Ensure NEW_BRANCH does NOT exist before recording the "create it" scenario.
-  try {
+  // (GitHub's delete-ref endpoint 422s — not 404s — for an already-absent ref, so
+  // check existence first via the same getBranchSha() the client itself uses.)
+  if (await client.getBranchSha(NEW_BRANCH)) {
     await setupOctokit.rest.git.deleteRef({ owner, repo, ref: `heads/${NEW_BRANCH}` });
-  } catch (err) {
-    if ((err as { status?: number }).status !== 404) throw err;
   }
 
   await recordScenario('commit-files-new-branch', async () => {
