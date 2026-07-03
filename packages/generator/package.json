@@ -1,0 +1,30 @@
+{
+  "name": "@timber/generator",
+  "version": "0.0.0",
+  "description": "Timber's shared static-site generator core: remark→rehype + LiquidJS, isomorphic (browser preview ≡ Node build).",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "liquidjs": "^10.19.0",
+    "rehype-highlight": "^7.0.1",
+    "rehype-stringify": "^10.0.1",
+    "remark-frontmatter": "^5.0.0",
+    "remark-gfm": "^4.0.0",
+    "remark-parse": "^11.0.0",
+    "remark-rehype": "^11.1.1",
+    "unified": "^11.0.5",
+    "yaml": "^2.6.1"
+  }
+}
