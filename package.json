@@ -15,6 +15,7 @@
     "build": "pnpm -r build",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:live": "vitest run --project live",
     "lint": "eslint .",
     "format": "prettier --write ."
   },
