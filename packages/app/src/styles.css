@@ -278,6 +278,83 @@ body {
   font: inherit;
 }
 
+.reference-field {
+  position: relative;
+}
+
+.reference-field__control {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.reference-field__control input {
+  flex: 1;
+}
+
+.reference-field__clear {
+  flex: none;
+  border: 1px solid var(--border);
+  background: none;
+  border-radius: 5px;
+  padding: 0.2rem 0.45rem;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.reference-field__missing {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: #c0392b;
+}
+
+.reference-field__list {
+  position: absolute;
+  z-index: 5;
+  left: 0;
+  right: 0;
+  margin: 0.2rem 0 0;
+  padding: 0.2rem;
+  list-style: none;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.reference-field__option {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: none;
+  border-radius: 5px;
+  padding: 0.35rem 0.5rem;
+  cursor: pointer;
+  font: inherit;
+}
+
+.reference-field__option.is-active {
+  background: #eef4fb;
+}
+
+.reference-field__id {
+  font-size: 0.68rem;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.reference-field__empty {
+  padding: 0.35rem 0.5rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
 .body-editor__toolbar {
   margin-bottom: 0.5rem;
 }

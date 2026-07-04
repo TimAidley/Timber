@@ -3,6 +3,7 @@ import type { FrontMatter } from '@timber/generator';
 import { FieldWidget, type ReferenceOption } from './widgets.js';
 import { ImageField } from './ImageField.js';
 import { VideoField } from './VideoField.js';
+import { ReferenceField } from './ReferenceField.js';
 import type { AssetStore } from '../state/assets.js';
 
 interface SchemaFormProps {
@@ -63,13 +64,20 @@ export function SchemaForm({
             />
           ) : field.type === 'video' ? (
             <VideoField fieldKey={key} value={data[key]} onChange={(v) => onChange(key, v)} />
+          ) : field.type === 'reference' ? (
+            <ReferenceField
+              fieldKey={key}
+              value={data[key]}
+              options={referenceOptionsFor(model, field.referenceType)}
+              referenceType={field.referenceType}
+              onChange={(v) => onChange(key, v)}
+            />
           ) : (
             <FieldWidget
               fieldKey={key}
               field={field}
               value={data[key]}
               onChange={(value) => onChange(key, value)}
-              referenceOptions={referenceOptionsFor(model, field.referenceType)}
             />
           )}
         </div>

@@ -11,8 +11,6 @@ export interface WidgetProps {
   field: FieldSchema;
   value: unknown;
   onChange: (value: unknown) => void;
-  /** Candidate targets for a `reference` field (objects of its referenceType). */
-  referenceOptions?: ReferenceOption[];
 }
 
 function asString(value: unknown): string {
@@ -20,18 +18,16 @@ function asString(value: unknown): string {
 }
 
 /**
- * A schema-driven widget: one control per {@link FieldSchema} kind (SPEC §8 — "a
- * date field renders a date picker, a reference field renders the search-and-pick
- * control…"). This is the minimal set for the de-risk slice; `image` renders a
- * plain path input for now (the upload pipeline is Slice 4b), and `reference` is a
- * simple select rather than the eventual searchable picker.
+ * A schema-driven widget: one control per {@link FieldSchema} kind (SPEC §8). This
+ * covers the plain kinds; `image`, `video`, and `reference` have dedicated
+ * components ({@link ReferenceField} is the search-and-pick picker) that
+ * {@link SchemaForm} dispatches to before reaching here.
  */
 export function FieldWidget({
   fieldKey,
   field,
   value,
   onChange,
-  referenceOptions = [],
 }: WidgetProps): React.JSX.Element {
   const id = `field-${fieldKey}`;
 
@@ -113,18 +109,6 @@ export function FieldWidget({
         />
       );
     }
-
-    case 'reference':
-      return (
-        <select id={id} value={asString(value)} onChange={(e) => onChange(e.target.value || undefined)}>
-          <option value="">— none —</option>
-          {referenceOptions.map((opt) => (
-            <option key={opt.id} value={opt.id}>
-              {opt.label} ({opt.id})
-            </option>
-          ))}
-        </select>
-      );
 
     case 'video':
       return (
