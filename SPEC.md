@@ -70,7 +70,9 @@ Users define content types via **schemas stored in the repo** (versioned, portab
 
 Two kinds of type:
 - **Collection types** — many instances (events, people, posts). Editor shows a list + "new," each instance is a folder.
-- **Singleton types** — exactly one (site settings, homepage, about). Editor shows a direct edit form; no list, no create/delete. **Global site settings is a singleton type**, edited through the same form machinery as everything else — not a special subsystem.
+- **Singleton types** — exactly one (e.g. global site settings). Editor shows a direct edit form; no list, no create/delete. **Global site settings is a singleton type**, edited through the same form machinery as everything else — not a special subsystem. (Homepage and "about" are *not* singletons — they're ordinary `pages`-collection objects; the homepage's root URL is a URL-routing concern, not a type distinction.)
+
+**On-disk layout — uniform bundles.** A singleton uses the *same* folder-per-object bundle as a collection object, just without a slug subfolder since there is exactly one instance: `content/<type>/index.md` (e.g. `content/site-settings/index.md`). This keeps one loader/writer/editor model for every object; a config-only singleton simply has no colocated assets. (Collection objects live at `content/<type>/<slug>/index.md`.)
 
 ### Fields (v1 set)
 Single-line text, multi-line plain text, Markdown/rich text, number, boolean, date/datetime, single-select (enum), multi-select (tags), image, reference, and video (stores a URL — see Media). The Markdown **body** is a special, always-available, optional field (some types are pure front matter with no body).
@@ -89,6 +91,8 @@ This cluster is one decision. The resolution:
 
 ### Validation
 Tolerant: validate declared fields (required-ness, type, enum membership, min/max, regex) but **pass through undeclared front-matter keys** rather than rejecting them (preserves the non-WordPress-rigid feel; lets power users stash ad-hoc data). Runs interactively in the editor and again at build time. The hard line is tied to page visibility: **invalid content can always be saved as a draft, but a page cannot be made public until it validates.** Validation never blocks checkpointing work; it does block broken content reaching the live site.
+
+**Draft by default.** Visibility is a per-page `public` front-matter flag (see §11). When the flag is **absent**, the object is treated as a **draft (private)** — it is only public if it explicitly sets `public: true`. Nothing reaches the live site because a flag was forgotten; going public is always a deliberate act.
 
 ---
 
@@ -176,7 +180,7 @@ A **Publish / "Update site"** action reviews the diff, lets the user edit the co
 ### Draft vs. public (orthogonal to git sync)
 Two independent axes, two words:
 - **Publish / Update site** = the git action of merging WIP → main.
-- **Public / Private** = a **per-page front-matter flag** honored by the generator (private pages are omitted from the live build). A page can be on `main` and still private — this is how you work on a draft over time without it being public, without stranding it on a long-lived branch.
+- **Public / Private** = a **per-page front-matter flag** honored by the generator (private pages are omitted from the live build). A page can be on `main` and still private — this is how you work on a draft over time without it being public, without stranding it on a long-lived branch. **The flag is draft-by-default: absent ⇒ private; only `public: true` publishes** (see §5 Validation).
 
 ### Conflicts
 Multiple editors, but few, and single-file-per-page makes most conflicts structurally impossible (two different pages never collide). **Detect, don't resolve** (v1): track the base commit SHA the WIP branch started from; before merging, check whether `main` advanced. If not, merge cleanly. If it did, rebase onto the new `main` (applies automatically when changes don't overlap — the common case). Only when the **same file** genuinely diverged, offer keep-mine / take-theirs / reconcile. No full three-way merge editor in v1 (isomorphic-git can do it later if ever needed). A blunt "main moved, reload before publishing" is an acceptable starting point.
