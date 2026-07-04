@@ -1,0 +1,25 @@
+{
+  "name": "@timber/content",
+  "version": "0.0.0",
+  "description": "Timber's content model: schemas, collection/singleton types, id index, reference resolution, tolerant validation. Pure and isomorphic.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@timber/generator": "workspace:*",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "yaml": "^2.6.1"
+  }
+}
