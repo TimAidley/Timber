@@ -9,21 +9,27 @@
     "node": ">=20"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild", "msw"]
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "msw"
+    ]
   },
   "scripts": {
     "build": "pnpm -r build",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:live": "vitest run --project live",
+    "test:browser": "vitest run --config packages/app/vitest.browser.config.ts",
     "lint": "eslint .",
     "format": "prettier --write ."
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
     "@types/node": "^22.10.2",
+    "@vitest/browser": "2.1.9",
     "eslint": "^9.17.0",
     "jsdom": "^25.0.1",
+    "playwright": "1.56.0",
     "prettier": "^3.4.2",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.18.0",

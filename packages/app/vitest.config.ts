@@ -1,15 +1,20 @@
-import { defineProject } from 'vitest/config';
+import { configDefaults, defineProject } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 
 // The app is browser-only React, so its tests need the React plugin (JSX) and a
 // DOM environment. It is deliberately its OWN vitest project — the `node` and
 // `browser-like` projects (which prove the pure packages are isomorphic) exclude
 // `packages/app` precisely because this package is NOT part of that proof.
+//
+// `*.browser.test.ts` specs run the real canvas re-encode path and belong to the
+// separate real-browser project (vitest.browser.config.ts, run via `pnpm
+// test:browser`); jsdom can't execute them, so they're excluded here.
 export default defineProject({
   plugins: [react()],
   test: {
     name: 'app',
     environment: 'jsdom',
     include: ['test/**/*.test.{ts,tsx}'],
+    exclude: [...configDefaults.exclude, '**/*.browser.test.ts'],
   },
 });
