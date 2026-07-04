@@ -162,9 +162,65 @@ body {
   color: var(--muted);
 }
 
+.editor-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
 .editor-header code {
   color: var(--muted);
   font-size: 0.8rem;
+}
+
+.editor-header__delete {
+  flex: none;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid #c0392b;
+  color: #c0392b;
+  background: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.editor-header__delete:hover {
+  background: #fdecea;
+}
+
+.object-list__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.4rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+
+.object-list__new {
+  border: 1px solid var(--accent);
+  background: none;
+  color: var(--accent);
+  border-radius: 6px;
+  padding: 0.15rem 0.5rem;
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.modal__actions button.is-danger {
+  border-color: #c0392b;
+  background: #c0392b;
+  color: #fff;
+}
+
+.delete__referrers {
+  color: #7d2820;
+  font-size: 0.85rem;
 }
 
 .editor-panel {

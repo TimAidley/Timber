@@ -9,7 +9,8 @@
 export { loadSchemas, SchemaError } from './schema.js';
 export { assembleContent } from './assemble.js';
 export { Validator } from './validate.js';
-export { resolveReference, detectDanglingReferences, urlFor } from './references.js';
+export { resolveReference, detectDanglingReferences, referrersTo, urlFor } from './references.js';
+export { slugify, uniqueSlug } from './identity.js';
 export { isPublic, canPublish, resolvePublic } from './visibility.js';
 export { FIELD_KINDS, isFieldKind, fieldToJsonSchema } from './fields.js';
 export { parseVideoUrl } from './video.js';

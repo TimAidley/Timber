@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FileWrite } from '@timber/github';
 import { Autosaver, type SyncState } from '../src/state/autosave.js';
 
-type CommitFn = (files: FileWrite[], message: string) => Promise<void>;
+type CommitFn = (files: FileWrite[], message: string, deletions: string[]) => Promise<void>;
 
 function setup(commit: CommitFn) {
   const states: SyncState[] = [];
@@ -84,6 +84,38 @@ describe('Autosaver', () => {
     await vi.advanceTimersByTimeAsync(5000);
     expect(commit).toHaveBeenCalledTimes(2);
     expect(states.at(-1)).toBe('saved');
+  });
+
+  it('coalesces a deletion into the commit and names it, dropping any pending edit', async () => {
+    const commit = vi.fn<CommitFn>(async () => undefined);
+    const { saver } = setup(commit);
+
+    // Edit one object, then delete another object's whole bundle.
+    saver.markObjectDirty('content/events/keep/index.md', { title: 'Keep' }, 'body');
+    saver.markObjectDirty('content/events/gone/index.md', { title: 'Gone' }, 'x');
+    saver.markPathsDeleted(['content/events/gone/index.md', 'content/events/gone/hero.webp']);
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect(commit).toHaveBeenCalledTimes(1);
+    const [files, message, deletions] = commit.mock.calls[0]!;
+    // The deleted object's pending edit is superseded — only the kept object is written.
+    expect(files.map((f) => f.path)).toEqual(['content/events/keep/index.md']);
+    expect(deletions!.sort()).toEqual(['content/events/gone/hero.webp', 'content/events/gone/index.md']);
+    expect(message).toBe('edit keep, delete gone');
+  });
+
+  it('commits a delete-only change (no file writes)', async () => {
+    const commit = vi.fn<CommitFn>(async () => undefined);
+    const { saver } = setup(commit);
+
+    saver.markPathsDeleted(['content/events/gone/index.md']);
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect(commit).toHaveBeenCalledTimes(1);
+    const [files, message, deletions] = commit.mock.calls[0]!;
+    expect(files).toHaveLength(0);
+    expect(deletions).toEqual(['content/events/gone/index.md']);
+    expect(message).toBe('delete gone');
   });
 
   it('saveNow() flushes immediately without waiting for the idle timer', async () => {

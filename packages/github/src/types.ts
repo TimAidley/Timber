@@ -36,6 +36,25 @@ export interface CommitFilesInput {
   baseBranch?: string;
   message: string;
   files: FileWrite[];
+  /**
+   * Paths to remove in the same commit (deleted from `base_tree` via a `sha: null`
+   * tree entry). Powers object delete and the old-path side of a rename (SPEC §5).
+   */
+  deletions?: string[];
+  /**
+   * Paths to move by **reusing an existing blob SHA** — no re-upload of the bytes.
+   * Each writes `to` at `sha` and deletes `from`; used to relocate a bundle's
+   * colocated assets on rename (SPEC §5). The moved `index.md` is a normal `files`
+   * write (its content changes) plus a `from` deletion.
+   */
+  moves?: MoveEntry[];
+}
+
+/** Relocate an existing blob to a new path without re-uploading its bytes. */
+export interface MoveEntry {
+  from: string;
+  to: string;
+  sha: string;
 }
 
 export interface CommitResult {

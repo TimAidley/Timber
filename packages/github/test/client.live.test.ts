@@ -95,6 +95,68 @@ describe.skipIf(!rawToken)('RepoClient (live, against the real sandbox repo)', (
     expect(await client.readBlob(mdEntry!.sha)).toBe(marker);
   });
 
+  it('creates then deletes a bundle in the same branch (object lifecycle, SPEC §5)', async () => {
+    const bundle = `content/pages/scratch-${scratchBranch}/index.md`;
+    const asset = `content/pages/scratch-${scratchBranch}/note.txt`;
+
+    // Create: write the bundle's index.md + a colocated asset.
+    await client.commitFiles({
+      branch: scratchBranch,
+      message: `test: create scratch bundle (${scratchBranch})`,
+      files: [
+        { path: bundle, content: `---\nid: scratch\ntitle: Scratch\n---\nbody\n` },
+        { path: asset, content: 'note\n' },
+      ],
+    });
+    let tree = await client.loadTree(scratchBranch);
+    expect(tree.entries.some((e) => e.path === bundle)).toBe(true);
+    expect(tree.entries.some((e) => e.path === asset)).toBe(true);
+
+    // Delete: remove the whole bundle (index.md + asset) in one commit.
+    await client.commitFiles({
+      branch: scratchBranch,
+      message: `test: delete scratch bundle (${scratchBranch})`,
+      files: [],
+      deletions: [bundle, asset],
+    });
+    tree = await client.loadTree(scratchBranch);
+    expect(tree.entries.some((e) => e.path === bundle)).toBe(false);
+    expect(tree.entries.some((e) => e.path === asset)).toBe(false);
+  });
+
+  it('renames a bundle by reusing the asset blob SHA (no re-upload, SPEC §5)', async () => {
+    const oldDir = `content/pages/ren-old-${scratchBranch}`;
+    const newDir = `content/pages/ren-new-${scratchBranch}`;
+
+    // Seed a bundle with a colocated asset, capturing the asset's blob SHA.
+    await client.commitFiles({
+      branch: scratchBranch,
+      message: `test: seed rename bundle (${scratchBranch})`,
+      files: [
+        { path: `${oldDir}/index.md`, content: `---\nid: ren\ntitle: Ren\n---\nbody\n` },
+        { path: `${oldDir}/pic.txt`, content: 'pixels\n' },
+      ],
+    });
+    const before = await client.loadTree(scratchBranch);
+    const assetSha = before.entries.find((e) => e.path === `${oldDir}/pic.txt`)!.sha;
+
+    // Rename: move index.md (rewritten) + the asset (blob-reusing move), delete the old.
+    await client.commitFiles({
+      branch: scratchBranch,
+      message: `test: rename bundle (${scratchBranch})`,
+      files: [{ path: `${newDir}/index.md`, content: `---\nid: ren\ntitle: Ren\naliases:\n  - ren-old-${scratchBranch}\n---\nbody\n` }],
+      deletions: [`${oldDir}/index.md`],
+      moves: [{ from: `${oldDir}/pic.txt`, to: `${newDir}/pic.txt`, sha: assetSha }],
+    });
+
+    const after = await client.loadTree(scratchBranch);
+    // The moved asset kept its exact blob SHA — proving no re-upload.
+    expect(after.entries.find((e) => e.path === `${newDir}/pic.txt`)?.sha).toBe(assetSha);
+    expect(after.entries.some((e) => e.path === `${oldDir}/pic.txt`)).toBe(false);
+    expect(after.entries.some((e) => e.path === `${oldDir}/index.md`)).toBe(false);
+    expect(after.entries.some((e) => e.path === `${newDir}/index.md`)).toBe(true);
+  });
+
   it('squash-publishes a WIP tree onto a throwaway target branch (SPEC §11)', async () => {
     const octokit = new Octokit({ auth: rawToken });
     const targetBranch = `publish-target-${scratchBranch}`;

@@ -24,6 +24,26 @@ export function urlFor(object: ContentObject, schema: ContentTypeSchema): string
 }
 
 /**
+ * Every object with a `reference` field pointing at `id` — the inbound counterpart
+ * to {@link detectDanglingReferences}. Powers the guarded-delete warning (SPEC §5:
+ * "guarded by a warning that lists what references the object"), so a deletion that
+ * would strand references is a deliberate choice, not silent breakage.
+ */
+export function referrersTo(model: ContentModel, id: string): ContentObject[] {
+  const referrers: ContentObject[] = [];
+  for (const object of model.objects) {
+    if (object.id === id) continue; // an object referencing itself isn't a blocker
+    const schema = model.schemas.get(object.type);
+    if (!schema) continue;
+    const hit = Object.entries(schema.fields).some(
+      ([name, field]) => field.type === 'reference' && object.data[name] === id,
+    );
+    if (hit) referrers.push(object);
+  }
+  return referrers;
+}
+
+/**
  * Sweep every reference field across the model and report ids that don't resolve
  * (or resolve to the wrong `referenceType`). This is the model-wide dangling-
  * reference detection SPEC §5 calls for — resolve-first rather than silent breakage.

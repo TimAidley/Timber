@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { canPublish, Validator, type ContentObject } from '@timber/content';
+import { canPublish, Validator, type ContentModel, type ContentObject, type ContentTypeSchema } from '@timber/content';
 import type { FrontMatter } from '@timber/generator';
 import type { RepoSession } from './state/repoSession.js';
 import { AssetStore } from './state/assets.js';
@@ -13,8 +13,11 @@ import { Preview } from './preview/Preview.js';
 import { SyncIndicator } from './components/SyncIndicator.js';
 import { PublishDialog } from './components/PublishDialog.js';
 import { DeployStatus } from './components/DeployStatus.js';
+import { NewObjectDialog } from './components/NewObjectDialog.js';
+import { DeleteDialog } from './components/DeleteDialog.js';
 import { AdvancedArea } from './advanced/AdvancedArea.js';
 import { canAccessAdvanced } from './github/access.js';
+import { newObject } from './content/newObject.js';
 
 /** The deploy workflow's file name (the starter template ships deploy.yml). */
 const DEPLOY_WORKFLOW = 'deploy.yml';
@@ -36,6 +39,22 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   const assetStore = useMemo(() => new AssetStore(), []);
   const autosave = useAutosave(session, assetStore);
 
+  // The working object list — mutated by create/delete/rename (SPEC §5). The derived
+  // `workingModel` recomputes the id index so validation, reference pickers, and the
+  // delete guard see these mutations live (a new object is immediately referenceable;
+  // a deleted one immediately dangling).
+  const [objects, setObjects] = useState<ContentObject[]>(model.objects);
+  const workingModel: ContentModel = useMemo(
+    () => ({
+      ...model,
+      objects,
+      byId: new Map(objects.filter((o) => o.id).map((o) => [o.id as string, o] as const)),
+    }),
+    [model, objects],
+  );
+  const [showNew, setShowNew] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<ContentObject | null>(null);
+
   // Content editing vs. the advanced/admin area (templates + config), gated by the
   // canAccessAdvanced() seam (SPEC §8/§10). Both share this one session + autosave, so
   // switching never drops unsaved state and edits coalesce into the same WIP commit.
@@ -49,7 +68,7 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   const [deployPollKey, setDeployPollKey] = useState(0);
 
   const [selectedPath, setSelectedPath] = useState<string>(model.objects[0]?.path ?? '');
-  const selected: ContentObject | undefined = model.objects.find((o) => o.path === selectedPath);
+  const selected: ContentObject | undefined = objects.find((o) => o.path === selectedPath);
 
   const [edit, setEdit] = useState<EditState>(() => {
     const first = model.objects[0];
@@ -111,6 +130,39 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
     applyEdit({ ...edit, data });
   }
 
+  // Create a new draft object (SPEC §5): unique slug within its type, seeded front
+  // matter, staged as an unsaved edit + IndexedDB draft; autosave commits its
+  // index.md to the WIP branch like any other edit.
+  function createObject(schema: ContentTypeSchema, title: string): void {
+    const taken = new Set(objects.filter((o) => o.type === schema.name).map((o) => o.slug));
+    const created = newObject(schema.name, title, schema, taken);
+    setObjects((prev) => [...prev, created]);
+    setSelectedPath(created.path);
+    autosave.markObjectDirty(created.path, created.data, created.body);
+    void draftStore.current?.put(repoKey, created.path, created.data, created.body);
+    setShowNew(false);
+  }
+
+  // Delete an object's whole bundle (index.md + colocated assets from the loaded
+  // tree). markPathsDeleted drops any pending edit and schedules the removal in the
+  // next coalesced WIP commit; the local draft is cleared too.
+  function confirmDelete(target: ContentObject): void {
+    const bundleDir = target.path.replace(/\/index\.md$/, '');
+    const bundleFiles = [
+      target.path,
+      ...session.treeEntries
+        .filter((e) => e.type === 'blob' && e.path.startsWith(`${bundleDir}/`) && e.path !== target.path)
+        .map((e) => e.path),
+    ];
+    autosave.markPathsDeleted(bundleFiles);
+    void draftStore.current?.delete(repoKey, target.path);
+
+    const remaining = objects.filter((o) => o.path !== target.path);
+    setObjects(remaining);
+    if (selectedPath === target.path) setSelectedPath(remaining[0]?.path ?? '');
+    setDeleteTarget(null);
+  }
+
   const validation = useMemo(() => {
     if (!selected || !schema) return undefined;
     const candidate: ContentObject = {
@@ -119,8 +171,8 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
       body: edit.body,
       public: edit.data.public === true,
     };
-    return validator.validateObject(candidate, model);
-  }, [selected, schema, edit, validator, model]);
+    return validator.validateObject(candidate, workingModel);
+  }, [selected, schema, edit, validator, workingModel]);
 
   return (
     <div className="app">
@@ -162,8 +214,14 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
           </div>
         ) : null}
         <nav>
+          <div className="object-list__head">
+            <span>Content</span>
+            <button type="button" className="object-list__new" onClick={() => setShowNew(true)}>
+              ＋ New
+            </button>
+          </div>
           <ul className="object-list">
-            {model.objects.map((o) => (
+            {objects.map((o) => (
               <li key={o.path}>
                 <button
                   type="button"
@@ -190,8 +248,19 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
         {selected && schema ? (
           <>
             <header className="editor-header">
-              <h2>{String(edit.data.title ?? selected.slug)}</h2>
-              <code>{selected.path}</code>
+              <div className="editor-header__title">
+                <h2>{String(edit.data.title ?? selected.slug)}</h2>
+                <code>{selected.path}</code>
+              </div>
+              {selected.kind === 'collection' ? (
+                <button
+                  type="button"
+                  className="editor-header__delete"
+                  onClick={() => setDeleteTarget(selected)}
+                >
+                  Delete
+                </button>
+              ) : null}
             </header>
 
             <section className="editor-panel">
@@ -199,7 +268,7 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
               <SchemaForm
                 schema={schema}
                 data={edit.data}
-                model={model}
+                model={workingModel}
                 assetStore={assetStore}
                 bundleDir={selected.path.replace(/\/index\.md$/, '')}
                 onAssetStaged={autosave.markAssetDirty}
@@ -241,6 +310,19 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
       </aside>
         </>
       )}
+
+      {showNew ? (
+        <NewObjectDialog model={workingModel} onClose={() => setShowNew(false)} onCreate={createObject} />
+      ) : null}
+
+      {deleteTarget ? (
+        <DeleteDialog
+          object={deleteTarget}
+          model={workingModel}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={() => confirmDelete(deleteTarget)}
+        />
+      ) : null}
 
       {showPublish ? (
         <PublishDialog

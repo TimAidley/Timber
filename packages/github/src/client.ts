@@ -155,6 +155,16 @@ export class RepoClient {
    * `assembleContent` from `@timber/content`.
    */
   async loadSnapshot(ref?: string): Promise<RepoSnapshot> {
+    return (await this.loadSnapshotWithTree(ref)).snapshot;
+  }
+
+  /**
+   * Like {@link loadSnapshot}, but also returns the full {@link RepoTree}. The editor
+   * keeps the tree so object delete/rename can enumerate a bundle's colocated **asset**
+   * paths (the content model only carries `index.md`) and reuse existing blob SHAs when
+   * moving them (SPEC §5).
+   */
+  async loadSnapshotWithTree(ref?: string): Promise<{ snapshot: RepoSnapshot; tree: RepoTree }> {
     const tree = await this.loadTree(ref);
     const textEntries = tree.entries.filter(
       (e) => e.type === 'blob' && SNAPSHOT_FILE.test(e.path),
@@ -165,7 +175,7 @@ export class RepoClient {
         snapshot.set(entry.path, await this.readBlob(entry.sha));
       }),
     );
-    return snapshot;
+    return { snapshot, tree };
   }
 
   /** The login of the authenticated user — used to derive their `<login>_wip` branch. */
@@ -191,6 +201,8 @@ export class RepoClient {
    */
   async commitFiles(input: CommitFilesInput): Promise<CommitResult> {
     const { branch, message, files } = input;
+    const deletions = input.deletions ?? [];
+    const moves = input.moves ?? [];
 
     let baseSha = await this.getBranchSha(branch);
     if (!baseSha) {
@@ -218,16 +230,34 @@ export class RepoClient {
 
     const blobs = await Promise.all(files.map((file) => this.createBlob(file)));
 
-    const { data: newTree } = await this.octokit.rest.git.createTree({
-      owner: this.owner,
-      repo: this.repo,
-      base_tree: baseCommit.tree.sha,
-      tree: blobs.map((blob) => ({
+    // A single tree overlaid on the base: new/updated blobs, blob-reusing moves
+    // (add at `to`, drop `from`), and deletions (`sha: null` removes the path).
+    const treeEntries = [
+      ...blobs.map((blob) => ({
         path: blob.path,
         mode: '100644' as const,
         type: 'blob' as const,
         sha: blob.sha,
       })),
+      ...moves.map((move) => ({
+        path: move.to,
+        mode: '100644' as const,
+        type: 'blob' as const,
+        sha: move.sha,
+      })),
+      ...[...deletions, ...moves.map((m) => m.from)].map((path) => ({
+        path,
+        mode: '100644' as const,
+        type: 'blob' as const,
+        sha: null,
+      })),
+    ];
+
+    const { data: newTree } = await this.octokit.rest.git.createTree({
+      owner: this.owner,
+      repo: this.repo,
+      base_tree: baseCommit.tree.sha,
+      tree: treeEntries,
     });
 
     const { data: newCommit } = await this.octokit.rest.git.createCommit({

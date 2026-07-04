@@ -167,6 +167,38 @@ describe('RepoClient (replayed from fixtures recorded against the real sandbox r
     expect(isExhausted()).toBe(true);
   });
 
+  it('commitFiles() deletes paths (sha: null) alongside a write in one commit', async () => {
+    const { isExhausted } = useCassette('commit-delete');
+
+    const result = await makeClient().commitFiles({
+      branch: 'octocat_wip',
+      message: 'edit kept, delete gone',
+      files: [{ path: 'content/events/kept/index.md', content: 'updated body\n' }],
+      deletions: ['content/events/gone/index.md', 'content/events/gone/hero.webp'],
+    });
+
+    // The cassette asserts the createTree body carried the write + two sha:null
+    // entries; reaching PATCH proves the whole delete-in-commit path ran.
+    expect(result.sha).toBe('DELCOMMIT');
+    expect(isExhausted()).toBe(true);
+  });
+
+  it('commitFiles() commits a delete-only change (no blobs created)', async () => {
+    const { served, isExhausted } = useCassette('commit-delete-only');
+
+    const result = await makeClient().commitFiles({
+      branch: 'octocat_wip',
+      message: 'delete gone',
+      files: [],
+      deletions: ['content/events/gone/index.md'],
+    });
+
+    expect(result.sha).toBe('DELCOMMIT');
+    // No blob POST when there are no file writes — only the sha:null tree entry.
+    expect(served.some((r) => r.method === 'POST' && r.pathname.endsWith('/git/blobs'))).toBe(false);
+    expect(isExhausted()).toBe(true);
+  });
+
   // --- Phase 5b: publish / merge primitives ---
 
   it('compareChangedPaths() returns the changed files (publish diff / overlap check)', async () => {

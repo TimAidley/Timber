@@ -1,4 +1,4 @@
-import { RepoClient } from '@timber/github';
+import { RepoClient, type TreeEntry } from '@timber/github';
 import { assembleContent, loadSchemas, type ContentModel } from '@timber/content';
 import { getToken } from '../github/auth.js';
 import { repoConfig } from '../github/config.js';
@@ -20,6 +20,11 @@ export interface RepoSession {
   /** Which branch the loaded snapshot came from (wip if it existed, else default). */
   loadedRef: string;
   model: ContentModel;
+  /**
+   * The loaded branch's full file tree (paths + blob SHAs). Object delete/rename read
+   * it to find a bundle's colocated asset paths and reuse their blob SHAs on move.
+   */
+  treeEntries: TreeEntry[];
 }
 
 /**
@@ -41,9 +46,9 @@ export async function loadRepoSession(): Promise<RepoSession> {
   const wipSha = await client.getBranchSha(wipBranch);
   const loadedRef = wipSha ? wipBranch : defaultBranch;
 
-  const snapshot = await client.loadSnapshot(loadedRef);
+  const { snapshot, tree } = await client.loadSnapshotWithTree(loadedRef);
   const schemas = loadSchemas(snapshot);
   const model = assembleContent(snapshot, schemas);
 
-  return { client, login, wipBranch, defaultBranch, baseSha, loadedRef, model };
+  return { client, login, wipBranch, defaultBranch, baseSha, loadedRef, model, treeEntries: tree.entries };
 }
