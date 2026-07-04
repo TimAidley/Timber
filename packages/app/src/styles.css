@@ -278,6 +278,139 @@ body {
   max-width: 100%;
 }
 
+.publish-btn {
+  width: 100%;
+  padding: 0.4rem;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.modal__panel {
+  background: #fff;
+  border-radius: 10px;
+  width: min(560px, 92vw);
+  max-height: 85vh;
+  overflow-y: auto;
+  padding: 1.25rem 1.5rem;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.25);
+}
+
+.modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal__header button {
+  border: none;
+  background: none;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+.modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.modal__actions button,
+.publish__block button,
+.publish__done button {
+  padding: 0.4rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  font: inherit;
+}
+
+.modal__actions button.is-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.modal__actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.publish__summary {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.publish__diff {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0;
+  font-size: 0.82rem;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.publish__diff li {
+  padding: 0.15rem 0;
+}
+
+.publish__status {
+  display: inline-block;
+  min-width: 68px;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.publish__status--added {
+  color: #2e9e5b;
+}
+
+.publish__status--removed {
+  color: #c0392b;
+}
+
+.publish__message {
+  display: block;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.publish__message input {
+  width: 100%;
+  padding: 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+  margin-top: 0.25rem;
+}
+
+.publish__error {
+  color: #c0392b;
+}
+
+.publish__block ul,
+.publish__done code {
+  font-size: 0.82rem;
+}
+
 .preview--error {
   color: #c0392b;
   white-space: pre-wrap;

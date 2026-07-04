@@ -11,6 +11,7 @@ import { SchemaForm } from './forms/SchemaForm.js';
 import { BodyEditor } from './editor/BodyEditor.js';
 import { Preview } from './preview/Preview.js';
 import { SyncIndicator } from './components/SyncIndicator.js';
+import { PublishDialog } from './components/PublishDialog.js';
 
 interface EditState {
   data: FrontMatter;
@@ -28,6 +29,10 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   const validator = useMemo(() => new Validator(model.schemas), [model]);
   const assetStore = useMemo(() => new AssetStore(), []);
   const autosave = useAutosave(session, assetStore);
+
+  // Publish dialog + the conflict base SHA, which advances each time we publish.
+  const [showPublish, setShowPublish] = useState(false);
+  const [baseSha, setBaseSha] = useState(session.baseSha);
 
   const [selectedPath, setSelectedPath] = useState<string>(model.objects[0]?.path ?? '');
   const selected: ContentObject | undefined = model.objects.find((o) => o.path === selectedPath);
@@ -111,6 +116,9 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
           <code>{session.loadedRef}</code>
         </p>
         <SyncIndicator state={autosave.syncState} onSaveNow={autosave.saveNow} />
+        <button type="button" className="publish-btn" onClick={() => setShowPublish(true)}>
+          Publish…
+        </button>
         <nav>
           <ul className="object-list">
             {model.objects.map((o) => (
@@ -185,6 +193,15 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
         <h3>Preview</h3>
         {selected ? <Preview data={edit.data} body={edit.body} assetStore={assetStore} /> : null}
       </aside>
+
+      {showPublish ? (
+        <PublishDialog
+          client={session.client}
+          ctx={{ wipBranch: session.wipBranch, defaultBranch: session.defaultBranch, baseSha }}
+          onClose={() => setShowPublish(false)}
+          onPublished={(sha) => setBaseSha(sha)}
+        />
+      ) : null}
     </div>
   );
 }
