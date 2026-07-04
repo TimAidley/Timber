@@ -191,6 +191,8 @@ Two independent axes, two words:
 ### Conflicts
 Multiple editors, but few, and single-file-per-page makes most conflicts structurally impossible (two different pages never collide). **Detect, don't resolve** (v1): track the base commit SHA the WIP branch started from; before merging, check whether `main` advanced. If not, merge cleanly. If it did, rebase onto the new `main` (applies automatically when changes don't overlap — the common case). Only when the **same file** genuinely diverged, offer keep-mine / take-theirs / reconcile. No full three-way merge editor in v1 (isomorphic-git can do it later if ever needed). A blunt "main moved, reload before publishing" is an acceptable starting point.
 
+**Implemented (Slice 5b):** a Publish dialog reviews the WIP→main diff, takes an editable commit message, and squash-merges to `main` (one commit whose tree = WIP's), then resets WIP from the new `main`. A **pre-publish validity gate** refuses to publish if any *public* object fails validation (SPEC §5). Conflict handling is **auto-rebase on no-overlap, block on true conflict**: if `main` moved but the changed files don't overlap, the WIP changes are rebased onto the new `main` and published; if the *same file* diverged on both sides, publishing is blocked with "main moved — reload before publishing." The per-file keep-mine/take-theirs reconciliation UI remains deferred. The build+Pages deploy Action and in-editor deploy status are Phase 6.
+
 ---
 
 ## 12. Build & deploy
