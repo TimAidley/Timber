@@ -9,17 +9,23 @@ import {
 } from '@timber/content';
 import { NodeFileSource, NodeOutputSink } from './fileSource.node.js';
 import { buildSnapshotFromDir } from './snapshot.node.js';
+import { buildSite, BuildError } from './build.node.js';
 
 const USAGE = `timber — Timber static-site generator CLI
 
 Usage:
   timber render <contentDir> <templateFile> <outFile>
   timber validate <repoDir>
+  timber build <repoDir> <outDir>
 
 render   — reads <contentDir>/index.md and <templateFile>, renders the page
            through the shared generator, and writes the HTML to <outFile>.
 validate — loads a content repo's schemas + objects, reports invalid objects,
            dangling references, and duplicate ids, and exits non-zero if any.
+build    — renders the whole site: every public object through its
+           templates/<type>.liquid (fallback templates/default.liquid) into
+           <outDir>, copying assets and omitting drafts. Fails (non-zero) if any
+           public object is invalid, so a broken site never deploys.
 
 This is the Node/CI entry point; preview ≡ build.`;
 
@@ -78,6 +84,23 @@ async function validateCommand(repoDir: string): Promise<number> {
   return problems === 0 ? 0 : 1;
 }
 
+/** Build the whole site to <outDir>; returns an exit code (non-zero on build failure). */
+async function buildCommand(repoDir: string, outDir: string): Promise<number> {
+  try {
+    const { pages, drafts, assets } = await buildSite(repoDir, outDir);
+    process.stdout.write(
+      `Built ${pages} page(s), ${assets} asset(s), skipped ${drafts} draft(s) → ${outDir}\n`,
+    );
+    return 0;
+  } catch (err) {
+    if (err instanceof BuildError) {
+      process.stderr.write(`✗ ${err.message}\n`);
+      return 1;
+    }
+    throw err;
+  }
+}
+
 async function main(argv: string[]): Promise<number> {
   const [command, ...rest] = argv;
 
@@ -103,6 +126,15 @@ async function main(argv: string[]): Promise<number> {
       return 1;
     }
     return validateCommand(repoDir);
+  }
+
+  if (command === 'build') {
+    const [repoDir, outDir] = rest;
+    if (!repoDir || !outDir) {
+      process.stderr.write(`error: build needs <repoDir> <outDir>\n\n${USAGE}\n`);
+      return 1;
+    }
+    return buildCommand(repoDir, outDir);
   }
 
   process.stderr.write(`error: unknown command "${command}"\n\n${USAGE}\n`);
