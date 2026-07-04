@@ -203,6 +203,8 @@ Multiple editors, but few, and single-file-per-page makes most conflicts structu
 - If a build fails, the **last good deploy stays live** (Pages keeps serving it) — a useful safety property. **Deploy/build status is surfaced in the editor** ("building…/published ✓/failed").
 - CI is a full Node environment, so **native tooling (`sharp`, etc.) remains available for the production build** if ever wanted (e.g. higher-quality `srcset`), even though upload-time image processing stays in the browser.
 - The workflow needs Pages permissions (`pages: write`, `id-token: write`). Template it correctly once — fork-friendliness means others will copy it verbatim.
+- **Template mapping (settled, Slice 6a):** each object renders through **`templates/<type>.liquid`**, falling back to **`templates/default.liquid`**; the build errors if neither exists. A per-object `layout` front-matter override is deferred. **CI obtains the generator by building the CLI from a pinned Timber git ref** (no npm publish yet) — the pin keeps preview ≡ production; a published `@timber/cli` can replace it later without changing a site.
+- **Implemented (Slice 6a):** `timber build <repoDir> <outDir>` — the full-site Node build. It assembles the model, runs the validity gate (structural errors + any invalid *public* object **fail the build**, so a broken site never deploys and the last good deploy stays live), renders every **public** object (drafts omitted) through its template to `<url>/index.html` via the same `renderPage` the browser preview uses (preview ≡ build, proven by a parity test), and copies site-wide `/assets` + colocated bundle assets. The deploy **Action** and in-editor **deploy status** are Slice 6b. (Precise asset-URL rewriting / `srcset` is Phase 7.)
 
 ---
 
