@@ -50,6 +50,12 @@ export interface ContentTypeSchema {
   urlPattern?: string;
   /** Whether objects of this type carry a Markdown body. Defaults to true. */
   hasBody?: boolean;
+  /**
+   * Whether objects of this type render as pages (SPEC §13). Defaults to true; a
+   * config singleton like `settings` sets `page: false` so the build reads it for
+   * site context but never emits an HTML page for it.
+   */
+  page?: boolean;
   fields: Record<string, FieldSchema>;
 }
 

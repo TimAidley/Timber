@@ -67,6 +67,7 @@ function parseSchema(name: string, raw: unknown, where: string): ContentTypeSche
   const schema: ContentTypeSchema = { name, kind: kind as ContentTypeKind, fields };
   if (typeof rec.urlPattern === 'string') schema.urlPattern = rec.urlPattern;
   if (rec.hasBody !== undefined) schema.hasBody = Boolean(rec.hasBody);
+  if (rec.page !== undefined) schema.page = Boolean(rec.page);
   return schema;
 }
 
