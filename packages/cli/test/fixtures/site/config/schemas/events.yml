@@ -1,0 +1,10 @@
+kind: collection
+hasBody: true
+fields:
+  title:
+    type: text
+    required: true
+  startDate:
+    type: date
+  poster:
+    type: image
