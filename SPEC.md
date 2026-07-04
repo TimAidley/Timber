@@ -155,6 +155,7 @@ Not stored in git — **link/embed external** (YouTube/Vimeo/etc.). A `video` fi
 - Given the **self-hosted, single-tenant** decision, auth is **per-instance and lightweight** — a fine-grained PAT or simple OAuth suffices; a full GitHub App with installation custody is more than needed. **For development, paste a fine-grained PAT.**
 - Auth is **deferred behind a single `getToken()` seam** — the rest of the app only needs "a valid token," so the mechanism can be chosen/swapped late without touching the rest.
 - **Token security:** narrowest scopes on the single repo, prefer short-lived tokens, keep the token in memory rather than `localStorage` where feasible, ship a strict CSP. The XSS surface is already reduced (LiquidJS is sandboxed; no in-browser untrusted Node).
+- **Implemented (Slice 5a):** a browser `getToken()` that reads a pasted fine-grained PAT. The PAT is stored in `localStorage` — a conscious **dev-only** deviation from the in-memory guidance above (the target is a throwaway test repo). Because it's isolated behind the seam, the production flow (§16 open decision) tightens this by replacing only `src/github/token.ts`.
 
 ---
 
@@ -176,6 +177,8 @@ The mental model: IndexedDB is a per-device draft of not-yet-committed changes; 
 
 ### Commit cadence (to the WIP branch)
 Debounced and event-driven, **not** per keystroke: on navigation/blur, after ~5–15s idle, on explicit save, and best-effort on tab hide/close. **Coalesce** concurrent triggers into a single commit containing **all currently-dirty files** (one commit "edited the summer-fete event," not one per file). On failure/throttle, fall back to the local copy, show "unsaved," and retry with backoff. The exact idle interval is a tuning knob.
+
+**Implemented (Slice 5a):** the editor loads content from the user's `<login>_wip` branch (else the default branch); edits accumulate in a dirty map and flush as one coalesced commit — text `index.md` **and** binary image bytes together — to the WIP branch (idle debounce + tab-hide + explicit save), retrying with backoff on failure. IndexedDB persists per-edit drafts (recovered on reload); the sync indicator surfaces saved/unsaved/saving/error. **Publish** (squash-merge WIP→main) and **conflict detection** are Slice 5b.
 
 ### Publishing
 A **Publish / "Update site"** action reviews the diff, lets the user edit the commit message, and merges WIP → `main`, **squashed** so `main`'s history is clean. After each successful merge, the WIP branch is **reset/recreated from the new `main`** to minimize divergence (the single best thing for keeping conflicts rare).
