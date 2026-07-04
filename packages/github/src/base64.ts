@@ -11,7 +11,11 @@ export function base64ToUtf8(base64: string): string {
 }
 
 export function utf8ToBase64(text: string): string {
-  const bytes = new TextEncoder().encode(text);
+  return bytesToBase64(new TextEncoder().encode(text));
+}
+
+/** Encode raw bytes (e.g. a processed image) to base64 for a Git Data API blob. */
+export function bytesToBase64(bytes: Uint8Array): string {
   let binary = '';
   for (const byte of bytes) {
     binary += String.fromCharCode(byte);

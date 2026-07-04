@@ -1,0 +1,78 @@
+[
+  {
+    "method": "GET",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/ref/heads%2Fmain",
+    "status": 200,
+    "responseBody": {
+      "ref": "refs/heads/main",
+      "object": {
+        "sha": "COMMIT1",
+        "type": "commit"
+      }
+    }
+  },
+  {
+    "method": "GET",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/commits/COMMIT1",
+    "status": 200,
+    "responseBody": {
+      "sha": "COMMIT1",
+      "tree": {
+        "sha": "TREE1"
+      }
+    }
+  },
+  {
+    "method": "GET",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/trees/TREE1?recursive=1",
+    "status": 200,
+    "responseBody": {
+      "sha": "TREE1",
+      "tree": [
+        {
+          "path": "content/pages",
+          "type": "tree",
+          "sha": "t1"
+        },
+        {
+          "path": "content/pages/hello/index.md",
+          "type": "blob",
+          "sha": "B1",
+          "size": 10
+        },
+        {
+          "path": "config/schemas/pages.yml",
+          "type": "blob",
+          "sha": "B2",
+          "size": 12
+        },
+        {
+          "path": "assets/logo.png",
+          "type": "blob",
+          "sha": "B3",
+          "size": 99
+        }
+      ]
+    }
+  },
+  {
+    "method": "GET",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/blobs/B1",
+    "status": 200,
+    "responseBody": {
+      "sha": "B1",
+      "content": "IyBIZWxsbwo=",
+      "encoding": "base64"
+    }
+  },
+  {
+    "method": "GET",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/blobs/B2",
+    "status": 200,
+    "responseBody": {
+      "sha": "B2",
+      "content": "a2luZDogY29sbGVjdGlvbgo=",
+      "encoding": "base64"
+    }
+  }
+]

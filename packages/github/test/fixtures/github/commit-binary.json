@@ -1,0 +1,64 @@
+[
+  {
+    "method": "GET",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/ref/heads%2Foctocat_wip",
+    "status": 200,
+    "responseBody": {
+      "ref": "refs/heads/octocat_wip",
+      "object": {
+        "sha": "C0",
+        "type": "commit"
+      }
+    }
+  },
+  {
+    "method": "GET",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/commits/C0",
+    "status": 200,
+    "responseBody": {
+      "sha": "C0",
+      "tree": {
+        "sha": "T0"
+      }
+    }
+  },
+  {
+    "method": "POST",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/blobs",
+    "status": 201,
+    "requestBody": {
+      "content": "AQIDBA==",
+      "encoding": "base64"
+    },
+    "responseBody": {
+      "sha": "BB"
+    }
+  },
+  {
+    "method": "POST",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/trees",
+    "status": 201,
+    "responseBody": {
+      "sha": "TT"
+    }
+  },
+  {
+    "method": "POST",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/commits",
+    "status": 201,
+    "responseBody": {
+      "sha": "CN"
+    }
+  },
+  {
+    "method": "PATCH",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/refs/heads%2Foctocat_wip",
+    "status": 200,
+    "responseBody": {
+      "ref": "refs/heads/octocat_wip",
+      "object": {
+        "sha": "CN"
+      }
+    }
+  }
+]

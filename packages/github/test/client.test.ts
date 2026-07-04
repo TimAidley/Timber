@@ -121,4 +121,49 @@ describe('RepoClient (replayed from fixtures recorded against the real sandbox r
     await expect(client.getDefaultBranch()).rejects.toThrow('no token available');
     expect(served).toHaveLength(0);
   });
+
+  // --- Phase 5a additions ---
+
+  it('readBlob() decodes a blob by SHA', async () => {
+    useCassette('read-blob');
+    const text = await makeClient().readBlob('blobsha1');
+    expect(text).toBe('hello world\n');
+  });
+
+  it('getAuthenticatedLogin() returns the login (for the <login>_wip branch)', async () => {
+    useCassette('get-authenticated-login');
+    expect(await makeClient().getAuthenticatedLogin()).toBe('octocat');
+  });
+
+  it('loadSnapshot() fetches only content/config text files into a path->utf8 map', async () => {
+    const { isExhausted } = useCassette('load-snapshot');
+
+    const snapshot = await makeClient().loadSnapshot('main');
+
+    expect([...snapshot.keys()].sort()).toEqual([
+      'config/schemas/pages.yml',
+      'content/pages/hello/index.md',
+    ]);
+    expect(snapshot.get('content/pages/hello/index.md')).toBe('# Hello\n');
+    expect(snapshot.get('config/schemas/pages.yml')).toBe('kind: collection\n');
+    // The binary asset (assets/logo.png) is never fetched.
+    expect(snapshot.has('assets/logo.png')).toBe(false);
+    expect(isExhausted()).toBe(true);
+  });
+
+  it('commitFiles() base64-encodes a binary file (processed image) in one commit', async () => {
+    const { served, isExhausted } = useCassette('commit-binary');
+
+    const result = await makeClient().commitFiles({
+      branch: 'octocat_wip',
+      message: 'edit summer-fete',
+      files: [{ path: 'content/events/x/images/p.webp', bytes: new Uint8Array([1, 2, 3, 4]) }],
+    });
+
+    expect(result.sha).toBe('CN');
+    // The cassette asserts the blob POST body was { content: 'AQIDBA==', encoding: 'base64' };
+    // reaching PATCH .../git/refs proves the whole binary commit path ran.
+    expect(served.some((r) => r.method === 'PATCH' && r.pathname.includes('/git/refs/'))).toBe(true);
+    expect(isExhausted()).toBe(true);
+  });
 });

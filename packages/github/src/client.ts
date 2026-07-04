@@ -1,13 +1,21 @@
 import { Octokit } from '@octokit/rest';
-import { base64ToUtf8, utf8ToBase64 } from './base64.js';
+import { base64ToUtf8, bytesToBase64, utf8ToBase64 } from './base64.js';
 import type {
   CommitFilesInput,
   CommitResult,
   FileWrite,
   RepoClientOptions,
+  RepoSnapshot,
   RepoTree,
   TreeEntry,
 } from './types.js';
+
+/**
+ * Text files the content model reads (SPEC §5): Markdown bundles + schema/config
+ * YAML under `content/` and `config/`. Binary assets aren't loaded into the
+ * snapshot — mirrors the CLI's `buildSnapshotFromDir`.
+ */
+const SNAPSHOT_FILE = /^(content|config)\/.*\.(md|ya?ml)$/;
 
 function isNotFoundError(err: unknown): boolean {
   return (
@@ -126,11 +134,48 @@ export class RepoClient {
     return base64ToUtf8(data.content);
   }
 
+  /** Read and decode one blob's text content by its SHA (from a loaded tree). */
+  async readBlob(sha: string): Promise<string> {
+    const { data } = await this.octokit.rest.git.getBlob({
+      owner: this.owner,
+      repo: this.repo,
+      file_sha: sha,
+    });
+    return base64ToUtf8(data.content);
+  }
+
+  /**
+   * Load a branch's content-model text files into an in-memory {@link RepoSnapshot}
+   * (`path -> utf8`), fetching all blobs concurrently. This is the browser
+   * counterpart to the CLI's `buildSnapshotFromDir`; the result feeds
+   * `assembleContent` from `@timber/content`.
+   */
+  async loadSnapshot(ref?: string): Promise<RepoSnapshot> {
+    const tree = await this.loadTree(ref);
+    const textEntries = tree.entries.filter(
+      (e) => e.type === 'blob' && SNAPSHOT_FILE.test(e.path),
+    );
+    const snapshot: RepoSnapshot = new Map();
+    await Promise.all(
+      textEntries.map(async (entry) => {
+        snapshot.set(entry.path, await this.readBlob(entry.sha));
+      }),
+    );
+    return snapshot;
+  }
+
+  /** The login of the authenticated user — used to derive their `<login>_wip` branch. */
+  async getAuthenticatedLogin(): Promise<string> {
+    const { data } = await this.octokit.rest.users.getAuthenticated();
+    return data.login;
+  }
+
   private async createBlob(file: FileWrite): Promise<{ path: string; sha: string }> {
+    const content = 'bytes' in file ? bytesToBase64(file.bytes) : utf8ToBase64(file.content);
     const { data } = await this.octokit.rest.git.createBlob({
       owner: this.owner,
       repo: this.repo,
-      content: utf8ToBase64(file.content),
+      content,
       encoding: 'base64',
     });
     return { path: file.path, sha: data.sha };

@@ -1,0 +1,12 @@
+[
+  {
+    "method": "GET",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/blobs/blobsha1",
+    "status": 200,
+    "responseBody": {
+      "sha": "blobsha1",
+      "content": "aGVsbG8gd29ybGQK",
+      "encoding": "base64"
+    }
+  }
+]

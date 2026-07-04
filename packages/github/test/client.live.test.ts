@@ -55,4 +55,42 @@ describe.skipIf(!rawToken)('RepoClient (live, against the real sandbox repo)', (
     const committed = await client.readFile('content/pages/hello/index.md', scratchBranch);
     expect(committed).toBe(marker);
   });
+
+  it('resolves the authenticated login (for the <login>_wip branch)', async () => {
+    const login = await client.getAuthenticatedLogin();
+    expect(typeof login).toBe('string');
+    expect(login.length).toBeGreaterThan(0);
+  });
+
+  it('loadSnapshot() builds a path->utf8 map of the content/config text files', async () => {
+    const snapshot = await client.loadSnapshot();
+    expect(snapshot.get('content/pages/hello/index.md')).toContain('placeholder page');
+    // Only text files under content/ and config/ are loaded.
+    expect([...snapshot.keys()].every((p) => /^(content|config)\/.*\.(md|ya?ml)$/.test(p))).toBe(
+      true,
+    );
+  });
+
+  it('coalesces a text edit and a binary image into a single WIP commit', async () => {
+    const marker = `wip coalesced ${scratchBranch}\n`;
+    const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]); // PNG magic bytes
+
+    const result = await client.commitFiles({
+      branch: scratchBranch,
+      message: `test: coalesced text+binary (${scratchBranch})`,
+      files: [
+        { path: 'content/pages/hello/index.md', content: marker },
+        { path: 'content/pages/hello/images/pixel.png', bytes: png },
+      ],
+    });
+    expect(result.sha).toBeTruthy();
+
+    // Read the text back; the binary blob landing is proven by the commit succeeding
+    // with both files in one tree.
+    const committed = await client.readFile('content/pages/hello/index.md', scratchBranch);
+    expect(committed).toBe(marker);
+
+    const tree = await client.loadTree(scratchBranch);
+    expect(tree.entries.some((e) => e.path === 'content/pages/hello/images/pixel.png')).toBe(true);
+  });
 });
