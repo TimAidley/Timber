@@ -14,6 +14,84 @@ body {
   margin: 0;
 }
 
+.token-gate,
+.app-status {
+  max-width: 640px;
+  margin: 10vh auto;
+  padding: 1.5rem;
+}
+
+.token-gate input {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+  margin-bottom: 0.6rem;
+}
+
+.token-gate button,
+.app-status button {
+  padding: 0.45rem 0.9rem;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.app-status--error {
+  color: #c0392b;
+}
+
+.app__repo {
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.sync {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-bottom: 1rem;
+}
+
+.sync__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #bbb;
+}
+
+.sync--dirty .sync__dot {
+  background: #e0a800;
+}
+
+.sync--saving .sync__dot {
+  background: var(--accent);
+}
+
+.sync--saved .sync__dot,
+.sync--idle .sync__dot {
+  background: #2e9e5b;
+}
+
+.sync--error .sync__dot {
+  background: #c0392b;
+}
+
+.sync__save {
+  padding: 0.15rem 0.4rem;
+  font-size: 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: none;
+  cursor: pointer;
+}
+
 .app {
   display: grid;
   grid-template-columns: 220px 1fr 360px;

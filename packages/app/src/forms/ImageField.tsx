@@ -14,6 +14,8 @@ interface ImageFieldProps {
   assetStore: AssetStore;
   /** The object's bundle directory, e.g. `content/events/summer-fete`. */
   bundleDir: string;
+  /** Notified with the staged asset's repo path so autosave can commit its bytes. */
+  onStaged?: ((path: string) => void) | undefined;
 }
 
 const EXT_BY_MIME: Record<string, string> = {
@@ -77,6 +79,7 @@ export function ImageField({
   onChangeAlt,
   assetStore,
   bundleDir,
+  onStaged,
 }: ImageFieldProps): React.JSX.Element {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -100,6 +103,7 @@ export function ImageField({
       assetStore.stage(target, processed.blob);
       setResult(processed);
       onChangePath(target);
+      onStaged?.(target);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {

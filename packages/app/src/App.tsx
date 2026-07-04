@@ -1,158 +1,80 @@
-import { useMemo, useState } from 'react';
-import {
-  assembleContent,
-  loadSchemas,
-  canPublish,
-  Validator,
-  type ContentObject,
-} from '@timber/content';
-import type { FrontMatter } from '@timber/generator';
-import { demoRepo } from './state/demoRepo.js';
-import { AssetStore } from './state/assets.js';
-import { SchemaForm } from './forms/SchemaForm.js';
-import { BodyEditor } from './editor/BodyEditor.js';
-import { Preview } from './preview/Preview.js';
-
-interface EditState {
-  data: FrontMatter;
-  body: string;
-}
+import { useEffect, useState } from 'react';
+import { repoConfig } from './github/config.js';
+import { getStoredToken, setStoredToken, clearStoredToken } from './github/token.js';
+import { loadRepoSession, type RepoSession } from './state/repoSession.js';
+import { TokenGate } from './components/TokenGate.js';
+import { Editor } from './Editor.js';
 
 /**
- * The Phase 4a editor shell: pick an object, edit its front matter through the
- * schema-driven form and its body through Milkdown, and see live preview + live
- * validation. Content is loaded from a bundled demo `RepoSnapshot` (Phase 5 swaps
- * in GitHub); the git autosave/commit/publish loop is deliberately out of scope
- * here — this slice exists to de-risk the editor + byte-stable round-trip.
+ * Top-level app (SPEC §9/§11): gate on a pasted PAT, connect to the configured
+ * repo, assemble its content model, then hand a live {@link RepoSession} to the
+ * editor. This is where the browser first talks to GitHub — Phase 4 loaded a
+ * bundled demo repo; Phase 5 loads the real one.
  */
 export function App(): React.JSX.Element {
-  // The model is assembled once from the snapshot (same code path as the CLI).
-  const { model, validator } = useMemo(() => {
-    const schemas = loadSchemas(demoRepo);
-    return { model: assembleContent(demoRepo, schemas), validator: new Validator(schemas) };
-  }, []);
+  const [hasToken, setHasToken] = useState(() => getStoredToken() !== null);
+  const [session, setSession] = useState<RepoSession | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Staging area for processed image bytes, shared by the image widgets and the
-  // preview (Phase 5 drains it into commits). Persists across selections/renders.
-  const assetStore = useMemo(() => new AssetStore(), []);
+  useEffect(() => {
+    if (!hasToken) return;
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    loadRepoSession()
+      .then((s) => {
+        if (!cancelled) setSession(s);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [hasToken]);
 
-  const [selectedPath, setSelectedPath] = useState<string>(model.objects[0]?.path ?? '');
-  const selected: ContentObject | undefined = model.objects.find((o) => o.path === selectedPath);
-
-  // Editable copy of the selected object, re-seeded when the selection changes.
-  const [edit, setEdit] = useState<EditState>(() => ({
-    data: { ...(selected?.data ?? {}) },
-    body: selected?.body ?? '',
-  }));
-  const [editingPath, setEditingPath] = useState(selectedPath);
-  if (selected && editingPath !== selectedPath) {
-    setEditingPath(selectedPath);
-    setEdit({ data: { ...selected.data }, body: selected.body });
+  function resetToken(): void {
+    clearStoredToken();
+    setSession(null);
+    setError(null);
+    setHasToken(false);
   }
 
-  const schema = selected ? model.schemas.get(selected.type) : undefined;
+  if (!hasToken) {
+    return (
+      <TokenGate
+        onSubmit={(token) => {
+          setStoredToken(token);
+          setHasToken(true);
+        }}
+      />
+    );
+  }
 
-  // Live validation of the in-progress edit against the assembled model.
-  const validation = useMemo(() => {
-    if (!selected || !schema) return undefined;
-    const candidate: ContentObject = {
-      ...selected,
-      data: edit.data,
-      body: edit.body,
-      public: edit.data.public === true,
-    };
-    return validator.validateObject(candidate, model);
-  }, [selected, schema, edit, validator, model]);
+  if (error) {
+    return (
+      <div className="app-status app-status--error">
+        <p>
+          Couldn’t load <code>{repoConfig.owner}/{repoConfig.repo}</code>: {error}
+        </p>
+        <button type="button" onClick={resetToken}>
+          Use a different token
+        </button>
+      </div>
+    );
+  }
 
-  return (
-    <div className="app">
-      <aside className="app__sidebar">
-        <h1 className="app__brand">Timber</h1>
-        <nav>
-          <ul className="object-list">
-            {model.objects.map((o) => (
-              <li key={o.path}>
-                <button
-                  type="button"
-                  className={o.path === selectedPath ? 'is-active' : ''}
-                  onClick={() => setSelectedPath(o.path)}
-                >
-                  <span className="object-list__title">{String(o.data.title ?? o.slug)}</span>
-                  <span className="object-list__type">
-                    {o.type}
-                    {o.public ? '' : ' · draft'}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </nav>
-      </aside>
+  if (loading || !session) {
+    return (
+      <div className="app-status">
+        Loading <code>{repoConfig.owner}/{repoConfig.repo}</code>…
+      </div>
+    );
+  }
 
-      <main className="app__main">
-        {selected && schema ? (
-          <>
-            <header className="editor-header">
-              <h2>{String(edit.data.title ?? selected.slug)}</h2>
-              <code>{selected.path}</code>
-            </header>
-
-            <section className="editor-panel">
-              <h3>Fields</h3>
-              <SchemaForm
-                schema={schema}
-                data={edit.data}
-                model={model}
-                assetStore={assetStore}
-                bundleDir={selected.path.replace(/\/index\.md$/, '')}
-                onChange={(key, value) =>
-                  setEdit((prev) => {
-                    const data = { ...prev.data };
-                    if (value === undefined || value === '') delete data[key];
-                    else data[key] = value;
-                    return { ...prev, data };
-                  })
-                }
-              />
-            </section>
-
-            <section className="editor-panel">
-              <h3>Body</h3>
-              <BodyEditor
-                value={edit.body}
-                onChange={(body) => setEdit((prev) => ({ ...prev, body }))}
-              />
-            </section>
-
-            {validation ? (
-              <section
-                className={`validation ${validation.valid ? 'validation--ok' : 'validation--bad'}`}
-              >
-                <strong>
-                  {validation.valid ? '✓ Valid' : '✗ Invalid'} —{' '}
-                  {canPublish(validation) ? 'can be published' : 'draft only'}
-                </strong>
-                {validation.errors.length > 0 ? (
-                  <ul>
-                    {validation.errors.map((e, i) => (
-                      <li key={i}>
-                        {e.field ? <code>{e.field}</code> : null} {e.message}
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-              </section>
-            ) : null}
-          </>
-        ) : (
-          <p>No object selected.</p>
-        )}
-      </main>
-
-      <aside className="app__preview">
-        <h3>Preview</h3>
-        {selected ? <Preview data={edit.data} body={edit.body} assetStore={assetStore} /> : null}
-      </aside>
-    </div>
-  );
+  return <Editor session={session} />;
 }

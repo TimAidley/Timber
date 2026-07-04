@@ -14,6 +14,8 @@ interface SchemaFormProps {
   assetStore: AssetStore;
   /** The current object's bundle directory (for colocating image assets). */
   bundleDir: string;
+  /** Notified when an image is staged, so autosave can commit its bytes. */
+  onAssetStaged?: ((path: string) => void) | undefined;
 }
 
 /** Objects of a given type, as reference-picker options (id + title). */
@@ -37,6 +39,7 @@ export function SchemaForm({
   onChange,
   assetStore,
   bundleDir,
+  onAssetStaged,
 }: SchemaFormProps): React.JSX.Element {
   return (
     <div className="schema-form">
@@ -56,6 +59,7 @@ export function SchemaForm({
               onChangeAlt={(v) => onChange(`${key}Alt`, v)}
               assetStore={assetStore}
               bundleDir={bundleDir}
+              onStaged={onAssetStaged}
             />
           ) : field.type === 'video' ? (
             <VideoField fieldKey={key} value={data[key]} onChange={(v) => onChange(key, v)} />
