@@ -24,6 +24,7 @@ export async function renderPage(input: RenderPageInput): Promise<string> {
     page: data,
     content,
     site: input.site ?? {},
+    seo: input.seo ?? {},
   });
 
   return html;

@@ -28,4 +28,6 @@ export interface RenderPageInput {
   template: string;
   /** Optional site-wide context exposed as `{{ site }}`. */
   site?: SiteContext;
+  /** Optional per-page derived data (e.g. SEO) exposed as `{{ seo }}` (SPEC §13). */
+  seo?: Record<string, unknown>;
 }
