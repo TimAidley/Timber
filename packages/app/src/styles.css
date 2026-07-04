@@ -278,6 +278,42 @@ body {
   max-width: 100%;
 }
 
+.deploy {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  margin-bottom: 0.6rem;
+}
+
+.deploy__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #bbb;
+}
+
+.deploy--building .deploy__dot {
+  background: var(--accent);
+}
+
+.deploy--published .deploy__dot {
+  background: #2e9e5b;
+}
+
+.deploy--failed .deploy__dot {
+  background: #c0392b;
+}
+
+.deploy__label {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.deploy--failed .deploy__label {
+  color: #c0392b;
+}
+
 .publish-btn {
   width: 100%;
   padding: 0.4rem;

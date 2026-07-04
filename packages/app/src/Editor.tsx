@@ -12,6 +12,10 @@ import { BodyEditor } from './editor/BodyEditor.js';
 import { Preview } from './preview/Preview.js';
 import { SyncIndicator } from './components/SyncIndicator.js';
 import { PublishDialog } from './components/PublishDialog.js';
+import { DeployStatus } from './components/DeployStatus.js';
+
+/** The deploy workflow's file name (the starter template ships deploy.yml). */
+const DEPLOY_WORKFLOW = 'deploy.yml';
 
 interface EditState {
   data: FrontMatter;
@@ -33,6 +37,8 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   // Publish dialog + the conflict base SHA, which advances each time we publish.
   const [showPublish, setShowPublish] = useState(false);
   const [baseSha, setBaseSha] = useState(session.baseSha);
+  // Bumped after a publish so the deploy-status indicator re-checks the new run.
+  const [deployPollKey, setDeployPollKey] = useState(0);
 
   const [selectedPath, setSelectedPath] = useState<string>(model.objects[0]?.path ?? '');
   const selected: ContentObject | undefined = model.objects.find((o) => o.path === selectedPath);
@@ -116,6 +122,12 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
           <code>{session.loadedRef}</code>
         </p>
         <SyncIndicator state={autosave.syncState} onSaveNow={autosave.saveNow} />
+        <DeployStatus
+          client={session.client}
+          workflowFile={DEPLOY_WORKFLOW}
+          branch={session.defaultBranch}
+          pollKey={deployPollKey}
+        />
         <button type="button" className="publish-btn" onClick={() => setShowPublish(true)}>
           Publish…
         </button>
@@ -199,7 +211,10 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
           client={session.client}
           ctx={{ wipBranch: session.wipBranch, defaultBranch: session.defaultBranch, baseSha }}
           onClose={() => setShowPublish(false)}
-          onPublished={(sha) => setBaseSha(sha)}
+          onPublished={(sha) => {
+            setBaseSha(sha);
+            setDeployPollKey((k) => k + 1); // deploy kicks off on the push to main
+          }}
         />
       ) : null}
     </div>
