@@ -2,6 +2,7 @@ import { readdir, readFile, writeFile, mkdir } from 'node:fs/promises';
 import { dirname, join, relative, sep } from 'node:path';
 import { renderPage } from '@timber/generator';
 import {
+  aliasUrls,
   assembleContent,
   loadSchemas,
   loadNavigation,
@@ -10,6 +11,7 @@ import {
   canPublish,
   isPublic,
   pageSeo,
+  redirectStubHtml,
   siteContext,
   urlFor,
   Validator,
@@ -22,6 +24,7 @@ export interface BuildResult {
   pages: number;
   drafts: number;
   assets: number;
+  redirects: number;
 }
 
 /** Thrown when the site can't be built — a broken site must never deploy (SPEC §12). */
@@ -118,6 +121,7 @@ export async function buildSite(repoDir: string, outDir: string): Promise<BuildR
   let pages = 0;
   let drafts = 0;
   let assets = 0;
+  let redirects = 0;
   const sitemapUrls: string[] = [];
 
   // Site-wide assets: /assets/** → <out>/assets/**
@@ -151,6 +155,16 @@ export async function buildSite(repoDir: string, outDir: string): Promise<BuildR
     pages += 1;
     sitemapUrls.push(seo.canonical);
 
+    // Redirect stubs (SPEC §5): a renamed object keeps working URLs — each old slug
+    // in `aliases` gets a meta-refresh page pointing at the object's current URL.
+    for (const oldUrl of aliasUrls(object, schema)) {
+      const stubDir = urlToDir(oldUrl);
+      if (!stubDir) continue; // never overwrite the site root
+      await mkdir(join(outDir, stubDir), { recursive: true });
+      await writeFile(join(outDir, stubDir, 'index.html'), redirectStubHtml(url), 'utf8');
+      redirects += 1;
+    }
+
     // Colocated bundle assets: everything under the object's bundle dir except index.md.
     const bundleDir = dirname(object.path); // e.g. content/events/fete
     for (const rel of await walkFiles(join(repoDir, bundleDir))) {
@@ -164,5 +178,5 @@ export async function buildSite(repoDir: string, outDir: string): Promise<BuildR
   await writeFile(join(outDir, 'sitemap.xml'), buildSitemap(sitemapUrls), 'utf8');
   await writeFile(join(outDir, 'robots.txt'), buildRobots(site), 'utf8');
 
-  return { pages, drafts, assets };
+  return { pages, drafts, assets, redirects };
 }

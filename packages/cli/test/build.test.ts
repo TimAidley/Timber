@@ -46,6 +46,18 @@ describe('buildSite', () => {
     expect(await exists(join(out, 'pages/secret/index.html'))).toBe(false);
   });
 
+  it('emits a redirect stub at each alias URL pointing to the current URL (SPEC §5)', async () => {
+    const result = await buildSite(siteFixture, out);
+    expect(result.redirects).toBe(1);
+
+    // fete declares alias `summer-fayre`; its old URL redirects to the current one.
+    const stub = await readFile(join(out, 'events/summer-fayre/index.html'), 'utf8');
+    expect(stub).toContain('<meta http-equiv="refresh" content="0; url=/events/fete/">');
+    expect(stub).toContain('<link rel="canonical" href="/events/fete/">');
+    // The real page still exists at the current URL.
+    expect(await exists(join(out, 'events/fete/index.html'))).toBe(true);
+  });
+
   it('falls back to templates/default.liquid when no <type>.liquid exists', async () => {
     await buildSite(siteFixture, out);
     const note = await readFile(join(out, 'notes/note1/index.html'), 'utf8');

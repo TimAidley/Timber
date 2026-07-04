@@ -199,6 +199,31 @@ describe('RepoClient (replayed from fixtures recorded against the real sandbox r
     expect(isExhausted()).toBe(true);
   });
 
+  it('commitFiles() moves a bundle by reusing blob SHAs (rename, SPEC §5)', async () => {
+    const { isExhausted } = useCassette('commit-move');
+
+    const result = await makeClient().commitFiles({
+      branch: 'octocat_wip',
+      message: 'rename new-slug',
+      // index.md is rewritten (content changes: the appended alias) at the new path…
+      files: [
+        {
+          path: 'content/events/new-slug/index.md',
+          content: '---\nid: ev\ntitle: Ren\naliases:\n  - old-slug\n---\nbody\n',
+        },
+      ],
+      // …the colocated asset moves by reusing its existing blob SHA (no re-upload)…
+      moves: [{ from: 'content/events/old-slug/hero.webp', to: 'content/events/new-slug/hero.webp', sha: 'ASSETSHA' }],
+      // …and the old index.md is removed.
+      deletions: ['content/events/old-slug/index.md'],
+    });
+
+    // The cassette asserts createTree carried new-path@sha for both the rewritten md
+    // and the moved asset, plus old-path@null for both.
+    expect(result.sha).toBe('MOVECOMMIT');
+    expect(isExhausted()).toBe(true);
+  });
+
   // --- Phase 5b: publish / merge primitives ---
 
   it('compareChangedPaths() returns the changed files (publish diff / overlap check)', async () => {

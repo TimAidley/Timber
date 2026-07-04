@@ -174,11 +174,15 @@ body {
   font-size: 0.8rem;
 }
 
-.editor-header__delete {
+.editor-header__actions {
   flex: none;
+  display: flex;
+  gap: 0.4rem;
+}
+
+.editor-header__rename,
+.editor-header__delete {
   padding: 0.3rem 0.7rem;
-  border: 1px solid #c0392b;
-  color: #c0392b;
   background: none;
   border-radius: 6px;
   cursor: pointer;
@@ -186,8 +190,28 @@ body {
   font-size: 0.8rem;
 }
 
+.editor-header__rename {
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.editor-header__rename:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.editor-header__delete {
+  border: 1px solid #c0392b;
+  color: #c0392b;
+}
+
 .editor-header__delete:hover {
   background: #fdecea;
+}
+
+.rename__preview {
+  font-size: 0.8rem;
+  color: var(--muted);
 }
 
 .object-list__head {

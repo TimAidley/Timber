@@ -87,9 +87,9 @@ async function validateCommand(repoDir: string): Promise<number> {
 /** Build the whole site to <outDir>; returns an exit code (non-zero on build failure). */
 async function buildCommand(repoDir: string, outDir: string): Promise<number> {
   try {
-    const { pages, drafts, assets } = await buildSite(repoDir, outDir);
+    const { pages, drafts, assets, redirects } = await buildSite(repoDir, outDir);
     process.stdout.write(
-      `Built ${pages} page(s), ${assets} asset(s), skipped ${drafts} draft(s) → ${outDir}\n`,
+      `Built ${pages} page(s), ${assets} asset(s), ${redirects} redirect(s), skipped ${drafts} draft(s) → ${outDir}\n`,
     );
     return 0;
   } catch (err) {

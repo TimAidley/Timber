@@ -15,6 +15,7 @@ import { PublishDialog } from './components/PublishDialog.js';
 import { DeployStatus } from './components/DeployStatus.js';
 import { NewObjectDialog } from './components/NewObjectDialog.js';
 import { DeleteDialog } from './components/DeleteDialog.js';
+import { RenameDialog } from './components/RenameDialog.js';
 import { AdvancedArea } from './advanced/AdvancedArea.js';
 import { canAccessAdvanced } from './github/access.js';
 import { newObject } from './content/newObject.js';
@@ -54,6 +55,7 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   );
   const [showNew, setShowNew] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ContentObject | null>(null);
+  const [showRename, setShowRename] = useState(false);
 
   // Content editing vs. the advanced/admin area (templates + config), gated by the
   // canAccessAdvanced() seam (SPEC §8/§10). Both share this one session + autosave, so
@@ -163,6 +165,46 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
     setDeleteTarget(null);
   }
 
+  // Rename the selected object's slug (SPEC §5): append the old slug to `aliases` (so
+  // the build emits a redirect stub), move the bundle (index.md rewritten + old
+  // deleted + colocated assets moved by blob SHA), rewrite any front-matter paths that
+  // pointed into the old bundle, and migrate the local draft. References store the id,
+  // so nothing else needs touching.
+  function renameObject(newSlug: string): void {
+    if (!selected) return;
+    const oldPath = selected.path;
+    const oldDir = `content/${selected.type}/${selected.slug}`;
+    const newDir = `content/${selected.type}/${newSlug}`;
+    const newPath = `${newDir}/index.md`;
+
+    const prevAliases = Array.isArray(edit.data.aliases)
+      ? edit.data.aliases.filter((a): a is string => typeof a === 'string')
+      : [];
+    const aliases = prevAliases.includes(selected.slug) ? prevAliases : [...prevAliases, selected.slug];
+
+    // Repoint any front-matter value (e.g. an image field) that lived in the bundle.
+    const data: FrontMatter = { aliases };
+    for (const [k, v] of Object.entries(edit.data)) {
+      if (k === 'aliases') continue;
+      data[k] = typeof v === 'string' && v.startsWith(`${oldDir}/`) ? `${newDir}/${v.slice(oldDir.length + 1)}` : v;
+    }
+
+    const moves = session.treeEntries
+      .filter((e) => e.type === 'blob' && e.path.startsWith(`${oldDir}/`) && e.path !== oldPath)
+      .map((e) => ({ from: e.path, to: `${newDir}/${e.path.slice(oldDir.length + 1)}`, sha: e.sha }));
+
+    autosave.markObjectRenamed(oldPath, newPath, data, edit.body, moves);
+    void draftStore.current?.delete(repoKey, oldPath);
+    void draftStore.current?.put(repoKey, newPath, data, edit.body);
+
+    const renamed: ContentObject = { ...selected, slug: newSlug, path: newPath, data };
+    setObjects((prev) => prev.map((o) => (o.path === oldPath ? renamed : o)));
+    setEdit({ data: { ...data }, body: edit.body });
+    setEditingPath(newPath);
+    setSelectedPath(newPath);
+    setShowRename(false);
+  }
+
   const validation = useMemo(() => {
     if (!selected || !schema) return undefined;
     const candidate: ContentObject = {
@@ -253,13 +295,18 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
                 <code>{selected.path}</code>
               </div>
               {selected.kind === 'collection' ? (
-                <button
-                  type="button"
-                  className="editor-header__delete"
-                  onClick={() => setDeleteTarget(selected)}
-                >
-                  Delete
-                </button>
+                <div className="editor-header__actions">
+                  <button type="button" className="editor-header__rename" onClick={() => setShowRename(true)}>
+                    Rename
+                  </button>
+                  <button
+                    type="button"
+                    className="editor-header__delete"
+                    onClick={() => setDeleteTarget(selected)}
+                  >
+                    Delete
+                  </button>
+                </div>
               ) : null}
             </header>
 
@@ -321,6 +368,15 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
           model={workingModel}
           onClose={() => setDeleteTarget(null)}
           onConfirm={() => confirmDelete(deleteTarget)}
+        />
+      ) : null}
+
+      {showRename && selected ? (
+        <RenameDialog
+          object={selected}
+          takenSlugs={new Set(objects.filter((o) => o.type === selected.type && o.path !== selected.path).map((o) => o.slug))}
+          onClose={() => setShowRename(false)}
+          onRename={renameObject}
         />
       ) : null}
 

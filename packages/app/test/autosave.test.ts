@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { FileWrite } from '@timber/github';
+import type { FileWrite, MoveEntry } from '@timber/github';
 import { Autosaver, type SyncState } from '../src/state/autosave.js';
 
-type CommitFn = (files: FileWrite[], message: string, deletions: string[]) => Promise<void>;
+type CommitFn = (files: FileWrite[], message: string, deletions: string[], moves: MoveEntry[]) => Promise<void>;
 
 function setup(commit: CommitFn) {
   const states: SyncState[] = [];
@@ -116,6 +116,33 @@ describe('Autosaver', () => {
     expect(files).toHaveLength(0);
     expect(deletions).toEqual(['content/events/gone/index.md']);
     expect(message).toBe('delete gone');
+  });
+
+  it('renames a bundle: writes the new index.md, deletes the old, moves assets by SHA', async () => {
+    const commit = vi.fn<CommitFn>(async () => undefined);
+    const { saver } = setup(commit);
+
+    saver.markObjectRenamed(
+      'content/events/old/index.md',
+      'content/events/new/index.md',
+      { id: 'e1', title: 'E', aliases: ['old'] },
+      'body',
+      [{ from: 'content/events/old/hero.webp', to: 'content/events/new/hero.webp', sha: 'ASSET' }],
+    );
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect(commit).toHaveBeenCalledTimes(1);
+    const [files, message, deletions, moves] = commit.mock.calls[0]!;
+    // New index.md is written at the new path…
+    expect(files.map((f) => f.path)).toEqual(['content/events/new/index.md']);
+    // …the old index.md is deleted…
+    expect(deletions).toEqual(['content/events/old/index.md']);
+    // …the asset moves by reusing its blob SHA…
+    expect(moves).toEqual([
+      { from: 'content/events/old/hero.webp', to: 'content/events/new/hero.webp', sha: 'ASSET' },
+    ]);
+    // …and the summary reads as a rename, not an edit+delete.
+    expect(message).toBe('rename new');
   });
 
   it('saveNow() flushes immediately without waiting for the idle timer', async () => {
