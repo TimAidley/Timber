@@ -8,3 +8,6 @@ fields:
     type: text
   baseUrl:
     type: text
+  homepage:
+    type: reference
+    referenceType: pages

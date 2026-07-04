@@ -28,7 +28,7 @@ describe('buildSite', () => {
   it('renders public objects to <url>/index.html via their type template', async () => {
     const result = await buildSite(siteFixture, out);
 
-    expect(result.pages).toBe(3); // hello, fete, note1
+    expect(result.pages).toBe(4); // hello, fete, note1, home
     expect(result.drafts).toBe(1); // secret
 
     const hello = await readFile(join(out, 'pages/hello/index.html'), 'utf8');
@@ -83,10 +83,28 @@ describe('buildSite', () => {
     const sitemap = await readFile(join(out, 'sitemap.xml'), 'utf8');
     expect(sitemap).toContain('<loc>https://fixture.example/pages/hello/</loc>');
     expect(sitemap).toContain('<loc>https://fixture.example/events/fete/</loc>');
+    expect(sitemap).toContain('<loc>https://fixture.example/</loc>'); // homepage at root
     expect(sitemap).not.toContain('secret'); // drafts excluded
 
     const robots = await readFile(join(out, 'robots.txt'), 'utf8');
     expect(robots).toContain('Sitemap: https://fixture.example/sitemap.xml');
+  });
+
+  it('renders the homepage at the domain root, not its /type/slug/ URL', async () => {
+    await buildSite(siteFixture, out);
+    const root = await readFile(join(out, 'index.html'), 'utf8');
+    expect(root).toContain('<h1>Home</h1>');
+    expect(root).toContain('<link rel="canonical" href="https://fixture.example/">');
+    // the homepage object does NOT also appear at /pages/home/
+    expect(await exists(join(out, 'pages/home/index.html'))).toBe(false);
+  });
+
+  it('injects the manual navigation into templates as site.nav', async () => {
+    await buildSite(siteFixture, out);
+    // note1 uses the default template, which renders the nav.
+    const note = await readFile(join(out, 'notes/note1/index.html'), 'utf8');
+    expect(note).toContain('<a href="/">Home</a>'); // ref resolved to homepage-at-root
+    expect(note).toContain('<a href="/about/">About</a>'); // explicit url
   });
 
   it('build output equals renderPage output for the same object (preview ≡ build)', async () => {

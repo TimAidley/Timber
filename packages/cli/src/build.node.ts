@@ -4,6 +4,7 @@ import { renderPage } from '@timber/generator';
 import {
   assembleContent,
   loadSchemas,
+  loadNavigation,
   buildRobots,
   buildSitemap,
   canPublish,
@@ -12,6 +13,8 @@ import {
   siteContext,
   urlFor,
   Validator,
+  type ContentObject,
+  type ContentTypeSchema,
 } from '@timber/content';
 import { buildSnapshotFromDir } from './snapshot.node.js';
 
@@ -99,6 +102,19 @@ export async function buildSite(repoDir: string, outDir: string): Promise<BuildR
   const settingsObject = model.objects.find((o) => schemas.get(o.type)?.page === false);
   const site = siteContext(settingsObject);
 
+  // Homepage-at-root (SPEC §5): the settings singleton names a `homepage` object id;
+  // that object renders to `/` instead of its normal `/type/slug/` URL.
+  const homepageId = typeof site.homepage === 'string' ? site.homepage : undefined;
+  const effectiveUrl = (object: ContentObject, schema: ContentTypeSchema): string =>
+    homepageId && object.id === homepageId ? '/' : urlFor(object, schema);
+
+  // Manual navigation (SPEC §13): resolve `ref` entries through the same effective URL.
+  site.nav = loadNavigation(snapshot, (id) => {
+    const target = model.byId.get(id);
+    const schema = target && schemas.get(target.type);
+    return target && schema ? effectiveUrl(target, schema) : undefined;
+  });
+
   let pages = 0;
   let drafts = 0;
   let assets = 0;
@@ -121,10 +137,15 @@ export async function buildSite(repoDir: string, outDir: string): Promise<BuildR
 
     const template = await resolveTemplate(object.type);
     const markdown = await readFile(join(repoDir, object.path), 'utf8');
+    const url = effectiveUrl(object, schema);
     const seo = pageSeo(object, schema, site);
+    if (homepageId && object.id === homepageId) {
+      const baseUrl = typeof site.baseUrl === 'string' ? site.baseUrl : '';
+      seo.canonical = baseUrl ? `${baseUrl}/` : '/';
+    }
     const html = await renderPage({ markdown, template, site, seo });
 
-    const dir = urlToDir(urlFor(object, schema));
+    const dir = urlToDir(url);
     await mkdir(join(outDir, dir), { recursive: true });
     await writeFile(join(outDir, dir, 'index.html'), html, 'utf8');
     pages += 1;
