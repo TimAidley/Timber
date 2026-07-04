@@ -85,12 +85,13 @@ describe.skipIf(!rawToken)('RepoClient (live, against the real sandbox repo)', (
     });
     expect(result.sha).toBeTruthy();
 
-    // Read the text back; the binary blob landing is proven by the commit succeeding
-    // with both files in one tree.
-    const committed = await client.readFile('content/pages/hello/index.md', scratchBranch);
-    expect(committed).toBe(marker);
-
+    // Verify via the Git Data API (the exact committed tree/blobs), not the Contents
+    // API — getContent is CDN-cached and can return stale content right after a commit.
     const tree = await client.loadTree(scratchBranch);
-    expect(tree.entries.some((e) => e.path === 'content/pages/hello/images/pixel.png')).toBe(true);
+    const mdEntry = tree.entries.find((e) => e.path === 'content/pages/hello/index.md');
+    const pngEntry = tree.entries.find((e) => e.path === 'content/pages/hello/images/pixel.png');
+    expect(mdEntry).toBeDefined();
+    expect(pngEntry).toBeDefined();
+    expect(await client.readBlob(mdEntry!.sha)).toBe(marker);
   });
 });
