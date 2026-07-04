@@ -1,288 +1,153 @@
-# Installing Timber — stand up a live site + the OAuth editor
+# Installing Timber
 
-This walks you through the **full production setup**: a new content repo that
-publishes to GitHub Pages, the Cloudflare Worker that lets you sign in with GitHub,
-and the editor app pointed at both. Follow it top to bottom.
+Two ways to stand up a Timber site:
 
-There are **three moving parts**:
+- **[Fork and go](#fork-and-go-no-local-setup)** — the easy path: fork a template, add a
+  few secrets, run one Action. No terminal, no local clone. Recommended.
+- **[Local / advanced](#appendix--local--advanced-setup)** — clone the repo and drive
+  everything by hand (useful for development or for understanding the moving parts),
+  including a **paste-a-PAT quick-start** with no cloud setup at all.
 
-1. **Content repo** — your site's source (seeded from `starter/`). A GitHub Action
-   builds it and deploys to **GitHub Pages** → this is your public website.
-2. **OAuth broker** — a tiny **Cloudflare Worker** that holds your GitHub client
-   secret. It's the one server-side piece; a static SPA can't finish GitHub OAuth
-   alone (the token exchange needs the secret and GitHub's endpoint has no CORS).
-3. **Editor app** (`@timber/app`) — the Timber SPA you edit in. Signs you in via the
-   broker and commits to the content repo.
+Both produce the same thing: a public website on GitHub Pages plus an in-browser editor.
+There are three moving parts either way:
 
-```
-You ──edit──▶ Editor app ──sign in──▶ broker (Cloudflare) ──▶ GitHub
-                  │                                              │
-                  └──commit to content repo──▶ GitHub Action ──▶ Pages (your site)
-```
+1. **Content repo** — your site's source (from the starter). A GitHub Action builds it
+   and deploys to **GitHub Pages** → your public website.
+2. **OAuth broker** — a tiny **Cloudflare Worker** holding your GitHub client secret (the
+   one server-side piece; a static SPA can't finish GitHub OAuth alone).
+3. **Editor app** — the Timber SPA, co-hosted at `/<repo>/admin/` on the same Pages site.
 
-> **Shortcut:** If you just want to *see the editor working* before doing all of
-> this, skip straight to the [PAT quick-start](#appendix-a--skip-oauth-paste-a-pat)
-> — it runs the editor locally with no OAuth App and no Cloudflare. Come back here
-> for the real thing.
+The only irreducibly-manual bits are your own accounts/credentials: a **Cloudflare
+account + API token**, a **GitHub OAuth App** registration, and pasting a few **secrets**
+into the repo. Everything else is automated.
 
 ---
 
-## Prerequisites
+## Fork and go (no local setup)
 
-- **Node ≥ 20** and **pnpm 10** (`npm i -g pnpm@10`). This repo pins `pnpm@10.33.0`.
-- **git**, a **GitHub account** (these steps assume the owner is `TimAidley` — change
-  to yours throughout), and a **Cloudflare account** (free tier is fine).
-- A local clone of **this Timber repo** (you already have it).
-- The Timber repo (`TimAidley/Timber`) must be **public**, or the deploy Action can't
-  check it out. It's public by default; if you made it private, see
-  [Troubleshooting](#troubleshooting).
+Your site will live at `https://<you>.github.io/<repo>/` and the editor at
+`https://<you>.github.io/<repo>/admin/`.
 
-Throughout, replace these placeholders:
+### 1. Use the template
+From the **`timber-starter`** repo, click **“Use this template” → Create a new
+repository** (or Fork). Name it anything.
 
-| Placeholder | Meaning | Example |
+### 2. Enable Pages
+In your new repo: **Settings → Pages → Source: “GitHub Actions.”**
+
+### 3. Register a GitHub OAuth App
+**GitHub → Settings → Developer settings → OAuth Apps → New OAuth App:**
+- **Homepage URL** and **Authorization callback URL:** `https://<you>.github.io/<repo>/admin/`
+  — exactly, trailing slash included.
+- Copy the **Client ID**; generate a **Client secret**.
+
+### 4. Add secrets + variables
+Your repo → **Settings → Secrets and variables → Actions**:
+
+| Kind | Name | Value |
 |---|---|---|
-| `<owner>` | your GitHub username | `TimAidley` |
-| `<site-repo>` | the new content repo's name | `timber-site` |
-| `<editor-origin>` | where the editor runs (scheme+host, **no path/slash**) | `http://localhost:5173` |
+| Variable | `GH_OAUTH_CLIENT_ID` | OAuth App **client id** (public) |
+| Secret | `GH_OAUTH_CLIENT_SECRET` | OAuth App **client secret** |
+| Secret | `CLOUDFLARE_API_TOKEN` | Cloudflare token with **Workers Scripts: Edit** |
+| Secret | `CLOUDFLARE_ACCOUNT_ID` | your Cloudflare **account id** |
 
-Your published site will live at `https://<owner>.github.io/<site-repo>/`.
+(From the Cloudflare dashboard → Workers. Free plan is fine; ensure a **workers.dev
+subdomain** is enabled for your account.)
 
----
+### 5. Set your base URL
+Edit `content/settings/index.md` → `baseUrl: https://<you>.github.io/<repo>` (no trailing
+slash) and commit. This makes links, canonical URLs, and the sitemap correct under the
+repo's subpath.
 
-## Step 1 — Create the content repo from `starter/`
+### 6. Run “Setup OAuth broker”
+**Actions → “Setup OAuth broker” → Run workflow.** It deploys the Cloudflare broker,
+commits its URL to `.timber-broker-url`, and triggers a deploy. When **Build & deploy
+site** goes green, open `https://<you>.github.io/<repo>/admin/`, **Sign in with GitHub**,
+and start editing. Publish → auto-deploys.
 
-The `starter/` folder in this repo is a complete, buildable example site (home +
-about pages, a theme, schemas, settings, and the deploy workflow). Copy it into a
-fresh repo.
+### How it fits together
+```
+Use template ─▶ add secrets ─▶ run "Setup OAuth broker" ─▶ deploys broker + commits URL
+                                                                │
+                                    "Build & deploy": site (/) + editor (/admin/) ─▶ Pages
+```
+The editor's URL/callback (`…/<repo>/admin/`) and the broker's allowed origin
+(`https://<you>.github.io`) are both determined by your repo name — nothing to guess.
 
-1. **Create an empty repo** on GitHub named `<site-repo>` — **Public** (required for
-   free Pages), with **no** README/licence/gitignore (keep it empty).
-
-2. **Seed it from `starter/`.** From anywhere on your machine:
-
-   ```sh
-   # copy the starter into a new working dir (adjust the path to your Timber clone)
-   cp -r /path/to/Timber/starter <site-repo>
-   cd <site-repo>
-
-   git init -b main
-   git add -A
-   git commit -m "Seed site from Timber starter"
-   git remote add origin https://github.com/<owner>/<site-repo>.git
-   git push -u origin main
-   ```
-
-   The workflow file (`.github/workflows/deploy.yml`) is included in `starter/`, so it
-   lands in your repo automatically.
-
-3. **Set your site's base URL.** Edit `content/settings/index.md` and change
-   `baseUrl` to your Pages URL (used for canonical links, sitemap, and OG tags):
-
-   ```yaml
-   baseUrl: https://<owner>.github.io/<site-repo>
-   ```
-
-   Commit and push. (You can also do this later from the editor.)
-
-> **Pin Timber (optional but recommended).** `.github/workflows/deploy.yml` has
-> `TIMBER_REF: main`. `main` works, but pinning to a Timber **release tag** keeps
-> "preview ≡ production" stable over time. Change `TIMBER_REF` to a tag once you cut
-> one.
+### Troubleshooting
+- **Setup fails reading your workers.dev subdomain** → enable workers.dev for your
+  Cloudflare account, then re-run “Setup OAuth broker.”
+- **Sign-in `redirect_uri` mismatch** → the OAuth App callback must equal
+  `https://<you>.github.io/<repo>/admin/` exactly (trailing slash).
+- **`origin_not_allowed` on sign-in** → the broker's `ALLOWED_ORIGIN` didn't match; it's
+  derived as `https://<you>.github.io`. Custom domain? Set `ALLOWED_ORIGIN` accordingly
+  (see the broker README) and re-run Setup.
+- **Deploy fails at “Check out Timber”** → the `TimAidley/Timber` repo must be public (the
+  Action checks it out anonymously).
+- **CSS/links 404 on the live site** → confirm `baseUrl` in `content/settings/index.md`
+  includes the `/<repo>` subpath (step 5).
+- **Pages 404 after a green deploy** → confirm **Settings → Pages → Source = GitHub
+  Actions** and give it a minute.
 
 ---
 
-## Step 2 — Enable GitHub Pages
+## Appendix — Local / advanced setup
 
-In the **content repo** on GitHub: **Settings → Pages → Build and deployment →
-Source: “GitHub Actions.”**
+For development, or to run the editor on your own machine. Replace `<owner>` /
+`<site-repo>` / `<editor-origin>` (e.g. `http://localhost:5173`) throughout.
 
-That's the only Pages setting you need — the workflow uploads the built site as an
-artifact and deploys it directly (no `gh-pages` branch).
+**Prerequisites:** Node ≥ 20, pnpm 10 (`npm i -g pnpm@10`), git, a clone of the Timber
+repo.
 
----
-
-## Step 3 — First deploy
-
-The push from Step 1 already triggered the **Build & deploy site** Action (it runs on
-every push to `main`, plus manual runs and a daily rebuild).
-
-- Watch it under the repo's **Actions** tab. First run takes a couple of minutes
-  (it installs Timber and builds the CLI).
-- When green, your site is live at **`https://<owner>.github.io/<site-repo>/`**.
-
-If the run fails, see [Troubleshooting](#troubleshooting). You now have a working
-site — the rest wires up the in-browser editor.
-
----
-
-## Step 4 — Register a GitHub OAuth App
-
-This gives the editor a way to sign you in. **GitHub → Settings → Developer settings
-→ OAuth Apps → New OAuth App.**
-
-- **Application name:** anything (e.g. "Timber editor").
-- **Homepage URL:** your editor's URL. For local dev that's `http://localhost:5173/`.
-- **Authorization callback URL:** the **same** URL, exactly — `http://localhost:5173/`.
-  The SPA handles the `?code` on its own page, so the callback *is* the app's own URL.
-  ⚠️ This must match the editor's origin+path exactly (trailing slash included), or
-  sign-in fails with a redirect_uri mismatch.
-- Click **Register application**.
-- Copy the **Client ID** (public — safe to expose).
-- Click **Generate a new client secret** and copy it now (**private** — you'll paste
-  it into Cloudflare in the next step and never anywhere else).
-
-> Running the editor somewhere other than localhost later? Register that URL as the
-> callback (or add a second OAuth App for it), and update `ALLOWED_ORIGIN` +
-> the app env accordingly.
-
----
-
-## Step 5 — Deploy the broker to Cloudflare
-
-The broker lives in `packages/oauth-broker/`. It trades the OAuth `code` for a token,
-holding your client secret server-side. From your **Timber** clone:
-
+### A. Create the content repo from `starter/`
 ```sh
-cd packages/oauth-broker
+cp -r /path/to/Timber/starter <site-repo> && cd <site-repo>
+git init -b main && git add -A && git commit -m "Seed site from Timber starter"
+git remote add origin https://github.com/<owner>/<site-repo>.git
+git push -u origin main
+```
+Set `baseUrl` in `content/settings/index.md`, enable **Pages → GitHub Actions**, and the
+push deploys your site at `https://<owner>.github.io/<site-repo>/`.
 
-# one-time: authenticate wrangler with your Cloudflare account
+### B. Deploy the broker by hand
+```sh
+cd /path/to/Timber/packages/oauth-broker
 npx wrangler login
-
-# store the client secret in Cloudflare's secret store (never committed/logged)
-npx wrangler secret put GITHUB_CLIENT_SECRET
-# └─ paste the client secret from Step 4 when prompted
-
-# deploy, passing the two non-secret values
+npx wrangler secret put GITHUB_CLIENT_SECRET        # paste the OAuth App secret
 npx wrangler deploy \
-  --var GITHUB_CLIENT_ID:<your-client-id> \
-  --var ALLOWED_ORIGIN:<editor-origin>
+  --var GITHUB_CLIENT_ID:<client-id> \
+  --var ALLOWED_ORIGIN:<editor-origin>              # exact origin, no path/slash
 ```
+`ALLOWED_ORIGIN` is scheme+host only (e.g. `http://localhost:5173`). Copy the printed
+`*.workers.dev` URL.
 
-- `<editor-origin>` is the **exact** origin of your editor — scheme + host, **no path,
-  no trailing slash**. For local dev: `http://localhost:5173`. The broker rejects
-  every other origin, so this must be right.
-- `wrangler deploy` prints the worker URL, e.g.
-  `https://timber-oauth-broker.<you>.workers.dev`. **Copy it** — that's your
-  `VITE_TIMBER_OAUTH_BROKER_URL` in the next step.
-
-> Prefer config files over flags? Uncomment and set `GITHUB_CLIENT_ID` and
-> `ALLOWED_ORIGIN` under `[vars]` in `packages/oauth-broker/wrangler.toml`, then just
-> `npx wrangler deploy`. (Never put the *secret* in `wrangler.toml` — always use
-> `wrangler secret put`.)
-
-**Sanity check** the broker rejects strangers (should print `origin_not_allowed`):
-
+### C. Run the editor locally
 ```sh
-curl -s -X POST https://timber-oauth-broker.<you>.workers.dev \
-  -H 'Origin: https://evil.example' -H 'Content-Type: application/json' \
-  -d '{"code":"x"}'
-```
-
----
-
-## Step 6 — Configure and run the editor
-
-Back in your **Timber** clone:
-
-```sh
-# install workspace deps (first time only)
+cd /path/to/Timber
 pnpm install
-
-# point the editor at your repo + broker
 cp packages/app/.env.example packages/app/.env
 ```
-
-Edit `packages/app/.env`:
-
+Set in `packages/app/.env`:
 ```ini
 VITE_TIMBER_OWNER=<owner>
 VITE_TIMBER_REPO=<site-repo>
-
-# both set ⇒ "Sign in with GitHub"; unset ⇒ paste-a-PAT dev gate
-VITE_TIMBER_OAUTH_CLIENT_ID=<your-client-id>
+VITE_TIMBER_OAUTH_CLIENT_ID=<client-id>
 VITE_TIMBER_OAUTH_BROKER_URL=https://timber-oauth-broker.<you>.workers.dev
 ```
+Then `pnpm --filter @timber/app dev`. Vite serves at **http://localhost:5173/** — it must
+match the OAuth callback and `ALLOWED_ORIGIN` exactly. Register the OAuth App callback as
+`http://localhost:5173/`. Restart `dev` after `.env` changes.
 
-Run it:
+### Appendix A — Skip OAuth, paste a PAT
+To try the editor with **zero** OAuth/Cloudflare setup: leave `VITE_TIMBER_OAUTH_*` unset,
+run `pnpm --filter @timber/app dev`, and paste a **fine-grained PAT** (GitHub → Settings →
+Developer settings → Fine-grained tokens) scoped to your repo with **Contents: Read and
+write**. The token is kept in `localStorage` — a dev convenience; OAuth is the proper
+end-user path.
 
-```sh
-pnpm --filter @timber/app dev
-```
-
-Vite prints the URL (default **http://localhost:5173/**). **It must match** the
-OAuth callback (Step 4) and `ALLOWED_ORIGIN` (Step 5) exactly. If Vite picks a
-different port (e.g. 5173 was taken), update both the OAuth App callback and redeploy
-the broker with the new `ALLOWED_ORIGIN`.
-
-> `.env` changes only take effect on a **dev-server restart**.
-
----
-
-## Step 7 — Sign in and build your site
-
-1. Open the editor URL → click **Sign in with GitHub** → authorise (scope: `repo`,
-   so it can commit to your content repo). You'll bounce to GitHub and back; the
-   `?code` is exchanged via the broker and stripped from the URL.
-2. The editor loads your repo. Try the full loop:
-   - **＋ New** → pick a type (e.g. `pages`) + a title → edit fields + body.
-   - Use the **reference picker**, **rename**, and **delete** as needed.
-   - Edits autosave to a `‹your-login›_wip` branch (watch the sync indicator).
-   - **Publish…** → review the diff → confirm → it squash-merges to `main`.
-3. The push to `main` triggers the deploy Action; the editor's **deploy status**
-   chip tracks *building… / published ✓*. Your live site updates at
-   `https://<owner>.github.io/<site-repo>/`.
-
-That's the whole loop: edit in the browser → publish → auto-deploy.
-
----
-
-## Troubleshooting
-
-- **Deploy Action fails at "Check out Timber."** `TimAidley/Timber` must be public
-  (the Action checks it out anonymously). If it's private, either make it public, or
-  add a PAT with `repo` read as an Actions secret and set `token:` on that checkout
-  step.
-- **Sign-in returns to a blank page / `redirect_uri` mismatch.** The OAuth App
-  callback URL must equal the editor's origin+path **exactly** (trailing slash
-  included). Local dev = `http://localhost:5173/`.
-- **`origin_not_allowed` when signing in.** The broker's `ALLOWED_ORIGIN` doesn't
-  match the editor origin. Redeploy with the exact scheme+host (no path/slash) and
-  confirm the port matches what Vite actually used.
-- **Sign-in works but the repo won't load.** Check `VITE_TIMBER_OWNER` /
-  `VITE_TIMBER_REPO` and that your GitHub account has write access to that repo.
-  Restart `pnpm dev` after `.env` edits.
-- **Pages 404 after a green deploy.** Confirm **Settings → Pages → Source = GitHub
-  Actions**, and give the first deploy a minute to propagate.
-- **Broken/invalid content won't publish.** By design — a public object must validate
-  before it can go live (drafts are always allowed). Fix the flagged fields or leave
-  it a draft.
-
----
-
-## Going further
-
-- **Host the editor** (instead of running it locally): `pnpm --filter @timber/app
-  build` produces a static bundle in `packages/app/dist/`. Deploy it to any static
-  host (its own GitHub Pages repo, Cloudflare Pages, etc.), then update the OAuth App
-  callback, the broker's `ALLOWED_ORIGIN`, and the app's `VITE_*` env to that stable
-  URL. Rebuild the app after changing its env (Vite inlines env at build time).
-- **Pin Timber** to a release tag in the content repo's `deploy.yml` (`TIMBER_REF`)
-  so your site's build never drifts.
-- **Custom domain:** add it under the content repo's **Settings → Pages**, then set
-  `baseUrl` in `content/settings/index.md` to the custom domain.
-
----
-
-## Appendix A — Skip OAuth, paste a PAT
-
-To try the editor with **zero** OAuth/Cloudflare setup:
-
-1. Leave `VITE_TIMBER_OAUTH_*` **unset** in `packages/app/.env` (only set
-   `VITE_TIMBER_OWNER` / `VITE_TIMBER_REPO`).
-2. `pnpm --filter @timber/app dev`.
-3. Create a **fine-grained PAT** (GitHub → Settings → Developer settings → Fine-grained
-   tokens) scoped to your content repo with **Contents: Read and write**, and paste it
-   into the editor's gate.
-
-This is the dev path (the token is kept in `localStorage`). The OAuth flow above is
-the proper end-user setup; the PAT is a fast on-ramp.
+### Going further
+- **Custom domain / user site:** if the site is served at a root (a `<you>.github.io`
+  repo, or a custom domain), `baseUrl` has no subpath and `basePath` is empty — links work
+  at `/`. Set the OAuth callback + broker `ALLOWED_ORIGIN` to that origin.
+- **Pin Timber:** set `TIMBER_REF` in the workflows to a Timber release tag so the build
+  never drifts.

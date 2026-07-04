@@ -40,7 +40,23 @@ export function siteContext(settings?: ContentObject): SiteContext {
   const site: SiteContext = { ...data };
   const baseUrl = str(data.baseUrl);
   if (baseUrl) site.baseUrl = trimTrailingSlash(baseUrl);
+  // The path portion of the base URL, so in-page links work when the site is served
+  // from a subpath — e.g. a GitHub *project* Pages site at `/<repo>/` (SPEC §3, §13).
+  // `/repo` for `https://you.github.io/repo`; `''` for a root site / custom domain /
+  // no baseUrl. Templates prefix root-absolute links with it: `{{ site.basePath }}/...`.
+  site.basePath = basePathOf(baseUrl);
   return site;
+}
+
+/** The (trailing-slash-trimmed) path of a base URL: `/repo`, or `''` for root/none. */
+function basePathOf(baseUrl: string | undefined): string {
+  if (!baseUrl) return '';
+  try {
+    const path = new URL(baseUrl).pathname.replace(/\/+$/, '');
+    return path === '' ? '' : path;
+  } catch {
+    return '';
+  }
 }
 
 /** Make an image reference absolute against the site base URL (best-effort). */

@@ -25,8 +25,22 @@ describe('siteContext', () => {
     expect(site.baseUrl).toBe('https://example.com'); // trailing slash trimmed
   });
 
-  it('is empty when there is no settings singleton', () => {
-    expect(siteContext(undefined)).toEqual({});
+  it('has no settings beyond an empty basePath when there is no singleton', () => {
+    expect(siteContext(undefined)).toEqual({ basePath: '' });
+  });
+
+  it('derives basePath from the base URL path (for subpath / project-Pages deploys)', () => {
+    // Root site / custom domain → no prefix.
+    expect(siteContext(settings).basePath).toBe('');
+    // Project Pages under /repo → links must be prefixed with /repo.
+    expect(siteContext(obj({ baseUrl: 'https://you.github.io/my-site' }, 'settings', 'settings')).basePath).toBe(
+      '/my-site',
+    );
+    expect(siteContext(obj({ baseUrl: 'https://you.github.io/my-site/' }, 'settings', 'settings')).basePath).toBe(
+      '/my-site',
+    );
+    // No baseUrl → empty (root).
+    expect(siteContext(obj({ title: 'x' }, 'settings', 'settings')).basePath).toBe('');
   });
 });
 

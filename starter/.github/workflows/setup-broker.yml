@@ -1,0 +1,95 @@
+name: Setup OAuth broker
+
+# Run this ONCE (Actions tab → "Setup OAuth broker" → Run workflow) to deploy the
+# Cloudflare Worker that lets the /admin/ editor sign you in with GitHub. It:
+#   1. deploys the broker (packages/oauth-broker) from a pinned Timber checkout,
+#   2. records the deployed worker URL in .timber-broker-url (committed — it's public),
+#   3. kicks off a site deploy so the /admin/ editor goes live.
+#
+# Prerequisites (repo Settings → Secrets and variables → Actions):
+#   Secrets:   CLOUDFLARE_API_TOKEN   (Workers Scripts: Edit)
+#              CLOUDFLARE_ACCOUNT_ID
+#              GH_OAUTH_CLIENT_SECRET (from your GitHub OAuth App)
+#   Variables: GH_OAUTH_CLIENT_ID     (from your GitHub OAuth App — public)
+#
+# See README.md for the full runbook.
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: write # commit .timber-broker-url
+  actions: write # dispatch the deploy workflow
+
+env:
+  TIMBER_REPO: TimAidley/Timber
+  TIMBER_REF: main # pin to a Timber release tag
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out this content repo
+        uses: actions/checkout@v4
+
+      - name: Check out Timber (pinned, for the broker source)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.TIMBER_REPO }}
+          ref: ${{ env.TIMBER_REF }}
+          path: .timber
+
+      # ALLOWED_ORIGIN is the exact origin of your editor site (the editor is served at
+      # https://<owner>.github.io/<repo>/admin/, whose origin is https://<owner>.github.io).
+      - name: Deploy the broker to Cloudflare
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: .timber/packages/oauth-broker
+          secrets: |
+            GITHUB_CLIENT_SECRET
+          command: >-
+            deploy
+            --var GITHUB_CLIENT_ID:${{ vars.GH_OAUTH_CLIENT_ID }}
+            --var ALLOWED_ORIGIN:https://${{ github.repository_owner }}.github.io
+        env:
+          GITHUB_CLIENT_SECRET: ${{ secrets.GH_OAUTH_CLIENT_SECRET }}
+
+      # The worker's URL is https://<worker-name>.<account-subdomain>.workers.dev.
+      # The worker name is fixed (wrangler.toml: timber-oauth-broker); look up the
+      # account's workers.dev subdomain via the Cloudflare API.
+      - name: Record the broker URL
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          SUBDOMAIN="$(curl -fsS \
+            -H "Authorization: Bearer $CF_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/workers/subdomain" \
+            | jq -r '.result.subdomain')"
+          if [ -z "$SUBDOMAIN" ] || [ "$SUBDOMAIN" = "null" ]; then
+            echo "Could not read your workers.dev subdomain. Enable workers.dev for your account, then re-run." >&2
+            exit 1
+          fi
+          URL="https://timber-oauth-broker.$SUBDOMAIN.workers.dev"
+          echo "Broker URL: $URL"
+          echo "$URL" > .timber-broker-url
+
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add .timber-broker-url
+          if git diff --cached --quiet; then
+            echo "Broker URL unchanged."
+          else
+            git commit -m 'chore: record OAuth broker URL'
+            git push
+          fi
+
+      # A GITHUB_TOKEN push doesn't trigger other workflows, so kick the deploy
+      # explicitly to build + publish the /admin/ editor now.
+      - name: Trigger a site deploy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run deploy.yml
