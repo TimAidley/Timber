@@ -1,0 +1,17 @@
+/**
+ * A minimal Liquid template used purely to drive in-browser live preview in this
+ * slice. The real "one default theme" (SPEC §13) is Phase 7 and will live in the
+ * starter repo's `templates/`; here we only need enough to prove the preview path
+ * runs the SAME generator (`renderPage`) the CI build uses — preview ≡ build.
+ *
+ * Templates are dumb (SPEC/CLAUDE.md): `page` is the front matter, `content` is the
+ * already-rendered body HTML (emitted raw).
+ */
+export const defaultTemplate = `<article>
+  <h1>{{ page.title }}</h1>
+  {% if page.status %}<p class="status">Status: {{ page.status }}</p>{% endif %}
+  {% if page.startDate %}<p class="date">{{ page.startDate }}</p>{% endif %}
+  {% if page.tags %}<ul class="tags">{% for tag in page.tags %}<li>{{ tag }}</li>{% endfor %}</ul>{% endif %}
+  {{ content }}
+</article>
+`;
