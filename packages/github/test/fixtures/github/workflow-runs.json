@@ -1,0 +1,20 @@
+[
+  {
+    "method": "GET",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/actions/workflows/deploy.yml/runs?per_page=1&branch=main",
+    "status": 200,
+    "responseBody": {
+      "total_count": 1,
+      "workflow_runs": [
+        {
+          "id": 42,
+          "status": "in_progress",
+          "conclusion": null,
+          "html_url": "https://github.com/TimAidley/Timber-test-sandbox/actions/runs/42",
+          "head_branch": "main",
+          "created_at": "2026-07-04T00:00:00Z"
+        }
+      ]
+    }
+  }
+]

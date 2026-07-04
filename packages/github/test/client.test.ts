@@ -210,4 +210,12 @@ describe('RepoClient (replayed from fixtures recorded against the real sandbox r
     await makeClient().resetBranch('octocat_wip', 'SQUASHSHA');
     expect(isExhausted()).toBe(true);
   });
+
+  it('getLatestWorkflowRun() returns the latest run (deploy-status indicator)', async () => {
+    useCassette('workflow-runs');
+    const run = await makeClient().getLatestWorkflowRun('deploy.yml', 'main');
+    expect(run?.status).toBe('in_progress');
+    expect(run?.conclusion).toBeNull();
+    expect(run?.url).toContain('/actions/runs/42');
+  });
 });

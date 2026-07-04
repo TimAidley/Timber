@@ -19,4 +19,5 @@ export type {
   RepoTree,
   TreeEntry,
   TreeOverlayEntry,
+  WorkflowRun,
 } from './types.js';

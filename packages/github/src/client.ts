@@ -11,6 +11,7 @@ import type {
   RepoTree,
   TreeEntry,
   TreeOverlayEntry,
+  WorkflowRun,
 } from './types.js';
 
 /**
@@ -328,5 +329,29 @@ export class RepoClient {
       sha: toSha,
       force: true,
     });
+  }
+
+  /**
+   * The most recent run of a workflow (by file name, e.g. `deploy.yml`), optionally
+   * for one branch — powers the editor's deploy-status indicator (SPEC §12:
+   * "building… / published ✓ / failed").
+   */
+  async getLatestWorkflowRun(workflowFile: string, branch?: string): Promise<WorkflowRun | undefined> {
+    const { data } = await this.octokit.rest.actions.listWorkflowRuns({
+      owner: this.owner,
+      repo: this.repo,
+      workflow_id: workflowFile,
+      per_page: 1,
+      ...(branch ? { branch } : {}),
+    });
+    const run = data.workflow_runs[0];
+    if (!run) return undefined;
+    return {
+      status: run.status ?? '',
+      conclusion: run.conclusion ?? null,
+      url: run.html_url,
+      headBranch: run.head_branch ?? null,
+      createdAt: run.created_at,
+    };
   }
 }

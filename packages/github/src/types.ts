@@ -57,6 +57,18 @@ export interface TreeOverlayEntry {
   sha: string | null;
 }
 
+/** The latest run of a workflow — drives the editor's deploy-status indicator (SPEC §12). */
+export interface WorkflowRun {
+  /** queued | in_progress | completed. */
+  status: string;
+  /** success | failure | cancelled | … | null while running. */
+  conclusion: string | null;
+  /** Link to the run on GitHub. */
+  url: string;
+  headBranch: string | null;
+  createdAt: string;
+}
+
 export interface CommitTreeInput {
   branch: string;
   message: string;
