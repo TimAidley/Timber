@@ -1,0 +1,152 @@
+:root {
+  --border: #d8d8d8;
+  --muted: #666;
+  --accent: #2b6cb0;
+  font-family: system-ui, -apple-system, sans-serif;
+  color: #1a1a1a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.app {
+  display: grid;
+  grid-template-columns: 220px 1fr 360px;
+  height: 100vh;
+}
+
+.app__sidebar {
+  border-right: 1px solid var(--border);
+  padding: 1rem;
+  overflow-y: auto;
+}
+
+.app__brand {
+  font-size: 1.2rem;
+  margin: 0 0 1rem;
+}
+
+.app__main {
+  padding: 1rem 1.5rem;
+  overflow-y: auto;
+}
+
+.app__preview {
+  border-left: 1px solid var(--border);
+  padding: 1rem;
+  overflow-y: auto;
+  background: #fafafa;
+}
+
+.object-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.object-list button {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  padding: 0.4rem 0.5rem;
+  cursor: pointer;
+}
+
+.object-list button.is-active {
+  background: #eef4fb;
+}
+
+.object-list__title {
+  font-weight: 600;
+}
+
+.object-list__type {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.editor-header code {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.editor-panel {
+  margin: 1.25rem 0;
+}
+
+.schema-form__row {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.schema-form__label {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.schema-form__required {
+  color: #c0392b;
+}
+
+.schema-form input,
+.schema-form select,
+.schema-form textarea {
+  width: 100%;
+  padding: 0.35rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font: inherit;
+}
+
+.body-editor__toolbar {
+  margin-bottom: 0.5rem;
+}
+
+.body-editor .milkdown,
+.body-editor__source {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.75rem;
+  min-height: 160px;
+}
+
+.body-editor__source {
+  width: 100%;
+  font-family: ui-monospace, monospace;
+  font-size: 0.85rem;
+}
+
+.validation {
+  border-radius: 6px;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.85rem;
+}
+
+.validation--ok {
+  background: #edf7ed;
+}
+
+.validation--bad {
+  background: #fdecea;
+}
+
+.preview {
+  font-size: 0.9rem;
+}
+
+.preview--error {
+  color: #c0392b;
+  white-space: pre-wrap;
+}

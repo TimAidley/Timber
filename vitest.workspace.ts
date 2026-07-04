@@ -15,7 +15,7 @@ export default defineWorkspace([
       name: 'node',
       environment: 'node',
       include: ['packages/**/test/**/*.test.ts'],
-      exclude: [...configDefaults.exclude, '**/*.live.test.ts'],
+      exclude: [...configDefaults.exclude, '**/*.live.test.ts', 'packages/app/**'],
     },
   },
   {
@@ -23,7 +23,7 @@ export default defineWorkspace([
       name: 'browser-like',
       environment: 'jsdom',
       include: ['packages/**/test/**/*.test.ts'],
-      exclude: [...configDefaults.exclude, '**/*.live.test.ts'],
+      exclude: [...configDefaults.exclude, '**/*.live.test.ts', 'packages/app/**'],
     },
   },
   {
@@ -33,4 +33,8 @@ export default defineWorkspace([
       include: ['packages/**/test/**/*.live.test.ts'],
     },
   },
+  // The browser editor app runs as its own project (jsdom + React plugin); see
+  // packages/app/vitest.config.ts. It's excluded from the two projects above
+  // because it's browser-only React, not part of the isomorphism proof.
+  './packages/app/vitest.config.ts',
 ]);
