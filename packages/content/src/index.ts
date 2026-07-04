@@ -16,6 +16,8 @@ export { parseVideoUrl } from './video.js';
 export type { VideoRef } from './video.js';
 export { siteContext, pageSeo, buildSitemap, buildRobots } from './seo.js';
 export type { SiteContext, PageSeo } from './seo.js';
+export { loadNavigation } from './navigation.js';
+export type { NavItem } from './navigation.js';
 
 export type {
   FieldKind,
