@@ -4,8 +4,12 @@ import { renderPage } from '@timber/generator';
 import {
   assembleContent,
   loadSchemas,
+  buildRobots,
+  buildSitemap,
   canPublish,
   isPublic,
+  pageSeo,
+  siteContext,
   urlFor,
   Validator,
 } from '@timber/content';
@@ -89,9 +93,16 @@ export async function buildSite(repoDir: string, outDir: string): Promise<BuildR
     throw new BuildError([`no template for type "${type}" (templates/${type}.liquid or templates/default.liquid)`]);
   }
 
+  // Site-wide context from the global-settings singleton (SPEC §13): the config
+  // object whose type is marked `page: false`. It's read for `{{ site }}` but never
+  // rendered as a page.
+  const settingsObject = model.objects.find((o) => schemas.get(o.type)?.page === false);
+  const site = siteContext(settingsObject);
+
   let pages = 0;
   let drafts = 0;
   let assets = 0;
+  const sitemapUrls: string[] = [];
 
   // Site-wide assets: /assets/** → <out>/assets/**
   for (const rel of await walkFiles(join(repoDir, 'assets'))) {
@@ -100,20 +111,24 @@ export async function buildSite(repoDir: string, outDir: string): Promise<BuildR
   }
 
   for (const object of model.objects) {
+    const schema = schemas.get(object.type);
+    if (!schema) continue; // unknown-type is already a model error above
+    if (schema.page === false) continue; // config singleton, not a page
     if (!isPublic(object)) {
       drafts += 1;
       continue;
     }
-    const schema = schemas.get(object.type);
-    if (!schema) continue; // unknown-type is already a model error above
+
     const template = await resolveTemplate(object.type);
     const markdown = await readFile(join(repoDir, object.path), 'utf8');
-    const html = await renderPage({ markdown, template, site: {} });
+    const seo = pageSeo(object, schema, site);
+    const html = await renderPage({ markdown, template, site, seo });
 
     const dir = urlToDir(urlFor(object, schema));
     await mkdir(join(outDir, dir), { recursive: true });
     await writeFile(join(outDir, dir, 'index.html'), html, 'utf8');
     pages += 1;
+    sitemapUrls.push(seo.canonical);
 
     // Colocated bundle assets: everything under the object's bundle dir except index.md.
     const bundleDir = dirname(object.path); // e.g. content/events/fete
@@ -123,6 +138,10 @@ export async function buildSite(repoDir: string, outDir: string): Promise<BuildR
       assets += 1;
     }
   }
+
+  // SEO artifacts (SPEC §13): sitemap of every rendered page + robots pointing to it.
+  await writeFile(join(outDir, 'sitemap.xml'), buildSitemap(sitemapUrls), 'utf8');
+  await writeFile(join(outDir, 'robots.txt'), buildRobots(site), 'utf8');
 
   return { pages, drafts, assets };
 }

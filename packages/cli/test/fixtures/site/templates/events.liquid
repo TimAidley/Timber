@@ -1,1 +1,1 @@
-<!doctype html><html><head><title>{{ page.title }}</title></head><body class="events"><h1>{{ page.title }}</h1>{% if page.startDate %}<time>{{ page.startDate }}</time>{% endif %}{{ content }}</body></html>
+<!doctype html><html><head><title>{{ seo.title }}</title><meta name="description" content="{{ seo.description }}"><link rel="canonical" href="{{ seo.canonical }}"></head><body class="events"><h1>{{ page.title }}</h1>{% if page.startDate %}<time>{{ page.startDate }}</time>{% endif %}{{ content }}</body></html>
