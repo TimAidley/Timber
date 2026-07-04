@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react';
 import { renderPage, type FrontMatter } from '@timber/generator';
 import { reassembleDocument } from '../content/document.js';
 import { defaultTemplate } from '../state/defaultTemplate.js';
+import type { AssetStore } from '../state/assets.js';
 
 interface PreviewProps {
   data: FrontMatter;
   body: string;
+  assetStore: AssetStore;
 }
 
 /**
@@ -14,7 +16,7 @@ interface PreviewProps {
  * what you see is what the build produces (SPEC §6, §12: "the browser validates").
  * Rendering is async (the remark→Liquid pipeline), so it runs in an effect.
  */
-export function Preview({ data, body }: PreviewProps): React.JSX.Element {
+export function Preview({ data, body, assetStore }: PreviewProps): React.JSX.Element {
   const [html, setHtml] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -24,7 +26,13 @@ export function Preview({ data, body }: PreviewProps): React.JSX.Element {
     renderPage({ markdown: raw, template: defaultTemplate })
       .then((out) => {
         if (!cancelled) {
-          setHtml(out);
+          // Staged images aren't on a server yet (Phase 5 commits them), so rewrite
+          // their bundle paths to object URLs so the preview <img> resolves in-app.
+          let resolved = out;
+          for (const asset of assetStore.all()) {
+            resolved = resolved.split(asset.path).join(asset.url);
+          }
+          setHtml(resolved);
           setError(null);
         }
       })
@@ -34,7 +42,7 @@ export function Preview({ data, body }: PreviewProps): React.JSX.Element {
     return () => {
       cancelled = true;
     };
-  }, [data, body]);
+  }, [data, body, assetStore]);
 
   if (error) {
     return <pre className="preview preview--error">{error}</pre>;

@@ -9,6 +9,7 @@
  */
 export const defaultTemplate = `<article>
   <h1>{{ page.title }}</h1>
+  {% if page.poster %}<figure><img src="{{ page.poster }}" alt="{{ page.posterAlt }}" style="max-width:100%" /></figure>{% endif %}
   {% if page.status %}<p class="status">Status: {{ page.status }}</p>{% endif %}
   {% if page.startDate %}<p class="date">{{ page.startDate }}</p>{% endif %}
   {% if page.tags %}<ul class="tags">{% for tag in page.tags %}<li>{{ tag }}</li>{% endfor %}</ul>{% endif %}

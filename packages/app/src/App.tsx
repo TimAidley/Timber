@@ -8,6 +8,7 @@ import {
 } from '@timber/content';
 import type { FrontMatter } from '@timber/generator';
 import { demoRepo } from './state/demoRepo.js';
+import { AssetStore } from './state/assets.js';
 import { SchemaForm } from './forms/SchemaForm.js';
 import { BodyEditor } from './editor/BodyEditor.js';
 import { Preview } from './preview/Preview.js';
@@ -30,6 +31,10 @@ export function App(): React.JSX.Element {
     const schemas = loadSchemas(demoRepo);
     return { model: assembleContent(demoRepo, schemas), validator: new Validator(schemas) };
   }, []);
+
+  // Staging area for processed image bytes, shared by the image widgets and the
+  // preview (Phase 5 drains it into commits). Persists across selections/renders.
+  const assetStore = useMemo(() => new AssetStore(), []);
 
   const [selectedPath, setSelectedPath] = useState<string>(model.objects[0]?.path ?? '');
   const selected: ContentObject | undefined = model.objects.find((o) => o.path === selectedPath);
@@ -98,6 +103,8 @@ export function App(): React.JSX.Element {
                 schema={schema}
                 data={edit.data}
                 model={model}
+                assetStore={assetStore}
+                bundleDir={selected.path.replace(/\/index\.md$/, '')}
                 onChange={(key, value) =>
                   setEdit((prev) => {
                     const data = { ...prev.data };
@@ -144,7 +151,7 @@ export function App(): React.JSX.Element {
 
       <aside className="app__preview">
         <h3>Preview</h3>
-        {selected ? <Preview data={edit.data} body={edit.body} /> : null}
+        {selected ? <Preview data={edit.data} body={edit.body} assetStore={assetStore} /> : null}
       </aside>
     </div>
   );

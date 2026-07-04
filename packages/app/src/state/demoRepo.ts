@@ -32,6 +32,8 @@ fields:
     options: [draft, scheduled, cancelled]
   tags:
     type: tags
+  poster:
+    type: image
   host:
     type: reference
     referenceType: people

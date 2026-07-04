@@ -142,8 +142,62 @@ body {
   background: #fdecea;
 }
 
+.image-field,
+.video-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.image-field__preview img {
+  max-width: 180px;
+  max-height: 120px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  display: block;
+}
+
+.image-field__preview code,
+.image-field__stats {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.image-field__status {
+  font-size: 0.8rem;
+  color: var(--accent);
+}
+
+.image-field__error,
+.video-field__error {
+  font-size: 0.8rem;
+  color: #c0392b;
+}
+
+.image-field__alt {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.video-field__facade {
+  max-width: 200px;
+  border-radius: 4px;
+  display: block;
+  margin-top: 0.3rem;
+}
+
+.video-field__ok {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
 .preview {
   font-size: 0.9rem;
+}
+
+.preview img {
+  max-width: 100%;
 }
 
 .preview--error {
