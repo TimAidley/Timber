@@ -218,6 +218,7 @@ Multiple editors, but few, and single-file-per-page makes most conflicts structu
 - **Search — Pagefind.** Runs at build time from the already-rendered HTML, ships a chunked WASM index loaded lazily, no backend/API key. Slots in as a **CI step after the generator**, plus a search widget in the theme. Low effort; can be enabled early. Lives in the live site, not the editor.
 - **RSS** — opt-in per collection type; easy to add but **post-MVP**.
 - **Pagination / archives** — deferred until a type has enough entries to need it.
+- **Implemented (Slice 7a):** global settings is a **singleton content type** whose schema sets **`page: false`** (`content/settings/index.md`) — the build reads it for the `{{ site }}` context but never renders it as a page. **SEO is computed in the generator** (`@timber/content/seo`: `siteContext`, `pageSeo`) and exposed to templates as `{{ seo }}` (title suffixed with the site title; description falling back front-matter → site; canonical from `baseUrl` + URL; OG image from the first image field), keeping templates dumb. The build emits `sitemap.xml` (every public page's canonical URL) and `robots.txt`. **Navigation** will use an explicit **`config/navigation.yml`** (Slice 7b, with the default theme + homepage-at-root). **Search (Pagefind)** is deferred to a follow-up slice.
 
 ---
 
