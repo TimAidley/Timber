@@ -28,6 +28,13 @@ export class AssetStore {
     return this.assets.get(path)?.url;
   }
 
+  /** Raw bytes for a staged asset, for committing to git (SPEC §7/§11). */
+  async bytes(path: string): Promise<Uint8Array | undefined> {
+    const asset = this.assets.get(path);
+    if (!asset) return undefined;
+    return new Uint8Array(await asset.blob.arrayBuffer());
+  }
+
   all(): StagedAsset[] {
     return [...this.assets.values()];
   }
