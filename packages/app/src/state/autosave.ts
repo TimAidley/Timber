@@ -23,10 +23,13 @@ export interface AutosaverDeps {
   retryMs?: number;
 }
 
-function describeCommit(objectPaths: string[], assetPaths: string[]): string {
-  const slugs = objectPaths.map((p) => p.replace(/\/index\.md$/, '').split('/').pop() ?? p);
+function describeCommit(objectPaths: string[], filePaths: string[], assetPaths: string[]): string {
+  const names = [
+    ...objectPaths.map((p) => p.replace(/\/index\.md$/, '').split('/').pop() ?? p),
+    ...filePaths, // templates/config commit under their full path
+  ];
   const head =
-    slugs.length === 1 ? `edit ${slugs[0]}` : slugs.length > 1 ? `edit ${slugs.length} items` : 'add assets';
+    names.length === 1 ? `edit ${names[0]}` : names.length > 1 ? `edit ${names.length} items` : 'add assets';
   const assets = assetPaths.length ? ` (+${assetPaths.length} asset${assetPaths.length > 1 ? 's' : ''})` : '';
   return `${head}${assets}`;
 }
@@ -40,6 +43,7 @@ function describeCommit(objectPaths: string[], assetPaths: string[]): string {
  */
 export class Autosaver {
   private dirtyObjects = new Map<string, DirtyObject>();
+  private dirtyFiles = new Map<string, string>();
   private dirtyAssets = new Set<string>();
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private flushing = false;
@@ -57,6 +61,18 @@ export class Autosaver {
     this.schedule();
   }
 
+  /**
+   * Mark a raw text file (a template or config YAML) dirty (SPEC §8 advanced area).
+   * Unlike objects, these carry no front matter/body — just the file's full text —
+   * and commit under their own path. The advanced area only calls this once the file
+   * *validates*, so a broken template never enters the coalesced WIP commit.
+   */
+  markFileDirty(path: string, content: string): void {
+    this.dirtyFiles.set(path, content);
+    this.deps.onState('dirty');
+    this.schedule();
+  }
+
   markAssetDirty(path: string): void {
     this.dirtyAssets.add(path);
     this.deps.onState('dirty');
@@ -65,6 +81,10 @@ export class Autosaver {
 
   getDirtyObject(path: string): DirtyObject | undefined {
     return this.dirtyObjects.get(path);
+  }
+
+  getDirtyFile(path: string): string | undefined {
+    return this.dirtyFiles.get(path);
   }
 
   /** Flush immediately (explicit save / tab hide). */
@@ -83,12 +103,14 @@ export class Autosaver {
 
   private async flush(): Promise<void> {
     if (this.flushing) return;
-    if (this.dirtyObjects.size === 0 && this.dirtyAssets.size === 0) return;
+    if (this.dirtyObjects.size === 0 && this.dirtyFiles.size === 0 && this.dirtyAssets.size === 0) return;
 
     // Optimistically take the dirty set; restore it on failure.
     const objects = [...this.dirtyObjects.entries()];
+    const rawFiles = [...this.dirtyFiles.entries()];
     const assets = [...this.dirtyAssets];
     this.dirtyObjects = new Map();
+    this.dirtyFiles = new Map();
     this.dirtyAssets = new Set();
 
     this.flushing = true;
@@ -102,13 +124,19 @@ export class Autosaver {
       );
       const files: FileWrite[] = [
         ...objects.map(([path, o]): FileWrite => ({ path, content: reassembleDocument(o.data, o.body) })),
+        ...rawFiles.map(([path, content]): FileWrite => ({ path, content })),
         ...assetFiles.filter((f): f is FileWrite => f !== null),
       ];
 
-      await this.deps.commit(files, describeCommit(objects.map(([p]) => p), assets));
-      this.deps.onState(this.dirtyObjects.size || this.dirtyAssets.size ? 'dirty' : 'saved');
+      await this.deps.commit(
+        files,
+        describeCommit(objects.map(([p]) => p), rawFiles.map(([p]) => p), assets),
+      );
+      const stillDirty = this.dirtyObjects.size || this.dirtyFiles.size || this.dirtyAssets.size;
+      this.deps.onState(stillDirty ? 'dirty' : 'saved');
     } catch {
       for (const [path, o] of objects) if (!this.dirtyObjects.has(path)) this.dirtyObjects.set(path, o);
+      for (const [path, content] of rawFiles) if (!this.dirtyFiles.has(path)) this.dirtyFiles.set(path, content);
       for (const path of assets) this.dirtyAssets.add(path);
       this.deps.onState('error');
       setTimeout(() => void this.flush(), this.retryMs);
@@ -121,8 +149,10 @@ export class Autosaver {
 export interface Autosave {
   syncState: SyncState;
   markObjectDirty: (path: string, data: FrontMatter, body: string) => void;
+  markFileDirty: (path: string, content: string) => void;
   markAssetDirty: (path: string) => void;
   getDirtyObject: (path: string) => DirtyObject | undefined;
+  getDirtyFile: (path: string) => string | undefined;
   saveNow: () => void;
 }
 
@@ -158,8 +188,10 @@ export function useAutosave(session: RepoSession, assetStore: AssetStore): Autos
   return {
     syncState,
     markObjectDirty: (path, data, body) => saver.markObjectDirty(path, data, body),
+    markFileDirty: (path, content) => saver.markFileDirty(path, content),
     markAssetDirty: (path) => saver.markAssetDirty(path),
     getDirtyObject: (path) => saver.getDirtyObject(path),
+    getDirtyFile: (path) => saver.getDirtyFile(path),
     saveNow: () => void saver.saveNow(),
   };
 }

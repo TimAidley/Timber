@@ -13,6 +13,8 @@ import { Preview } from './preview/Preview.js';
 import { SyncIndicator } from './components/SyncIndicator.js';
 import { PublishDialog } from './components/PublishDialog.js';
 import { DeployStatus } from './components/DeployStatus.js';
+import { AdvancedArea } from './advanced/AdvancedArea.js';
+import { canAccessAdvanced } from './github/access.js';
 
 /** The deploy workflow's file name (the starter template ships deploy.yml). */
 const DEPLOY_WORKFLOW = 'deploy.yml';
@@ -33,6 +35,12 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   const validator = useMemo(() => new Validator(model.schemas), [model]);
   const assetStore = useMemo(() => new AssetStore(), []);
   const autosave = useAutosave(session, assetStore);
+
+  // Content editing vs. the advanced/admin area (templates + config), gated by the
+  // canAccessAdvanced() seam (SPEC §8/§10). Both share this one session + autosave, so
+  // switching never drops unsaved state and edits coalesce into the same WIP commit.
+  const advancedAllowed = canAccessAdvanced();
+  const [view, setView] = useState<'content' | 'advanced'>('content');
 
   // Publish dialog + the conflict base SHA, which advances each time we publish.
   const [showPublish, setShowPublish] = useState(false);
@@ -131,6 +139,28 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
         <button type="button" className="publish-btn" onClick={() => setShowPublish(true)}>
           Publish…
         </button>
+        {advancedAllowed ? (
+          <div className="view-toggle" role="tablist" aria-label="Editor view">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={view === 'content'}
+              className={view === 'content' ? 'is-active' : ''}
+              onClick={() => setView('content')}
+            >
+              Content
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={view === 'advanced'}
+              className={view === 'advanced' ? 'is-active' : ''}
+              onClick={() => setView('advanced')}
+            >
+              Advanced
+            </button>
+          </div>
+        ) : null}
         <nav>
           <ul className="object-list">
             {model.objects.map((o) => (
@@ -152,6 +182,10 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
         </nav>
       </aside>
 
+      {view === 'advanced' ? (
+        <AdvancedArea session={session} autosave={autosave} />
+      ) : (
+        <>
       <main className="app__main">
         {selected && schema ? (
           <>
@@ -205,6 +239,8 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
         <h3>Preview</h3>
         {selected ? <Preview data={edit.data} body={edit.body} assetStore={assetStore} /> : null}
       </aside>
+        </>
+      )}
 
       {showPublish ? (
         <PublishDialog
