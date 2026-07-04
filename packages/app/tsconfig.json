@@ -1,0 +1,19 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "types": ["react", "react-dom"],
+
+    // This is an application bundled by Vite, not a library: typecheck only
+    // (Vite emits the bundle). Overrides the base's composite/declaration/emit
+    // so it stays out of the `tsc -b` library graph. It is also the first
+    // browser-only package — `types` deliberately omits "node", so a Node global
+    // is a compile error here just as `types: []` makes one in the pure packages.
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "noEmit": true
+  },
+  "include": ["src", "test"]
+}

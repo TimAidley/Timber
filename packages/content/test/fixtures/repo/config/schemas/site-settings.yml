@@ -1,0 +1,8 @@
+kind: singleton
+hasBody: false
+fields:
+  title:
+    type: text
+    required: true
+  tagline:
+    type: text

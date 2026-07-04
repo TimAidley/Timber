@@ -1,0 +1,11 @@
+[
+  {
+    "method": "GET",
+    "url": "https://api.github.com/user",
+    "status": 200,
+    "responseBody": {
+      "login": "octocat",
+      "id": 1
+    }
+  }
+]

@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // A Cloudflare Worker's globals are the web-standard fetch/Request/Response/
+    // crypto — the "WebWorker" lib, NOT DOM. `types: []` keeps Node globals out, so
+    // this stays portable web-standard code (the reference host is Cloudflare, but
+    // the handler runs anywhere with the fetch API).
+    "lib": ["ES2022", "WebWorker"],
+    "types": [],
+    // Typecheck-only: `wrangler deploy` does the actual bundling (esbuild), so this
+    // package emits nothing — like the app, it stays out of the `tsc -b` lib graph.
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "noEmit": true
+  },
+  "include": ["src"]
+}

@@ -1,0 +1,189 @@
+import { Octokit } from '@octokit/rest';
+import { afterAll, describe, expect, it } from 'vitest';
+import { RepoClient, fromEnv } from '../src/index.js';
+
+/**
+ * Live suite: exercises RepoClient against the real GitHub API and a real
+ * dedicated sandbox repo, not a cassette. Gated on TIMBER_SANDBOX_TOKEN so it's
+ * inert (skipped) with no env vars set — `pnpm test` never runs this file; only
+ * `pnpm test:live` does, on a nightly schedule or on demand (see
+ * .github/workflows/live-github-tests.yml).
+ */
+const TOKEN_VAR = 'TIMBER_SANDBOX_TOKEN';
+const owner = process.env.TIMBER_SANDBOX_OWNER ?? 'TimAidley';
+const repo = process.env.TIMBER_SANDBOX_REPO ?? 'Timber-test-sandbox';
+const rawToken = process.env[TOKEN_VAR];
+
+// A fresh branch name per run so concurrent/repeated live runs never collide.
+const scratchBranch = `test-scratch-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+describe.skipIf(!rawToken)('RepoClient (live, against the real sandbox repo)', () => {
+  const client = new RepoClient({ owner, repo, getToken: fromEnv(TOKEN_VAR) });
+
+  afterAll(async () => {
+    if (!rawToken) return;
+    // Best-effort cleanup so the sandbox repo doesn't accumulate scratch
+    // branches — runs even if a test above failed.
+    const octokit = new Octokit({ auth: rawToken });
+    await octokit.rest.git
+      .deleteRef({ owner, repo, ref: `heads/${scratchBranch}` })
+      .catch(() => undefined);
+  });
+
+  it('loads the default branch tree from the real repo', async () => {
+    const tree = await client.loadTree();
+    expect(tree.entries.some((e) => e.path === 'content/pages/hello/index.md')).toBe(true);
+    expect(tree.entries.some((e) => e.path === 'templates' && e.type === 'tree')).toBe(true);
+  });
+
+  it('reads a real file from the real repo', async () => {
+    const content = await client.readFile('content/pages/hello/index.md');
+    expect(content).toContain('placeholder page');
+  });
+
+  it('commits a file to a brand-new scratch branch and reads it back', async () => {
+    const marker = `live test run ${scratchBranch}\n`;
+
+    const result = await client.commitFiles({
+      branch: scratchBranch,
+      baseBranch: 'main',
+      message: `test: live scratch commit (${scratchBranch})`,
+      files: [{ path: 'content/pages/hello/index.md', content: marker }],
+    });
+    expect(result.sha).toBeTruthy();
+
+    const committed = await client.readFile('content/pages/hello/index.md', scratchBranch);
+    expect(committed).toBe(marker);
+  });
+
+  it('resolves the authenticated login (for the <login>_wip branch)', async () => {
+    const login = await client.getAuthenticatedLogin();
+    expect(typeof login).toBe('string');
+    expect(login.length).toBeGreaterThan(0);
+  });
+
+  it('loadSnapshot() builds a path->utf8 map of the content/config text files', async () => {
+    const snapshot = await client.loadSnapshot();
+    expect(snapshot.get('content/pages/hello/index.md')).toContain('placeholder page');
+    // Only text files under content/ and config/ are loaded.
+    expect([...snapshot.keys()].every((p) => /^(content|config)\/.*\.(md|ya?ml)$/.test(p))).toBe(
+      true,
+    );
+  });
+
+  it('coalesces a text edit and a binary image into a single WIP commit', async () => {
+    const marker = `wip coalesced ${scratchBranch}\n`;
+    const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]); // PNG magic bytes
+
+    const result = await client.commitFiles({
+      branch: scratchBranch,
+      message: `test: coalesced text+binary (${scratchBranch})`,
+      files: [
+        { path: 'content/pages/hello/index.md', content: marker },
+        { path: 'content/pages/hello/images/pixel.png', bytes: png },
+      ],
+    });
+    expect(result.sha).toBeTruthy();
+
+    // Verify via the Git Data API (the exact committed tree/blobs), not the Contents
+    // API — getContent is CDN-cached and can return stale content right after a commit.
+    const tree = await client.loadTree(scratchBranch);
+    const mdEntry = tree.entries.find((e) => e.path === 'content/pages/hello/index.md');
+    const pngEntry = tree.entries.find((e) => e.path === 'content/pages/hello/images/pixel.png');
+    expect(mdEntry).toBeDefined();
+    expect(pngEntry).toBeDefined();
+    expect(await client.readBlob(mdEntry!.sha)).toBe(marker);
+  });
+
+  it('creates then deletes a bundle in the same branch (object lifecycle, SPEC §5)', async () => {
+    const bundle = `content/pages/scratch-${scratchBranch}/index.md`;
+    const asset = `content/pages/scratch-${scratchBranch}/note.txt`;
+
+    // Create: write the bundle's index.md + a colocated asset.
+    await client.commitFiles({
+      branch: scratchBranch,
+      message: `test: create scratch bundle (${scratchBranch})`,
+      files: [
+        { path: bundle, content: `---\nid: scratch\ntitle: Scratch\n---\nbody\n` },
+        { path: asset, content: 'note\n' },
+      ],
+    });
+    let tree = await client.loadTree(scratchBranch);
+    expect(tree.entries.some((e) => e.path === bundle)).toBe(true);
+    expect(tree.entries.some((e) => e.path === asset)).toBe(true);
+
+    // Delete: remove the whole bundle (index.md + asset) in one commit.
+    await client.commitFiles({
+      branch: scratchBranch,
+      message: `test: delete scratch bundle (${scratchBranch})`,
+      files: [],
+      deletions: [bundle, asset],
+    });
+    tree = await client.loadTree(scratchBranch);
+    expect(tree.entries.some((e) => e.path === bundle)).toBe(false);
+    expect(tree.entries.some((e) => e.path === asset)).toBe(false);
+  });
+
+  it('renames a bundle by reusing the asset blob SHA (no re-upload, SPEC §5)', async () => {
+    const oldDir = `content/pages/ren-old-${scratchBranch}`;
+    const newDir = `content/pages/ren-new-${scratchBranch}`;
+
+    // Seed a bundle with a colocated asset, capturing the asset's blob SHA.
+    await client.commitFiles({
+      branch: scratchBranch,
+      message: `test: seed rename bundle (${scratchBranch})`,
+      files: [
+        { path: `${oldDir}/index.md`, content: `---\nid: ren\ntitle: Ren\n---\nbody\n` },
+        { path: `${oldDir}/pic.txt`, content: 'pixels\n' },
+      ],
+    });
+    const before = await client.loadTree(scratchBranch);
+    const assetSha = before.entries.find((e) => e.path === `${oldDir}/pic.txt`)!.sha;
+
+    // Rename: move index.md (rewritten) + the asset (blob-reusing move), delete the old.
+    await client.commitFiles({
+      branch: scratchBranch,
+      message: `test: rename bundle (${scratchBranch})`,
+      files: [{ path: `${newDir}/index.md`, content: `---\nid: ren\ntitle: Ren\naliases:\n  - ren-old-${scratchBranch}\n---\nbody\n` }],
+      deletions: [`${oldDir}/index.md`],
+      moves: [{ from: `${oldDir}/pic.txt`, to: `${newDir}/pic.txt`, sha: assetSha }],
+    });
+
+    const after = await client.loadTree(scratchBranch);
+    // The moved asset kept its exact blob SHA — proving no re-upload.
+    expect(after.entries.find((e) => e.path === `${newDir}/pic.txt`)?.sha).toBe(assetSha);
+    expect(after.entries.some((e) => e.path === `${oldDir}/pic.txt`)).toBe(false);
+    expect(after.entries.some((e) => e.path === `${oldDir}/index.md`)).toBe(false);
+    expect(after.entries.some((e) => e.path === `${newDir}/index.md`)).toBe(true);
+  });
+
+  it('squash-publishes a WIP tree onto a throwaway target branch (SPEC §11)', async () => {
+    const octokit = new Octokit({ auth: rawToken });
+    const targetBranch = `publish-target-${scratchBranch}`;
+    const mainSha = (await client.getBranchSha('main'))!;
+    await octokit.rest.git.createRef({ owner, repo, ref: `refs/heads/${targetBranch}`, sha: mainSha });
+
+    try {
+      const wipTip = (await client.getBranchSha(scratchBranch))!;
+      const wipTree = await client.treeShaOf(wipTip);
+
+      // Squash: one commit on the target whose tree is exactly the WIP's tree.
+      const result = await client.commitTree({
+        branch: targetBranch,
+        message: `test: squash publish (${scratchBranch})`,
+        treeSha: wipTree,
+        parents: [mainSha],
+      });
+      expect(result.sha).toBeTruthy();
+      expect(await client.treeShaOf(result.sha)).toBe(wipTree);
+
+      // compareChangedPaths reflects the WIP edits landing on the target.
+      const changed = await client.compareChangedPaths('main', targetBranch);
+      expect(changed.some((c) => c.path === 'content/pages/hello/index.md')).toBe(true);
+    } finally {
+      await octokit.rest.git
+        .deleteRef({ owner, repo, ref: `heads/${targetBranch}` })
+        .catch(() => undefined);
+    }
+  });
+});

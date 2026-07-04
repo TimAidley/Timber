@@ -1,0 +1,4 @@
+- label: Home
+  ref: PAGE-HOME
+- label: About
+  ref: PAGE-ABOUT

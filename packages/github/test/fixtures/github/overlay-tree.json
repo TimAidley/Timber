@@ -1,0 +1,27 @@
+[
+  {
+    "method": "POST",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/trees",
+    "status": 201,
+    "requestBody": {
+      "base_tree": "MAINTREE",
+      "tree": [
+        {
+          "path": "content/pages/hello/index.md",
+          "mode": "100644",
+          "type": "blob",
+          "sha": "WIPBLOB"
+        },
+        {
+          "path": "content/pages/gone/index.md",
+          "mode": "100644",
+          "type": "blob",
+          "sha": null
+        }
+      ]
+    },
+    "responseBody": {
+      "sha": "OVERLAID"
+    }
+  }
+]

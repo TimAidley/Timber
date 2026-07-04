@@ -1,0 +1,112 @@
+[
+  {
+    "method": "GET",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/ref/heads%2Foctocat_wip",
+    "status": 200,
+    "responseBody": {
+      "ref": "refs/heads/octocat_wip",
+      "object": {
+        "sha": "WIPTIP",
+        "type": "commit",
+        "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/commits/WIPTIP"
+      }
+    }
+  },
+  {
+    "method": "GET",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/commits/WIPTIP",
+    "status": 200,
+    "responseBody": {
+      "sha": "WIPTIP",
+      "tree": {
+        "sha": "BASETREE",
+        "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/trees/BASETREE"
+      },
+      "message": "seed",
+      "parents": []
+    }
+  },
+  {
+    "method": "POST",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/blobs",
+    "requestBody": {
+      "content": "LS0tCmlkOiBldgp0aXRsZTogUmVuCmFsaWFzZXM6CiAgLSBvbGQtc2x1ZwotLS0KYm9keQo=",
+      "encoding": "base64"
+    },
+    "status": 201,
+    "responseBody": {
+      "sha": "NEWMD",
+      "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/blobs/NEWMD"
+    }
+  },
+  {
+    "method": "POST",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/trees",
+    "requestBody": {
+      "base_tree": "BASETREE",
+      "tree": [
+        {
+          "path": "content/events/new-slug/index.md",
+          "mode": "100644",
+          "type": "blob",
+          "sha": "NEWMD"
+        },
+        {
+          "path": "content/events/new-slug/hero.webp",
+          "mode": "100644",
+          "type": "blob",
+          "sha": "ASSETSHA"
+        },
+        {
+          "path": "content/events/old-slug/index.md",
+          "mode": "100644",
+          "type": "blob",
+          "sha": null
+        },
+        {
+          "path": "content/events/old-slug/hero.webp",
+          "mode": "100644",
+          "type": "blob",
+          "sha": null
+        }
+      ]
+    },
+    "status": 201,
+    "responseBody": {
+      "sha": "MOVEDTREE",
+      "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/trees/MOVEDTREE"
+    }
+  },
+  {
+    "method": "POST",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/commits",
+    "requestBody": {
+      "message": "rename new-slug",
+      "tree": "MOVEDTREE",
+      "parents": ["WIPTIP"]
+    },
+    "status": 201,
+    "responseBody": {
+      "sha": "MOVECOMMIT",
+      "tree": { "sha": "MOVEDTREE" },
+      "message": "rename new-slug",
+      "parents": [{ "sha": "WIPTIP" }]
+    }
+  },
+  {
+    "method": "PATCH",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/refs/heads%2Foctocat_wip",
+    "requestBody": {
+      "sha": "MOVECOMMIT"
+    },
+    "status": 200,
+    "responseBody": {
+      "ref": "refs/heads/octocat_wip",
+      "object": {
+        "sha": "MOVECOMMIT",
+        "type": "commit",
+        "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/commits/MOVECOMMIT"
+      }
+    }
+  }
+]

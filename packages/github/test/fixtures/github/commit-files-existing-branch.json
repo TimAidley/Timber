@@ -1,0 +1,213 @@
+[
+  {
+    "method": "GET",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/ref/heads%2Fphase2-existing",
+    "status": 200,
+    "responseBody": {
+      "ref": "refs/heads/phase2-existing",
+      "node_id": "REF_kwDOTNBemrpyZWZzL2hlYWRzL3BoYXNlMi1leGlzdGluZw",
+      "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/refs/heads/phase2-existing",
+      "object": {
+        "sha": "9daa87ae5afb28bbdc3b117878231e7bed4ed62c",
+        "type": "commit",
+        "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/commits/9daa87ae5afb28bbdc3b117878231e7bed4ed62c"
+      }
+    }
+  },
+  {
+    "method": "GET",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/commits/9daa87ae5afb28bbdc3b117878231e7bed4ed62c",
+    "status": 200,
+    "responseBody": {
+      "sha": "9daa87ae5afb28bbdc3b117878231e7bed4ed62c",
+      "node_id": "C_kwDOTNBemtoAKDlkYWE4N2FlNWFmYjI4YmJkYzNiMTE3ODc4MjMxZTdiZWQ0ZWQ2MmM",
+      "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/commits/9daa87ae5afb28bbdc3b117878231e7bed4ed62c",
+      "html_url": "https://github.com/TimAidley/Timber-test-sandbox/commit/9daa87ae5afb28bbdc3b117878231e7bed4ed62c",
+      "author": {
+        "name": "TimAidley",
+        "email": "tim@aidley.com",
+        "date": "2026-07-03T23:12:53Z"
+      },
+      "committer": {
+        "name": "TimAidley",
+        "email": "tim@aidley.com",
+        "date": "2026-07-03T23:12:53Z"
+      },
+      "tree": {
+        "sha": "1ba97491a0e2cdbb61d375bd59aa4828b4cf2b21",
+        "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/trees/1ba97491a0e2cdbb61d375bd59aa4828b4cf2b21"
+      },
+      "message": "chore: seed phase2-existing branch for fixture recording",
+      "parents": [
+        {
+          "sha": "696e073aa71bbde01548ad208dc9def7e82f1ad0",
+          "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/commits/696e073aa71bbde01548ad208dc9def7e82f1ad0",
+          "html_url": "https://github.com/TimAidley/Timber-test-sandbox/commit/696e073aa71bbde01548ad208dc9def7e82f1ad0"
+        }
+      ],
+      "verification": {
+        "verified": false,
+        "reason": "unsigned",
+        "signature": null,
+        "payload": null,
+        "verified_at": null
+      }
+    }
+  },
+  {
+    "method": "POST",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/blobs",
+    "requestBody": {
+      "content": "UmVjb3JkZWQgZml4dHVyZSBjb250ZW50IEEuCg==",
+      "encoding": "base64"
+    },
+    "status": 201,
+    "responseBody": {
+      "sha": "83840ab91028cb6a01b8856879172bc1b60b7153",
+      "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/blobs/83840ab91028cb6a01b8856879172bc1b60b7153"
+    }
+  },
+  {
+    "method": "POST",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/blobs",
+    "requestBody": {
+      "content": "UmVjb3JkZWQgZml4dHVyZSBjb250ZW50IEIuCg==",
+      "encoding": "base64"
+    },
+    "status": 201,
+    "responseBody": {
+      "sha": "753c1032b303c9d6a6f3a0f847f69089e61ed77e",
+      "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/blobs/753c1032b303c9d6a6f3a0f847f69089e61ed77e"
+    }
+  },
+  {
+    "method": "POST",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/trees",
+    "requestBody": {
+      "base_tree": "1ba97491a0e2cdbb61d375bd59aa4828b4cf2b21",
+      "tree": [
+        {
+          "path": "content/pages/hello/index.md",
+          "mode": "100644",
+          "type": "blob",
+          "sha": "83840ab91028cb6a01b8856879172bc1b60b7153"
+        },
+        {
+          "path": "content/pages/new/index.md",
+          "mode": "100644",
+          "type": "blob",
+          "sha": "753c1032b303c9d6a6f3a0f847f69089e61ed77e"
+        }
+      ]
+    },
+    "status": 201,
+    "responseBody": {
+      "sha": "e48a450e2b1fb8f1bf0857223a69a82af13e5708",
+      "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/trees/e48a450e2b1fb8f1bf0857223a69a82af13e5708",
+      "tree": [
+        {
+          "path": "README.md",
+          "mode": "100644",
+          "type": "blob",
+          "sha": "017bcb34f465e71160ab9807eea4f38032ce4a7f",
+          "size": 74,
+          "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/blobs/017bcb34f465e71160ab9807eea4f38032ce4a7f"
+        },
+        {
+          "path": "assets",
+          "mode": "040000",
+          "type": "tree",
+          "sha": "d564d0bc3dd917926892c55e3706cc116d5b165e",
+          "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/trees/d564d0bc3dd917926892c55e3706cc116d5b165e"
+        },
+        {
+          "path": "config",
+          "mode": "040000",
+          "type": "tree",
+          "sha": "543e603b49ed733bccc4e9fe318ad8d5bb4f738d",
+          "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/trees/543e603b49ed733bccc4e9fe318ad8d5bb4f738d"
+        },
+        {
+          "path": "content",
+          "mode": "040000",
+          "type": "tree",
+          "sha": "67f8731f94af21d5b3107eb8931a838e97a80ccf",
+          "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/trees/67f8731f94af21d5b3107eb8931a838e97a80ccf"
+        },
+        {
+          "path": "templates",
+          "mode": "040000",
+          "type": "tree",
+          "sha": "eebacf1807b17ec947f4b0cacfe7ec6ba82f7b4b",
+          "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/trees/eebacf1807b17ec947f4b0cacfe7ec6ba82f7b4b"
+        }
+      ],
+      "truncated": false
+    }
+  },
+  {
+    "method": "POST",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/commits",
+    "requestBody": {
+      "message": "test(github): recorded fixture commit (existing branch)",
+      "tree": "e48a450e2b1fb8f1bf0857223a69a82af13e5708",
+      "parents": [
+        "9daa87ae5afb28bbdc3b117878231e7bed4ed62c"
+      ]
+    },
+    "status": 201,
+    "responseBody": {
+      "sha": "a0fd838d2d513d255e76acf497d728aae6574f38",
+      "node_id": "C_kwDOTNBemtoAKGEwZmQ4MzhkMmQ1MTNkMjU1ZTc2YWNmNDk3ZDcyOGFhZTY1NzRmMzg",
+      "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/commits/a0fd838d2d513d255e76acf497d728aae6574f38",
+      "html_url": "https://github.com/TimAidley/Timber-test-sandbox/commit/a0fd838d2d513d255e76acf497d728aae6574f38",
+      "author": {
+        "name": "TimAidley",
+        "email": "tim@aidley.com",
+        "date": "2026-07-03T23:12:55Z"
+      },
+      "committer": {
+        "name": "TimAidley",
+        "email": "tim@aidley.com",
+        "date": "2026-07-03T23:12:55Z"
+      },
+      "tree": {
+        "sha": "e48a450e2b1fb8f1bf0857223a69a82af13e5708",
+        "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/trees/e48a450e2b1fb8f1bf0857223a69a82af13e5708"
+      },
+      "message": "test(github): recorded fixture commit (existing branch)",
+      "parents": [
+        {
+          "sha": "9daa87ae5afb28bbdc3b117878231e7bed4ed62c",
+          "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/commits/9daa87ae5afb28bbdc3b117878231e7bed4ed62c",
+          "html_url": "https://github.com/TimAidley/Timber-test-sandbox/commit/9daa87ae5afb28bbdc3b117878231e7bed4ed62c"
+        }
+      ],
+      "verification": {
+        "verified": false,
+        "reason": "unsigned",
+        "signature": null,
+        "payload": null,
+        "verified_at": null
+      }
+    }
+  },
+  {
+    "method": "PATCH",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/refs/heads%2Fphase2-existing",
+    "requestBody": {
+      "sha": "a0fd838d2d513d255e76acf497d728aae6574f38"
+    },
+    "status": 200,
+    "responseBody": {
+      "ref": "refs/heads/phase2-existing",
+      "node_id": "REF_kwDOTNBemrpyZWZzL2hlYWRzL3BoYXNlMi1leGlzdGluZw",
+      "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/refs/heads/phase2-existing",
+      "object": {
+        "sha": "a0fd838d2d513d255e76acf497d728aae6574f38",
+        "type": "commit",
+        "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/commits/a0fd838d2d513d255e76acf497d728aae6574f38"
+      }
+    }
+  }
+]

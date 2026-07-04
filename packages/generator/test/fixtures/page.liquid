@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>{{ page.title }}{% if site.name %} · {{ site.name }}{% endif %}</title>
+    {% if page.tags %}<meta name="keywords" content="{{ page.tags | join: ', ' }}" />{% endif %}
+  </head>
+  <body>
+    <article data-id="{{ page.id }}"{% unless page.public %} data-draft="true"{% endunless %}>
+      {{ content }}
+    </article>
+  </body>
+</html>

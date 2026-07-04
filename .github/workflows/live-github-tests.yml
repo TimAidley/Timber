@@ -1,0 +1,34 @@
+name: Live GitHub-integration tests
+
+# Exercises @timber/github's RepoClient against the real GitHub API and a
+# dedicated sandbox content repo (not a mock). Deliberately NOT wired to
+# push/pull_request — this is nightly/on-demand only, per Phase 2 of the build
+# order, so normal CI never depends on live network access or repo-secret
+# availability. Full CI wiring is Phase 6's job.
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  live-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm test:live
+        env:
+          TIMBER_SANDBOX_TOKEN: ${{ secrets.TIMBER_SANDBOX_TOKEN }}
+          TIMBER_SANDBOX_OWNER: TimAidley
+          TIMBER_SANDBOX_REPO: Timber-test-sandbox

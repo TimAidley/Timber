@@ -1,0 +1,13 @@
+kind: singleton
+page: false
+hasBody: false
+fields:
+  title:
+    type: text
+  description:
+    type: text
+  baseUrl:
+    type: text
+  homepage:
+    type: reference
+    referenceType: pages

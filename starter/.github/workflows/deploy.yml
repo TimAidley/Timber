@@ -1,0 +1,85 @@
+name: Build & deploy site
+
+# Copy this file into your CONTENT repo at .github/workflows/deploy.yml.
+#
+# It builds your site with the Timber generator and deploys it to GitHub Pages on
+# every push to main (plus manual runs and a daily rebuild). `main` holds source
+# only — the built HTML never enters git; it's uploaded as a Pages artifact and
+# deployed directly (no gh-pages branch). See SPEC §12.
+#
+# One-time setup in your content repo:
+#   1. Settings → Pages → Source: "GitHub Actions".
+#   2. Pin TIMBER_REF below to a Timber release tag so preview ≡ production.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+  schedule:
+    - cron: '0 4 * * *' # daily rebuild (SPEC §15)
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One Pages deploy at a time; let an in-flight deploy finish rather than cancel it.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  TIMBER_REPO: TimAidley/Timber
+  TIMBER_REF: main # pin to a Timber release tag
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out this content repo
+        uses: actions/checkout@v4
+
+      - name: Check out Timber (pinned)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.TIMBER_REPO }}
+          ref: ${{ env.TIMBER_REF }}
+          path: .timber
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: .timber/pnpm-lock.yaml
+
+      - name: Build the Timber CLI (generator)
+        working-directory: .timber
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter "@timber/cli..." build
+
+      - name: Build the site
+        run: node .timber/packages/cli/dist/index.js build . _site
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

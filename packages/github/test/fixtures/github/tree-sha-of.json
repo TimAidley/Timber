@@ -1,0 +1,13 @@
+[
+  {
+    "method": "GET",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/commits/WIPTIP",
+    "status": 200,
+    "responseBody": {
+      "sha": "WIPTIP",
+      "tree": {
+        "sha": "WIPTREE"
+      }
+    }
+  }
+]

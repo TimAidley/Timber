@@ -1,0 +1,17 @@
+[
+  {
+    "method": "PATCH",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/refs/heads%2Foctocat_wip",
+    "status": 200,
+    "requestBody": {
+      "sha": "SQUASHSHA",
+      "force": true
+    },
+    "responseBody": {
+      "ref": "refs/heads/octocat_wip",
+      "object": {
+        "sha": "SQUASHSHA"
+      }
+    }
+  }
+]

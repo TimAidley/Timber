@@ -1,0 +1,25 @@
+kind: collection
+hasBody: true
+fields:
+  title:
+    type: text
+    required: true
+  startDate:
+    type: date
+    required: true
+  category:
+    type: enum
+    options: [fete, market, talk]
+  speaker:
+    type: reference
+    referenceType: people
+  capacity:
+    type: number
+    min: 0
+    max: 500
+  tags:
+    type: tags
+  trailer:
+    type: video
+  heroImage:
+    type: image

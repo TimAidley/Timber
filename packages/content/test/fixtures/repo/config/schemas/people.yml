@@ -1,0 +1,7 @@
+kind: collection
+fields:
+  name:
+    type: text
+    required: true
+  role:
+    type: text

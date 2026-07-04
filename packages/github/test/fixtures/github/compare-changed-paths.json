@@ -1,0 +1,19 @@
+[
+  {
+    "method": "GET",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/compare/main...octocat_wip",
+    "status": 200,
+    "responseBody": {
+      "files": [
+        {
+          "filename": "content/pages/hello/index.md",
+          "status": "modified"
+        },
+        {
+          "filename": "content/events/fete/index.md",
+          "status": "added"
+        }
+      ]
+    }
+  }
+]
