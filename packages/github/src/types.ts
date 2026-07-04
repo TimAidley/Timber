@@ -41,3 +41,28 @@ export interface CommitFilesInput {
 export interface CommitResult {
   sha: string;
 }
+
+/** One file changed between two commits (SPEC §11 publish diff / conflict overlap). */
+export interface ChangedPath {
+  path: string;
+  /** GitHub status: added | modified | removed | renamed | copied | changed. */
+  status: string;
+  /** For `renamed`, the old path. */
+  previousPath?: string;
+}
+
+/** An entry to overlay onto a base tree; `sha: null` deletes the path. */
+export interface TreeOverlayEntry {
+  path: string;
+  sha: string | null;
+}
+
+export interface CommitTreeInput {
+  branch: string;
+  message: string;
+  /** An existing tree SHA to commit as-is (the squash/rebase result). */
+  treeSha: string;
+  parents: string[];
+  /** Force-move the branch ref (non-fast-forward). Default false. */
+  force?: boolean;
+}

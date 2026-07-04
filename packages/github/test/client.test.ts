@@ -166,4 +166,48 @@ describe('RepoClient (replayed from fixtures recorded against the real sandbox r
     expect(served.some((r) => r.method === 'PATCH' && r.pathname.includes('/git/refs/'))).toBe(true);
     expect(isExhausted()).toBe(true);
   });
+
+  // --- Phase 5b: publish / merge primitives ---
+
+  it('compareChangedPaths() returns the changed files (publish diff / overlap check)', async () => {
+    useCassette('compare-changed-paths');
+    const changed = await makeClient().compareChangedPaths('main', 'octocat_wip');
+    expect(changed).toEqual([
+      { path: 'content/pages/hello/index.md', status: 'modified' },
+      { path: 'content/events/fete/index.md', status: 'added' },
+    ]);
+  });
+
+  it('treeShaOf() resolves a commit tree SHA (the squash source)', async () => {
+    useCassette('tree-sha-of');
+    expect(await makeClient().treeShaOf('WIPTIP')).toBe('WIPTREE');
+  });
+
+  it('overlayTree() builds createTree with base_tree + entries (incl. deletion)', async () => {
+    const { isExhausted } = useCassette('overlay-tree');
+    const sha = await makeClient().overlayTree('MAINTREE', [
+      { path: 'content/pages/hello/index.md', sha: 'WIPBLOB' },
+      { path: 'content/pages/gone/index.md', sha: null },
+    ]);
+    expect(sha).toBe('OVERLAID');
+    expect(isExhausted()).toBe(true);
+  });
+
+  it('commitTree() squashes an existing tree onto a branch (createCommit + updateRef)', async () => {
+    const { isExhausted } = useCassette('commit-tree');
+    const result = await makeClient().commitTree({
+      branch: 'main',
+      message: 'Publish',
+      treeSha: 'WIPTREE',
+      parents: ['MAINSHA'],
+    });
+    expect(result.sha).toBe('SQUASHSHA');
+    expect(isExhausted()).toBe(true);
+  });
+
+  it('resetBranch() force-updates a ref (reset WIP after publish)', async () => {
+    const { isExhausted } = useCassette('reset-branch');
+    await makeClient().resetBranch('octocat_wip', 'SQUASHSHA');
+    expect(isExhausted()).toBe(true);
+  });
 });

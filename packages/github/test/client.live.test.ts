@@ -94,4 +94,34 @@ describe.skipIf(!rawToken)('RepoClient (live, against the real sandbox repo)', (
     expect(pngEntry).toBeDefined();
     expect(await client.readBlob(mdEntry!.sha)).toBe(marker);
   });
+
+  it('squash-publishes a WIP tree onto a throwaway target branch (SPEC §11)', async () => {
+    const octokit = new Octokit({ auth: rawToken });
+    const targetBranch = `publish-target-${scratchBranch}`;
+    const mainSha = (await client.getBranchSha('main'))!;
+    await octokit.rest.git.createRef({ owner, repo, ref: `refs/heads/${targetBranch}`, sha: mainSha });
+
+    try {
+      const wipTip = (await client.getBranchSha(scratchBranch))!;
+      const wipTree = await client.treeShaOf(wipTip);
+
+      // Squash: one commit on the target whose tree is exactly the WIP's tree.
+      const result = await client.commitTree({
+        branch: targetBranch,
+        message: `test: squash publish (${scratchBranch})`,
+        treeSha: wipTree,
+        parents: [mainSha],
+      });
+      expect(result.sha).toBeTruthy();
+      expect(await client.treeShaOf(result.sha)).toBe(wipTree);
+
+      // compareChangedPaths reflects the WIP edits landing on the target.
+      const changed = await client.compareChangedPaths('main', targetBranch);
+      expect(changed.some((c) => c.path === 'content/pages/hello/index.md')).toBe(true);
+    } finally {
+      await octokit.rest.git
+        .deleteRef({ owner, repo, ref: `heads/${targetBranch}` })
+        .catch(() => undefined);
+    }
+  });
 });

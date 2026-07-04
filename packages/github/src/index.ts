@@ -9,11 +9,14 @@ export { base64ToUtf8, utf8ToBase64, bytesToBase64 } from './base64.js';
 
 export type { GetToken } from './token.js';
 export type {
+  ChangedPath,
   CommitFilesInput,
   CommitResult,
+  CommitTreeInput,
   FileWrite,
   RepoClientOptions,
   RepoSnapshot,
   RepoTree,
   TreeEntry,
+  TreeOverlayEntry,
 } from './types.js';

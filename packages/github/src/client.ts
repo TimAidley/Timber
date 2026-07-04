@@ -1,13 +1,16 @@
 import { Octokit } from '@octokit/rest';
 import { base64ToUtf8, bytesToBase64, utf8ToBase64 } from './base64.js';
 import type {
+  ChangedPath,
   CommitFilesInput,
   CommitResult,
+  CommitTreeInput,
   FileWrite,
   RepoClientOptions,
   RepoSnapshot,
   RepoTree,
   TreeEntry,
+  TreeOverlayEntry,
 } from './types.js';
 
 /**
@@ -242,5 +245,88 @@ export class RepoClient {
     });
 
     return { sha: newCommit.sha };
+  }
+
+  // --- Publish / merge primitives (SPEC §11; Slice 5b) ---
+
+  /**
+   * Files changed between two refs/SHAs — powers both the publish diff review
+   * (main…wip) and the conflict overlap check (base…main vs base…wip).
+   */
+  async compareChangedPaths(base: string, head: string): Promise<ChangedPath[]> {
+    const { data } = await this.octokit.rest.repos.compareCommitsWithBasehead({
+      owner: this.owner,
+      repo: this.repo,
+      basehead: `${base}...${head}`,
+    });
+    return (data.files ?? []).map((f) => ({
+      path: f.filename,
+      status: f.status,
+      ...(f.previous_filename ? { previousPath: f.previous_filename } : {}),
+    }));
+  }
+
+  /** The tree SHA at a commit (the squash source). */
+  async treeShaOf(commitSha: string): Promise<string> {
+    const { data } = await this.octokit.rest.git.getCommit({
+      owner: this.owner,
+      repo: this.repo,
+      commit_sha: commitSha,
+    });
+    return data.tree.sha;
+  }
+
+  /**
+   * Build a new tree = `baseTreeSha` with `entries` overlaid (a `null` sha deletes
+   * the path). Reuses existing blob SHAs — no re-upload. This is the rebased tree:
+   * current main's tree with the WIP branch's changed files applied on top.
+   */
+  async overlayTree(baseTreeSha: string, entries: TreeOverlayEntry[]): Promise<string> {
+    const { data } = await this.octokit.rest.git.createTree({
+      owner: this.owner,
+      repo: this.repo,
+      base_tree: baseTreeSha,
+      tree: entries.map((e) => ({
+        path: e.path,
+        mode: '100644' as const,
+        type: 'blob' as const,
+        sha: e.sha,
+      })),
+    });
+    return data.sha;
+  }
+
+  /**
+   * Create one commit from an existing tree SHA and move a branch to it — the
+   * squash primitive (tree = WIP's, parent = main tip). `force` for a non-fast-
+   * forward move (e.g. resetting WIP).
+   */
+  async commitTree(input: CommitTreeInput): Promise<CommitResult> {
+    const { data: commit } = await this.octokit.rest.git.createCommit({
+      owner: this.owner,
+      repo: this.repo,
+      message: input.message,
+      tree: input.treeSha,
+      parents: input.parents,
+    });
+    await this.octokit.rest.git.updateRef({
+      owner: this.owner,
+      repo: this.repo,
+      ref: `heads/${input.branch}`,
+      sha: commit.sha,
+      ...(input.force ? { force: true } : {}),
+    });
+    return { sha: commit.sha };
+  }
+
+  /** Force-reset a branch to a SHA (SPEC §11: reset WIP from new main after publish). */
+  async resetBranch(branch: string, toSha: string): Promise<void> {
+    await this.octokit.rest.git.updateRef({
+      owner: this.owner,
+      repo: this.repo,
+      ref: `heads/${branch}`,
+      sha: toSha,
+      force: true,
+    });
   }
 }

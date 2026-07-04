@@ -1,0 +1,31 @@
+[
+  {
+    "method": "POST",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/commits",
+    "status": 201,
+    "requestBody": {
+      "message": "Publish",
+      "tree": "WIPTREE",
+      "parents": [
+        "MAINSHA"
+      ]
+    },
+    "responseBody": {
+      "sha": "SQUASHSHA"
+    }
+  },
+  {
+    "method": "PATCH",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/refs/heads%2Fmain",
+    "status": 200,
+    "requestBody": {
+      "sha": "SQUASHSHA"
+    },
+    "responseBody": {
+      "ref": "refs/heads/main",
+      "object": {
+        "sha": "SQUASHSHA"
+      }
+    }
+  }
+]
