@@ -1,6 +1,6 @@
 import { RepoClient } from '@timber/github';
 import { assembleContent, loadSchemas, type ContentModel } from '@timber/content';
-import { getToken } from '../github/token.js';
+import { getToken } from '../github/auth.js';
 import { repoConfig } from '../github/config.js';
 
 /**

@@ -1,0 +1,13 @@
+{
+  "name": "@timber/oauth-broker",
+  "version": "0.0.0",
+  "description": "Timber's OAuth token-exchange broker: a tiny web-standard fetch handler (reference deploy: Cloudflare Workers) that holds the GitHub client secret and trades an OAuth code for a token. The only server-side piece — GitHub requires the secret + lacks CORS, so a static SPA can't do this alone.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc",
+    "deploy": "npx wrangler deploy",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  }
+}

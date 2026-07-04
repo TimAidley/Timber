@@ -156,7 +156,8 @@ Not stored in git — **link/embed external** (YouTube/Vimeo/etc.). A `video` fi
 - Given the **self-hosted, single-tenant** decision, auth is **per-instance and lightweight** — a fine-grained PAT or simple OAuth suffices; a full GitHub App with installation custody is more than needed. **For development, paste a fine-grained PAT.**
 - Auth is **deferred behind a single `getToken()` seam** — the rest of the app only needs "a valid token," so the mechanism can be chosen/swapped late without touching the rest.
 - **Token security:** narrowest scopes on the single repo, prefer short-lived tokens, keep the token in memory rather than `localStorage` where feasible, ship a strict CSP. The XSS surface is already reduced (LiquidJS is sandboxed; no in-browser untrusted Node).
-- **Implemented (Slice 5a):** a browser `getToken()` that reads a pasted fine-grained PAT. The PAT is stored in `localStorage` — a conscious **dev-only** deviation from the in-memory guidance above (the target is a throwaway test repo). Because it's isolated behind the seam, the production flow (§16 open decision) tightens this by replacing only `src/github/token.ts`.
+- **Implemented (Slice 5a):** a browser `getToken()` that reads a pasted fine-grained PAT. The PAT is stored in `localStorage` — a conscious **dev-only** deviation from the in-memory guidance above (the target is a throwaway test repo). Because it's isolated behind the seam, the production flow tightens this by adding a second `getToken()` implementation, not touching the rest.
+- **Implemented (Production OAuth):** the **authorization-code flow with PKCE** for an **OAuth App**, behind the same seam. Verified constraint: even with GitHub's July-2025 PKCE support, the token exchange **still requires the `client_secret`** (GitHub doesn't distinguish public vs confidential clients) *and* the token endpoint has **no CORS** — so a purely static SPA can't finish OAuth alone. The minimum server-side piece is therefore a **tiny stateless token-exchange broker** (`@timber/oauth-broker`, reference deploy: **Cloudflare Workers**) that holds the secret and relays the code→token step; it's origin-allowlisted and never logs/echoes the secret. The SPA (`src/github/oauth.ts`) generates the PKCE challenge with Web Crypto, redirects to `authorize`, validates `state` on return, exchanges via the broker, and keeps the token **in memory + `sessionStorage`** (session-scoped — a step up from the dev PAT's `localStorage`). A small `src/github/auth.ts` facade picks **OAuth** when `VITE_TIMBER_OAUTH_CLIENT_ID` + `VITE_TIMBER_OAUTH_BROKER_URL` are set, else the dev **PAT** — both feed `RepoClient` the same `getToken`, so the git/commit code is untouched. Deferred: GitHub App + per-repo fine-grained tokens + refresh; device flow; token expiry/refresh (OAuth App user tokens don't expire by default).
 
 ---
 
@@ -268,7 +269,7 @@ Multiple editors, but few, and single-file-per-page makes most conflicts structu
 
 ## 16. Open decisions
 
-1. **Auth mechanism** for real (non-dev) use: serverless broker vs. GitHub App SPA/PKCE vs. simple OAuth. Deferred behind the seam; revisit when GitHub App SPA status is known.
+1. ~~**Auth mechanism** for real (non-dev) use~~ — **resolved (see §9):** OAuth App + authorization-code/PKCE with a small secret-holding serverless broker (`@timber/oauth-broker`, Cloudflare Workers reference). GitHub still requires the client secret even under PKCE, so "zero backend" isn't possible today; a GitHub App or the device flow remain future options if the tradeoffs change.
 2. **Role/permission shape** — deferred.
 3. **Exact image-layout directive syntax** — deferred.
 4. **Whether to pull Search forward** into MVP (low effort, user is keen).
