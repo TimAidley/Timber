@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ seo.title }}</title>
+    <meta name="description" content="{{ seo.description }}" />
+    <link rel="canonical" href="{{ seo.canonical }}" />
+    <meta property="og:title" content="{{ seo.ogTitle }}" />
+    <meta property="og:description" content="{{ seo.ogDescription }}" />
+    <meta property="og:type" content="{{ seo.ogType }}" />
+    {% if seo.ogImage %}<meta property="og:image" content="{{ seo.ogImage }}" />{% endif %}
+    <link rel="stylesheet" href="/assets/theme.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="site-title" href="/">{{ site.title }}</a>
+      <nav class="site-nav">
+        {% for item in site.nav %}<a href="{{ item.url }}">{{ item.label }}</a>{% endfor %}
+      </nav>
+    </header>
+    <main class="site-main">
+      <article class="page">
+        <h1>{{ page.title }}</h1>
+        {{ content }}
+      </article>
+    </main>
+    <footer class="site-footer">
+      <p>© {{ site.title }}{% if site.description %} — {{ site.description }}{% endif %}</p>
+    </footer>
+  </body>
+</html>
