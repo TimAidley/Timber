@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { canPublish, Validator, type ContentModel, type ContentObject, type ContentTypeSchema } from '@timber/content';
 import type { FrontMatter } from '@timber/generator';
 import type { RepoSession } from './state/repoSession.js';
@@ -10,9 +10,16 @@ import { repoConfig } from './github/config.js';
 import { SchemaForm } from './forms/SchemaForm.js';
 import { BodyEditor } from './editor/BodyEditor.js';
 import { Preview } from './preview/Preview.js';
-import { SyncIndicator } from './components/SyncIndicator.js';
+import {
+  ChangeBadge,
+  ChangesSummary,
+  PublishButton,
+  VisibilityBadge,
+  type PublishPhase,
+} from './components/ChangeBadges.js';
 import { PublishDialog } from './components/PublishDialog.js';
-import { DeployStatus } from './components/DeployStatus.js';
+import { objectChangeState, summarizeChanges } from './state/changes.js';
+import { useDeployPoll } from './state/useDeployPoll.js';
 import { NewObjectDialog } from './components/NewObjectDialog.js';
 import { DeleteDialog } from './components/DeleteDialog.js';
 import { RenameDialog } from './components/RenameDialog.js';
@@ -69,8 +76,39 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   // Publish dialog + the conflict base SHA, which advances each time we publish.
   const [showPublish, setShowPublish] = useState(false);
   const [baseSha, setBaseSha] = useState(session.baseSha);
-  // Bumped after a publish so the deploy-status indicator re-checks the new run.
-  const [deployPollKey, setDeployPollKey] = useState(0);
+
+  // The Publish button's morph state (idle → publishing → building → done/failed) and,
+  // for the deploy poll, the created-time of the newest run seen *before* we publish —
+  // so a stale completed run can't be mistaken for our new one.
+  const [publishPhase, setPublishPhase] = useState<PublishPhase>('idle');
+  const [deploySince, setDeploySince] = useState<string | undefined>(undefined);
+  const deployState = useDeployPoll(
+    session.client,
+    DEPLOY_WORKFLOW,
+    session.defaultBranch,
+    publishPhase === 'building',
+    deploySince,
+  );
+
+  // Objects committed to WIP but not yet on main ("Saved"). Refreshed on load and
+  // after each successful autosave/publish. `editingPaths` (local-only) comes from the
+  // autosaver; an object that's both counts as Editing (the furthest-back state).
+  const [savedPaths, setSavedPaths] = useState<ReadonlySet<string>>(new Set());
+  const refreshSaved = useCallback(async () => {
+    try {
+      const changed = await session.client.compareChangedPaths(session.defaultBranch, session.wipBranch);
+      setSavedPaths(new Set(changed.map((c) => c.path)));
+    } catch {
+      // WIP branch may not exist yet (nothing saved) — nothing published-pending.
+      setSavedPaths(new Set());
+    }
+  }, [session]);
+  useEffect(() => {
+    void refreshSaved();
+  }, [refreshSaved]);
+  useEffect(() => {
+    if (autosave.syncState === 'saved') void refreshSaved();
+  }, [autosave.syncState, refreshSaved]);
 
   const [selectedPath, setSelectedPath] = useState<string>(model.objects[0]?.path ?? '');
   const selected: ContentObject | undefined = objects.find((o) => o.path === selectedPath);
@@ -228,6 +266,53 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
     return validator.validateObject(candidate, workingModel);
   }, [selected, schema, edit, validator, workingModel]);
 
+  // Header change counts ("Editing 1 · Saved 4"), tallied over the working objects.
+  const counts = useMemo(
+    () => summarizeChanges(objects.map((o) => o.path), autosave.editingPaths, savedPaths),
+    [objects, autosave.editingPaths, savedPaths],
+  );
+  const hasChanges = counts.editing > 0 || counts.saved > 0;
+
+  // Whether the selected type renders as a page — visibility (Draft/Public) only
+  // applies to those; a config singleton (page: false) has no public presence.
+  const isPageType = schema ? schema.page !== false : false;
+
+  // Drive the Publish button's morph from the deploy poll while a build is running.
+  useEffect(() => {
+    if (publishPhase !== 'building') return;
+    if (deployState === 'published') {
+      setPublishPhase('done');
+      void refreshSaved(); // WIP was reset to the new main → "Saved" clears
+    } else if (deployState === 'failed') {
+      setPublishPhase('failed');
+    }
+  }, [deployState, publishPhase, refreshSaved]);
+
+  // Publish: flush any pending edits to WIP first (so they're included), record the
+  // current deploy baseline, then open the review dialog.
+  async function startPublish(): Promise<void> {
+    if (publishPhase === 'building' || publishPhase === 'publishing') return;
+    setPublishPhase('idle'); // clear a prior done/failed
+    autosave.saveNow();
+    try {
+      const latest = await session.client.getLatestWorkflowRun(DEPLOY_WORKFLOW, session.defaultBranch);
+      setDeploySince(latest?.createdAt);
+    } catch {
+      setDeploySince(undefined);
+    }
+    setShowPublish(true);
+  }
+
+  // Toggle the selected object's Draft/Public flag (SPEC §5). Writes `public` to front
+  // matter (an undeclared key the tolerant validator passes through) and mirrors it
+  // onto the working object so the sidebar badge + publish validity gate update live.
+  function toggleVisibility(): void {
+    if (!selected) return;
+    const next = !(edit.data.public === true);
+    updateField('public', next ? true : undefined);
+    setObjects((prev) => prev.map((o) => (o.path === selected.path ? { ...o, public: next } : o)));
+  }
+
   return (
     <div className="app">
       <aside className="app__sidebar">
@@ -235,16 +320,13 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
         <p className="app__repo">
           <code>{session.loadedRef}</code>
         </p>
-        <SyncIndicator state={autosave.syncState} onSaveNow={autosave.saveNow} />
-        <DeployStatus
-          client={session.client}
-          workflowFile={DEPLOY_WORKFLOW}
-          branch={session.defaultBranch}
-          pollKey={deployPollKey}
+        <ChangesSummary
+          editing={counts.editing}
+          saved={counts.saved}
+          syncState={autosave.syncState}
+          onSaveNow={autosave.saveNow}
         />
-        <button type="button" className="publish-btn" onClick={() => setShowPublish(true)}>
-          Publish…
-        </button>
+        <PublishButton phase={publishPhase} hasChanges={hasChanges} onPublish={() => void startPublish()} />
         {advancedAllowed ? (
           <div className="view-toggle" role="tablist" aria-label="Editor view">
             <button
@@ -282,10 +364,13 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
                   className={o.path === selectedPath ? 'is-active' : ''}
                   onClick={() => setSelectedPath(o.path)}
                 >
-                  <span className="object-list__title">{String(o.data.title ?? o.slug)}</span>
+                  <span className="object-list__title">
+                    <ChangeBadge state={objectChangeState(o.path, autosave.editingPaths, savedPaths)} />
+                    {String(o.data.title ?? o.slug)}
+                  </span>
                   <span className="object-list__type">
+                    {(model.schemas.get(o.type)?.page ?? true) ? <VisibilityBadge isPublic={o.public} /> : null}
                     {o.type}
-                    {o.public ? '' : ' · draft'}
                   </span>
                 </button>
               </li>
@@ -306,20 +391,37 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
                 <h2>{String(edit.data.title ?? selected.slug)}</h2>
                 <code>{selected.path}</code>
               </div>
-              {selected.kind === 'collection' ? (
-                <div className="editor-header__actions">
-                  <button type="button" className="editor-header__rename" onClick={() => setShowRename(true)}>
-                    Rename
-                  </button>
+              <div className="editor-header__actions">
+                {isPageType ? (
                   <button
                     type="button"
-                    className="editor-header__delete"
-                    onClick={() => setDeleteTarget(selected)}
+                    className={`editor-header__visibility is-${edit.data.public === true ? 'public' : 'draft'}`}
+                    onClick={toggleVisibility}
+                    title={
+                      edit.data.public === true
+                        ? 'Public — appears on the live site. Click to make it a draft.'
+                        : 'Draft — hidden from the live site. Click to make it public.'
+                    }
                   >
-                    Delete
+                    <VisibilityBadge isPublic={edit.data.public === true} />
+                    {edit.data.public === true ? 'Public' : 'Draft'}
                   </button>
-                </div>
-              ) : null}
+                ) : null}
+                {selected.kind === 'collection' ? (
+                  <>
+                    <button type="button" className="editor-header__rename" onClick={() => setShowRename(true)}>
+                      Rename
+                    </button>
+                    <button
+                      type="button"
+                      className="editor-header__delete"
+                      onClick={() => setDeleteTarget(selected)}
+                    >
+                      Delete
+                    </button>
+                  </>
+                ) : null}
+              </div>
             </header>
 
             <section className="editor-panel">
@@ -399,7 +501,9 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
           onClose={() => setShowPublish(false)}
           onPublished={(sha) => {
             setBaseSha(sha);
-            setDeployPollKey((k) => k + 1); // deploy kicks off on the push to main
+            setShowPublish(false);
+            setPublishPhase('building'); // hand off to the button morph; deploy poll takes over
+            void refreshSaved(); // WIP reset to the new main → "Saved" clears immediately
           }}
         />
       ) : null}

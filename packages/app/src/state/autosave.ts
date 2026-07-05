@@ -19,6 +19,13 @@ export interface AutosaverDeps {
   assetBytes: (path: string) => Promise<Uint8Array | undefined>;
   /** Notified whenever the sync state changes (drives the indicator). */
   onState: (state: SyncState) => void;
+  /**
+   * Notified whenever the set of objects with **local-only** (uncommitted) edits
+   * changes — drives the per-item "Editing" badges + header count. Paths in flight
+   * (being committed) stay included until the commit lands, so the badge doesn't
+   * flicker to clean mid-save.
+   */
+  onDirtyObjects?: (paths: string[]) => void;
   /** Notified on a failed flush (before the backoff retry) — surfaces the cause. */
   onError?: (error: unknown) => void;
   idleMs?: number;
@@ -64,6 +71,8 @@ function describeCommit(
  */
 export class Autosaver {
   private dirtyObjects = new Map<string, DirtyObject>();
+  /** Object paths taken by an in-flight flush; kept in the "editing" set until it lands. */
+  private flushingObjects = new Set<string>();
   private dirtyFiles = new Map<string, string>();
   private dirtyAssets = new Set<string>();
   private dirtyDeletions = new Set<string>();
@@ -84,8 +93,14 @@ export class Autosaver {
     this.maxRetryMs = deps.maxRetryMs ?? 60000;
   }
 
+  /** Emit the current "editing" object set (uncommitted edits + in-flight). */
+  private notifyDirtyObjects(): void {
+    this.deps.onDirtyObjects?.([...new Set([...this.dirtyObjects.keys(), ...this.flushingObjects])]);
+  }
+
   markObjectDirty(path: string, data: FrontMatter, body: string): void {
     this.dirtyObjects.set(path, { data, body });
+    this.notifyDirtyObjects();
     this.deps.onState('dirty');
     this.schedule();
   }
@@ -120,6 +135,7 @@ export class Autosaver {
       this.dirtyFiles.delete(path);
       this.dirtyAssets.delete(path);
     }
+    this.notifyDirtyObjects();
     this.deps.onState('dirty');
     this.schedule();
   }
@@ -136,6 +152,7 @@ export class Autosaver {
     this.dirtyDeletions.add(oldPath);
     for (const move of moves) this.dirtyMoves.set(move.to, move);
     this.dirtyRenames.set(newPath, oldPath);
+    this.notifyDirtyObjects();
     this.deps.onState('dirty');
     this.schedule();
   }
@@ -193,6 +210,9 @@ export class Autosaver {
     this.dirtyDeletions = new Set();
     this.dirtyMoves = new Map();
     this.dirtyRenames = new Map();
+    // These objects are in transit but not yet on the branch, so they stay "editing"
+    // (not clean, not saved) until the commit lands — no mid-save badge flicker.
+    this.flushingObjects = new Set(objects.map(([p]) => p));
 
     this.flushing = true;
     this.deps.onState('saving');
@@ -225,6 +245,8 @@ export class Autosaver {
         moves,
       );
       this.failures = 0; // success resets the backoff
+      this.flushingObjects = new Set(); // landed → these become "saved", not "editing"
+      this.notifyDirtyObjects();
       const stillDirty =
         this.dirtyObjects.size ||
         this.dirtyFiles.size ||
@@ -240,6 +262,8 @@ export class Autosaver {
       for (const path of deletions) this.dirtyDeletions.add(path);
       for (const move of moves) if (!this.dirtyMoves.has(move.to)) this.dirtyMoves.set(move.to, move);
       for (const [newP, oldP] of renames) if (!this.dirtyRenames.has(newP)) this.dirtyRenames.set(newP, oldP);
+      this.flushingObjects = new Set(); // back in dirtyObjects → still "editing"
+      this.notifyDirtyObjects();
       this.failures += 1;
       this.deps.onError?.(err);
       this.deps.onState('error');
@@ -252,6 +276,8 @@ export class Autosaver {
 
 export interface Autosave {
   syncState: SyncState;
+  /** Object paths with local-only (uncommitted) edits — drives the "Editing" badges. */
+  editingPaths: ReadonlySet<string>;
   markObjectDirty: (path: string, data: FrontMatter, body: string) => void;
   markFileDirty: (path: string, content: string) => void;
   markAssetDirty: (path: string) => void;
@@ -265,6 +291,7 @@ export interface Autosave {
 /** React binding for {@link Autosaver}: commits dirty edits to the session's WIP branch. */
 export function useAutosave(session: RepoSession, assetStore: AssetStore): Autosave {
   const [syncState, setSyncState] = useState<SyncState>('idle');
+  const [editingPaths, setEditingPaths] = useState<ReadonlySet<string>>(new Set());
 
   const saver = useMemo(
     () =>
@@ -286,6 +313,7 @@ export function useAutosave(session: RepoSession, assetStore: AssetStore): Autos
           console.warn('[timber] autosave failed; retrying with backoff:', error);
         },
         onState: setSyncState,
+        onDirtyObjects: (paths) => setEditingPaths(new Set(paths)),
       }),
     [session, assetStore],
   );
@@ -300,6 +328,7 @@ export function useAutosave(session: RepoSession, assetStore: AssetStore): Autos
 
   return {
     syncState,
+    editingPaths,
     markObjectDirty: (path, data, body) => saver.markObjectDirty(path, data, body),
     markFileDirty: (path, content) => saver.markFileDirty(path, content),
     markAssetDirty: (path) => saver.markAssetDirty(path),

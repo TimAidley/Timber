@@ -445,43 +445,89 @@ body {
   max-width: 100%;
 }
 
-.deploy {
+/* Header change summary (Editing/Saved counts + inline save status). */
+.changes {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  flex-wrap: wrap;
+  gap: 0.3rem;
   font-size: 0.75rem;
+  color: var(--muted);
   margin-bottom: 0.6rem;
 }
 
-.deploy__dot {
+.changes__dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #bbb;
-}
-
-.deploy--building .deploy__dot {
   background: var(--accent);
 }
 
-.deploy--published .deploy__dot {
-  background: #2e9e5b;
-}
-
-.deploy--failed .deploy__dot {
-  background: #c0392b;
-}
-
-.deploy__label {
-  color: var(--muted);
-  text-decoration: none;
-}
-
-.deploy--failed .deploy__label {
+.changes--error {
   color: #c0392b;
 }
 
+.changes--error .changes__dot {
+  background: #c0392b;
+}
+
+.changes__seg--editing {
+  color: #b8860b;
+}
+
+.changes__seg--saved {
+  color: #2f6fb0;
+}
+
+.changes__sep {
+  color: var(--border);
+}
+
+.changes__save {
+  padding: 0.15rem 0.4rem;
+  font-size: 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: none;
+  cursor: pointer;
+}
+
+/* Per-item lifecycle badge (glyph + colour + label; never colour alone). */
+.cbadge {
+  display: inline-block;
+  margin-right: 0.3rem;
+  font-size: 0.8em;
+}
+
+.cbadge--editing {
+  color: #b8860b;
+}
+
+.cbadge--saved {
+  color: #2f6fb0;
+}
+
+/* Visibility badge (Draft/Public), orthogonal to the change lifecycle. */
+.vbadge {
+  display: inline-block;
+  margin-right: 0.3rem;
+  font-size: 0.7em;
+  vertical-align: middle;
+}
+
+.vbadge--public {
+  color: #2e9e5b;
+}
+
+.vbadge--draft {
+  color: var(--muted);
+}
+
 .publish-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
   width: 100%;
   padding: 0.4rem;
   border: 1px solid var(--accent);
@@ -492,6 +538,62 @@ body {
   font: inherit;
   font-size: 0.85rem;
   margin-bottom: 1rem;
+}
+
+.publish-btn:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+
+.publish-btn--publishing,
+.publish-btn--building {
+  background: #6c7a89;
+  border-color: #6c7a89;
+}
+
+.publish-btn--done {
+  background: #2e9e5b;
+  border-color: #2e9e5b;
+}
+
+.publish-btn--failed {
+  background: #c0392b;
+  border-color: #c0392b;
+}
+
+.publish-btn__spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: publish-spin 0.7s linear infinite;
+}
+
+@keyframes publish-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Draft/Public toggle in the editor header. */
+.editor-header__visibility {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8rem;
+  background: none;
+  color: var(--muted);
+}
+
+.editor-header__visibility.is-public {
+  border-color: #2e9e5b;
+  color: #2e9e5b;
 }
 
 .view-toggle {

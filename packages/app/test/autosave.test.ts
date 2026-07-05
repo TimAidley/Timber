@@ -6,14 +6,16 @@ type CommitFn = (files: FileWrite[], message: string, deletions: string[], moves
 
 function setup(commit: CommitFn) {
   const states: SyncState[] = [];
+  const dirtyObjectSets: string[][] = [];
   const saver = new Autosaver({
     commit,
     assetBytes: async (path) => (path.endsWith('.webp') ? new Uint8Array([1, 2, 3]) : undefined),
     onState: (s) => states.push(s),
+    onDirtyObjects: (paths) => dirtyObjectSets.push([...paths].sort()),
     idleMs: 2000,
     retryMs: 5000,
   });
-  return { saver, states };
+  return { saver, states, dirtyObjectSets };
 }
 
 describe('Autosaver', () => {
@@ -166,6 +168,33 @@ describe('Autosaver', () => {
     ]);
     // …and the summary reads as a rename, not an edit+delete.
     expect(message).toBe('rename new');
+  });
+
+  it('reports the editing (uncommitted) object set, clearing it once the commit lands', async () => {
+    const commit = vi.fn<CommitFn>(async () => undefined);
+    const { saver, dirtyObjectSets } = setup(commit);
+
+    saver.markObjectDirty('content/events/a/index.md', { title: 'A' }, 'body');
+    saver.markObjectDirty('content/people/b/index.md', { title: 'B' }, 'body');
+    // Latest notification lists both dirty objects.
+    expect(dirtyObjectSets.at(-1)).toEqual(['content/events/a/index.md', 'content/people/b/index.md']);
+
+    await vi.advanceTimersByTimeAsync(2000);
+    // After a successful flush they're on the branch → editing set is empty.
+    expect(dirtyObjectSets.at(-1)).toEqual([]);
+  });
+
+  it('keeps an object in the editing set while a failing commit retries', async () => {
+    const commit = vi.fn<CommitFn>().mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce(undefined);
+    const { saver, dirtyObjectSets } = setup(commit);
+
+    saver.markObjectDirty('content/events/a/index.md', { title: 'A' }, 'body');
+    await vi.advanceTimersByTimeAsync(2000); // attempt 1 fails
+    // Still editing (not yet saved) after the failure.
+    expect(dirtyObjectSets.at(-1)).toEqual(['content/events/a/index.md']);
+
+    await vi.advanceTimersByTimeAsync(5000); // backoff retry succeeds
+    expect(dirtyObjectSets.at(-1)).toEqual([]);
   });
 
   it('saveNow() flushes immediately without waiting for the idle timer', async () => {

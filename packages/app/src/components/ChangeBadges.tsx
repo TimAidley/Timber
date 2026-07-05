@@ -1,0 +1,133 @@
+import type { SyncState } from '../state/autosave.js';
+import type { ChangeState } from '../state/changes.js';
+
+/**
+ * The change-lifecycle vocabulary, surfaced with a distinct **glyph + colour + text
+ * label** (never colour alone, for colour-blind legibility). See SPEC §8/§11:
+ *   Editing → Saved → (Submitted → Published, shown by the Publish button, not here).
+ */
+const CHANGE_META: Record<Exclude<ChangeState, 'clean'>, { glyph: string; label: string }> = {
+  editing: { glyph: '✎', label: 'Editing — unsaved changes on this device' },
+  saved: { glyph: '☁', label: 'Saved to your branch — not yet published' },
+};
+
+/** Per-item lifecycle badge for the sidebar; nothing to show for a clean item. */
+export function ChangeBadge({ state }: { state: ChangeState }): React.JSX.Element | null {
+  if (state === 'clean') return null;
+  const meta = CHANGE_META[state];
+  return (
+    <span className={`cbadge cbadge--${state}`} role="img" aria-label={meta.label} title={meta.label}>
+      {meta.glyph}
+    </span>
+  );
+}
+
+/**
+ * Page-visibility badge (Draft vs Public) — the axis orthogonal to the change
+ * lifecycle. A Draft page's data still rides to `main`, but the build skips it, so it
+ * never appears on the public site.
+ */
+export function VisibilityBadge({ isPublic }: { isPublic: boolean }): React.JSX.Element {
+  const meta = isPublic
+    ? { glyph: '●', label: 'Public — appears on the live site', cls: 'public' }
+    : { glyph: '○', label: 'Draft — hidden from the live site', cls: 'draft' };
+  return (
+    <span className={`vbadge vbadge--${meta.cls}`} role="img" aria-label={meta.label} title={meta.label}>
+      {meta.glyph}
+    </span>
+  );
+}
+
+interface ChangesSummaryProps {
+  editing: number;
+  saved: number;
+  syncState: SyncState;
+  onSaveNow: () => void;
+}
+
+/**
+ * The header's aggregate change indicator. Normally shows the counts
+ * ("✎ Editing 1 · ☁ Saved 4"); while a coalesced commit is in flight it becomes the
+ * live save-status (Saving… / Save failed — retrying), absorbing the old standalone
+ * sync indicator so there's one thing in this slot, not two.
+ */
+export function ChangesSummary({ editing, saved, syncState, onSaveNow }: ChangesSummaryProps): React.JSX.Element {
+  if (syncState === 'saving') {
+    return (
+      <div className="changes changes--saving">
+        <span className="changes__dot" aria-hidden="true" /> Saving…
+      </div>
+    );
+  }
+  if (syncState === 'error') {
+    return (
+      <div className="changes changes--error">
+        <span className="changes__dot" aria-hidden="true" /> Save failed — retrying
+        <button type="button" className="changes__save" onClick={onSaveNow}>
+          Save now
+        </button>
+      </div>
+    );
+  }
+  const segments: React.JSX.Element[] = [];
+  if (editing > 0)
+    segments.push(
+      <span key="editing" className="changes__seg changes__seg--editing">
+        <span aria-hidden="true">✎</span> Editing {editing}
+      </span>,
+    );
+  if (saved > 0)
+    segments.push(
+      <span key="saved" className="changes__seg changes__seg--saved">
+        <span aria-hidden="true">☁</span> Saved {saved}
+      </span>,
+    );
+  if (segments.length === 0) return <div className="changes changes--clean">No unpublished changes</div>;
+
+  return (
+    <div className="changes" aria-label={`${editing} editing, ${saved} saved`}>
+      {segments.flatMap((seg, i) => (i === 0 ? [seg] : [<span key={`sep${i}`} className="changes__sep"> · </span>, seg]))}
+    </div>
+  );
+}
+
+/** The Publish action's states, from click through the site build to done/failed. */
+export type PublishPhase = 'idle' | 'publishing' | 'building' | 'done' | 'failed';
+
+const PUBLISH_LABEL: Record<PublishPhase, string> = {
+  idle: 'Publish',
+  publishing: 'Publishing…',
+  building: 'Building…',
+  done: 'Published ✓',
+  failed: 'Publish failed — retry',
+};
+
+interface PublishButtonProps {
+  phase: PublishPhase;
+  /** Whether there's anything to publish (unsaved or saved-but-unpublished). */
+  hasChanges: boolean;
+  onPublish: () => void;
+}
+
+/**
+ * The single **Publish** control that morphs into a status indicator as the change
+ * travels to the live site: Publish → Publishing… → Building… → Published ✓ (or
+ * Publish failed — retry). There's no standing "published" banner — the site is
+ * always published; only what's *pending* is worth showing (SPEC §11).
+ */
+export function PublishButton({ phase, hasChanges, onPublish }: PublishButtonProps): React.JSX.Element {
+  const busy = phase === 'publishing' || phase === 'building';
+  const disabled = busy || (phase === 'idle' && !hasChanges);
+  return (
+    <button
+      type="button"
+      className={`publish-btn publish-btn--${phase}`}
+      disabled={disabled}
+      aria-busy={busy}
+      onClick={onPublish}
+    >
+      {busy ? <span className="publish-btn__spinner" aria-hidden="true" /> : null}
+      {PUBLISH_LABEL[phase]}
+    </button>
+  );
+}
