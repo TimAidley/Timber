@@ -7,12 +7,22 @@ import { Milkdown, MilkdownProvider, useEditor } from '@milkdown/react';
 import { remarkStringifyOptions } from './milkdown.js';
 import { preventBackspaceNav } from './backspaceFix.js';
 
-interface BodyEditorProps {
+interface WysiwygProps {
   /** Current Markdown body (canonical form). */
   value: string;
   /** Called with the new Markdown whenever the body changes. */
   onChange: (markdown: string) => void;
+  /**
+   * Identity of the document being edited. Changes only on an EXTERNAL re-seed
+   * (switching objects, restoring a draft) — NOT on the editor's own keystrokes.
+   * The editor recreates on this, so it re-seeds when the document changes but keeps
+   * the caret/focus while you type. (Recreating on `value` instead blurred the editor
+   * on every edit, which let the next Backspace escape to the browser.)
+   */
+  docKey: number;
 }
+
+type BodyEditorProps = WysiwygProps;
 
 /**
  * The Milkdown WYSIWYG instance. It seeds from `value` once (Milkdown's React
@@ -21,7 +31,7 @@ interface BodyEditorProps {
  * config the round-trip tests prove), and reports edits via the listener plugin's
  * `markdownUpdated`.
  */
-function Wysiwyg({ value, onChange }: BodyEditorProps): React.JSX.Element {
+function Wysiwyg({ value, onChange, docKey }: WysiwygProps): React.JSX.Element {
   useEditor(
     (root) =>
       Editor.make()
@@ -37,9 +47,10 @@ function Wysiwyg({ value, onChange }: BodyEditorProps): React.JSX.Element {
         .use(gfm)
         .use(listener)
         .use(preventBackspaceNav),
-    // Re-create the editor when the seed value identity changes (i.e. after the
-    // source-mode escape hatch rewrites the body). See BodyEditor.
-    [value],
+    // Re-seed only when the document identity changes (object switch / draft restore),
+    // NOT on every keystroke — recreating per edit blurred the editor. `value` is read
+    // fresh here because it updates in the same render that bumps `docKey`.
+    [docKey],
   );
 
   return <Milkdown />;
@@ -56,7 +67,7 @@ function Wysiwyg({ value, onChange }: BodyEditorProps): React.JSX.Element {
  * from whatever the source textarea left behind. Robust, and good enough for the
  * de-risk slice; a smoother controlled bridge can come later.
  */
-export function BodyEditor({ value, onChange }: BodyEditorProps): React.JSX.Element {
+export function BodyEditor({ value, onChange, docKey }: BodyEditorProps): React.JSX.Element {
   const [mode, setMode] = useState<'wysiwyg' | 'source'>('wysiwyg');
 
   const onSourceChange = useCallback(
@@ -77,7 +88,7 @@ export function BodyEditor({ value, onChange }: BodyEditorProps): React.JSX.Elem
 
       {mode === 'wysiwyg' ? (
         <MilkdownProvider>
-          <Wysiwyg value={value} onChange={onChange} />
+          <Wysiwyg value={value} onChange={onChange} docKey={docKey} />
         </MilkdownProvider>
       ) : (
         <textarea

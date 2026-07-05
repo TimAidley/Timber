@@ -77,12 +77,18 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
     return { data: { ...(first?.data ?? {}) }, body: first?.body ?? '' };
   });
   const [editingPath, setEditingPath] = useState(selectedPath);
+  // A counter bumped only on an EXTERNAL body re-seed (switching objects, restoring a
+  // draft) — never on the editor's own keystrokes. The Milkdown editor is keyed on it
+  // so it re-seeds when the document changes but is NOT rebuilt (and blurred) on every
+  // edit; the blur otherwise dropped the caret so the next key escaped the editor.
+  const [bodySeed, setBodySeed] = useState(0);
   // On selection change, restore an in-progress edit (autosave) if present, so
   // switching objects never loses unsaved work; else seed from the model.
   if (selected && editingPath !== selectedPath) {
     setEditingPath(selectedPath);
     const dirty = autosave.getDirtyObject(selectedPath);
     setEdit(dirty ? { data: { ...dirty.data }, body: dirty.body } : { data: { ...selected.data }, body: selected.body });
+    setBodySeed((s) => s + 1);
   }
 
   const schema = selected ? model.schemas.get(selected.type) : undefined;
@@ -106,7 +112,10 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
           if (changed) {
             // Restore as an unsaved edit; autosave will re-commit it to WIP.
             autosave.markObjectDirty(draft.path, draft.data, draft.body);
-            if (draft.path === selectedPath) setEdit({ data: { ...draft.data }, body: draft.body });
+            if (draft.path === selectedPath) {
+              setEdit({ data: { ...draft.data }, body: draft.body });
+              setBodySeed((s) => s + 1); // external re-seed → re-mount the body editor
+            }
           }
         }
       })
@@ -325,7 +334,7 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
 
             <section className="editor-panel">
               <h3>Body</h3>
-              <BodyEditor value={edit.body} onChange={(body) => applyEdit({ ...edit, body })} />
+              <BodyEditor docKey={bodySeed} value={edit.body} onChange={(body) => applyEdit({ ...edit, body })} />
             </section>
 
             {validation ? (
