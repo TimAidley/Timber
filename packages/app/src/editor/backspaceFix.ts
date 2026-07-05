@@ -11,20 +11,25 @@ import {
 import { TextSelection, type Command } from '@milkdown/kit/prose/state';
 
 /**
- * Make the editor **always consume Backspace/Delete** so the browser never runs a
- * default action for them.
+ * Make the editor **handle a plain in-text Backspace/Delete itself** — deleting the
+ * character in a transaction and returning `true`, so ProseMirror calls
+ * `preventDefault()`.
  *
- * ProseMirror deletes a single character through the browser's *native*
- * contentEditable behaviour and deliberately does **not** `preventDefault()` the
- * keydown. Most browsers are fine with that, but Vivaldi (and old Firefox) still map
- * a bare Backspace to "navigate Back" — so an un-prevented Backspace mid-edit throws
- * the user off the page and loses in-progress work. The fix: bind Backspace/Delete to
- * commands that perform the deletion in a transaction and return `true`, which makes
- * ProseMirror call `preventDefault()`. A trailing catch-all guarantees the key is
- * marked handled even at a document boundary where nothing is deleted.
+ * Why: ProseMirror normally deletes a single character through the browser's *native*
+ * contentEditable behaviour and does NOT `preventDefault()` the keydown. Most browsers
+ * are fine, but Vivaldi (and old Firefox) map a bare Backspace to "navigate Back", so
+ * an un-prevented Backspace mid-edit throws the user off the page. Handling the common
+ * case here stops that for normal typing/deleting.
+ *
+ * We deliberately do NOT try to handle every position (block joins, node boundaries):
+ * those fall through to ProseMirror's own `joinBackward`/`selectNodeBackward` (which
+ * DO preventDefault when they act) or, failing that, to native behaviour. An earlier
+ * "always consume" catch-all created dead keys at block boundaries. The rare
+ * back-navigation that can still leak through those boundary cases is caught by the
+ * history guard ({@link useBackNavigationGuard}) instead of by mangling editing.
  */
 
-/** UTF-16 length of the last grapheme of a string (so we delete emoji/combining marks whole). */
+/** UTF-16 length of the last grapheme of a string (delete emoji/combining marks whole). */
 function lastGraphemeLength(text: string): number {
   if (typeof Intl !== 'undefined' && 'Segmenter' in Intl) {
     let len = 0;
@@ -48,7 +53,7 @@ function firstGraphemeLength(text: string): number {
   return (Array.from(text)[0] ?? ' ').length || 1;
 }
 
-/** Delete one grapheme before a collapsed text cursor; defers node boundaries to PM. */
+/** Delete one grapheme before a collapsed text cursor; defers everything else to PM. */
 const deleteCharBackward: Command = (state, dispatch, view) => {
   if (view?.composing) return false; // never interrupt IME composition
   const sel = state.selection;
@@ -61,7 +66,7 @@ const deleteCharBackward: Command = (state, dispatch, view) => {
   return true;
 };
 
-/** Delete one grapheme after a collapsed text cursor; defers node boundaries to PM. */
+/** Delete one grapheme after a collapsed text cursor; defers everything else to PM. */
 const deleteCharForward: Command = (state, dispatch, view) => {
   if (view?.composing) return false;
   const sel = state.selection;
@@ -74,13 +79,9 @@ const deleteCharForward: Command = (state, dispatch, view) => {
   return true;
 };
 
-// Consume the key even when nothing was deleted (e.g. Backspace at the very start of
-// the document), so a bare Backspace can never fall through to browser navigation.
-const consume: Command = () => true;
-
 export const preventBackspaceNav = $prose(() =>
   keymap({
-    Backspace: chainCommands(deleteSelection, deleteCharBackward, joinBackward, selectNodeBackward, consume),
-    Delete: chainCommands(deleteSelection, deleteCharForward, joinForward, selectNodeForward, consume),
+    Backspace: chainCommands(deleteSelection, deleteCharBackward, joinBackward, selectNodeBackward),
+    Delete: chainCommands(deleteSelection, deleteCharForward, joinForward, selectNodeForward),
   }),
 );

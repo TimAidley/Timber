@@ -19,6 +19,7 @@ import { RenameDialog } from './components/RenameDialog.js';
 import { AdvancedArea } from './advanced/AdvancedArea.js';
 import { canAccessAdvanced } from './github/access.js';
 import { newObject } from './content/newObject.js';
+import { useBackNavigationGuard } from './editor/backNavGuard.js';
 
 /** The deploy workflow's file name (the starter template ships deploy.yml). */
 const DEPLOY_WORKFLOW = 'deploy.yml';
@@ -36,6 +37,8 @@ interface EditState {
  */
 export function Editor({ session }: { session: RepoSession }): React.JSX.Element {
   const { model } = session;
+  // Stop a stray Backspace / Back from navigating away and losing unsaved edits.
+  useBackNavigationGuard();
   const validator = useMemo(() => new Validator(model.schemas), [model]);
   const assetStore = useMemo(() => new AssetStore(), []);
   const autosave = useAutosave(session, assetStore);

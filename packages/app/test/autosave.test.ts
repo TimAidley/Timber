@@ -86,6 +86,29 @@ describe('Autosaver', () => {
     expect(states.at(-1)).toBe('saved');
   });
 
+  it('backs off exponentially on repeated failures (5s, 10s, …)', async () => {
+    const commit = vi
+      .fn<CommitFn>()
+      .mockRejectedValueOnce(new Error('e1'))
+      .mockRejectedValueOnce(new Error('e2'))
+      .mockResolvedValueOnce(undefined);
+    const { saver } = setup(commit);
+
+    saver.markObjectDirty('content/events/a/index.md', { title: 'A' }, 'body');
+    await vi.advanceTimersByTimeAsync(2000); // idle debounce → attempt 1 (fails)
+    expect(commit).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(5000); // first backoff = 5s → attempt 2 (fails)
+    expect(commit).toHaveBeenCalledTimes(2);
+
+    // Second backoff is 10s, not 5s: nothing fires at +5s…
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(commit).toHaveBeenCalledTimes(2);
+    // …only at +10s total.
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(commit).toHaveBeenCalledTimes(3);
+  });
+
   it('coalesces a deletion into the commit and names it, dropping any pending edit', async () => {
     const commit = vi.fn<CommitFn>(async () => undefined);
     const { saver } = setup(commit);

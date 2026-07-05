@@ -19,8 +19,12 @@ export interface AutosaverDeps {
   assetBytes: (path: string) => Promise<Uint8Array | undefined>;
   /** Notified whenever the sync state changes (drives the indicator). */
   onState: (state: SyncState) => void;
+  /** Notified on a failed flush (before the backoff retry) — surfaces the cause. */
+  onError?: (error: unknown) => void;
   idleMs?: number;
   retryMs?: number;
+  /** Cap for the exponential retry backoff (default 60s). */
+  maxRetryMs?: number;
 }
 
 /** A bundle name from an index.md path, e.g. `content/events/fete/index.md` → `fete`. */
@@ -68,12 +72,16 @@ export class Autosaver {
   private dirtyRenames = new Map<string, string>();
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private flushing = false;
+  /** Consecutive failed flushes; drives exponential retry backoff, reset on success. */
+  private failures = 0;
   private readonly idleMs: number;
   private readonly retryMs: number;
+  private readonly maxRetryMs: number;
 
   constructor(private readonly deps: AutosaverDeps) {
-    this.idleMs = deps.idleMs ?? 2000;
+    this.idleMs = deps.idleMs ?? 5000; // SPEC §11: ~5–15s idle, not per-keystroke
     this.retryMs = deps.retryMs ?? 5000;
+    this.maxRetryMs = deps.maxRetryMs ?? 60000;
   }
 
   markObjectDirty(path: string, data: FrontMatter, body: string): void {
@@ -151,7 +159,14 @@ export class Autosaver {
 
   private schedule(): void {
     if (this.idleTimer) clearTimeout(this.idleTimer);
-    this.idleTimer = setTimeout(() => void this.flush(), this.idleMs);
+    // After a failure, back off exponentially (5s, 10s, 20s… capped) rather than the
+    // normal idle debounce — and edits made during an outage don't shorten the wait,
+    // so a failing save stops hammering the server.
+    const delay =
+      this.failures > 0
+        ? Math.min(this.retryMs * 2 ** (this.failures - 1), this.maxRetryMs)
+        : this.idleMs;
+    this.idleTimer = setTimeout(() => void this.flush(), delay);
   }
 
   private async flush(): Promise<void> {
@@ -209,6 +224,7 @@ export class Autosaver {
         deletions,
         moves,
       );
+      this.failures = 0; // success resets the backoff
       const stillDirty =
         this.dirtyObjects.size ||
         this.dirtyFiles.size ||
@@ -216,15 +232,18 @@ export class Autosaver {
         this.dirtyDeletions.size ||
         this.dirtyMoves.size;
       this.deps.onState(stillDirty ? 'dirty' : 'saved');
-    } catch {
+      if (stillDirty) this.schedule();
+    } catch (err) {
       for (const [path, o] of objects) if (!this.dirtyObjects.has(path)) this.dirtyObjects.set(path, o);
       for (const [path, content] of rawFiles) if (!this.dirtyFiles.has(path)) this.dirtyFiles.set(path, content);
       for (const path of assets) this.dirtyAssets.add(path);
       for (const path of deletions) this.dirtyDeletions.add(path);
       for (const move of moves) if (!this.dirtyMoves.has(move.to)) this.dirtyMoves.set(move.to, move);
       for (const [newP, oldP] of renames) if (!this.dirtyRenames.has(newP)) this.dirtyRenames.set(newP, oldP);
+      this.failures += 1;
+      this.deps.onError?.(err);
       this.deps.onState('error');
-      setTimeout(() => void this.flush(), this.retryMs);
+      this.schedule(); // exponential backoff (see schedule)
     } finally {
       this.flushing = false;
     }
@@ -261,6 +280,11 @@ export function useAutosave(session: RepoSession, assetStore: AssetStore): Autos
           });
         },
         assetBytes: (path) => assetStore.bytes(path),
+        onError: (error) => {
+          // Surface why a save failed so it's diagnosable from DevTools; the backoff
+          // handles the retry cadence.
+          console.warn('[timber] autosave failed; retrying with backoff:', error);
+        },
         onState: setSyncState,
       }),
     [session, assetStore],
