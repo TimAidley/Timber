@@ -51,6 +51,17 @@ describe('oauth broker handler', () => {
     for (const [, value] of res.headers) expect(value).not.toContain(env.GITHUB_CLIENT_SECRET);
   });
 
+  it('allows an origin that differs only in case, reflecting the browser origin', async () => {
+    // ALLOWED_ORIGIN configured as `https://You.GitHub.io` (owner login case), browser
+    // sends the lowercased `https://you.github.io` — must still be allowed, and the
+    // reflected CORS header must byte-match what the browser sent.
+    const mixedEnv: BrokerEnv = { ...env, ALLOWED_ORIGIN: 'https://You.GitHub.io' };
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ access_token: 'gho_abc' }), { status: 200 })));
+    const res = await handleRequest(post({ code: 'c' }, 'https://you.github.io'), mixedEnv);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('access-control-allow-origin')).toBe('https://you.github.io');
+  });
+
   it('rejects a disallowed origin with 403 and no CORS header', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
