@@ -1,5 +1,12 @@
-import { RepoClient, type TreeEntry } from '@timber/github';
-import { assembleContent, loadSchemas, type ContentModel } from '@timber/content';
+import { RepoClient, type ChangedPath, type RepoTree, type TreeEntry } from '@timber/github';
+import {
+  assembleContent,
+  loadSchemas,
+  type ContentModel,
+  type ContentObject,
+  type ContentTypeSchema,
+  type RepoSnapshot,
+} from '@timber/content';
 import { getToken } from '../github/auth.js';
 import { repoConfig } from '../github/config.js';
 
@@ -25,6 +32,65 @@ export interface RepoSession {
    * it to find a bundle's colocated asset paths and reuse their blob SHAs on move.
    */
   treeEntries: TreeEntry[];
+  /**
+   * Objects present on the default branch but **removed on the WIP branch** — pending
+   * deletions committed in a prior session. Derived from the `main…wip` diff so they
+   * survive reloads (the editor shows them struck-through, with Restore). Each carries
+   * the object (reconstructed from the still-present default-branch copy) and its
+   * colocated asset SHAs, so a restore can re-attach the bytes without re-uploading.
+   */
+  deletedObjects: DeletedObject[];
+}
+
+export interface DeletedObject {
+  object: ContentObject;
+  assets: { path: string; sha: string }[];
+}
+
+// A collection object's index.md: content/<type>/<slug>/index.md (singletons — one
+// path segment — are never user-deletable, so pending deletions are always collections).
+const OBJECT_INDEX = /^content\/[^/]+\/[^/]+\/index\.md$/;
+
+/** The minimal slice of RepoClient the deletion-derivation needs (fakeable in tests). */
+export interface PendingDeletionDeps {
+  compareChangedPaths: (base: string, head: string) => Promise<ChangedPath[]>;
+  loadTree: (ref: string) => Promise<RepoTree>;
+  readFile: (path: string, ref: string) => Promise<string>;
+}
+
+/**
+ * Reconstruct pending deletions from the branch itself: an object `index.md` that
+ * exists on `defaultBranch` but is `removed` on `wipBranch`. The removed objects still
+ * live on the default branch (the deletion isn't published), so we read them there to
+ * rebuild the struck-through entry + restore payload, and pull their bundle assets'
+ * blob SHAs from the default-branch tree (they're gone from WIP).
+ */
+export async function derivePendingDeletions(
+  deps: PendingDeletionDeps,
+  defaultBranch: string,
+  wipBranch: string,
+  schemas: Map<string, ContentTypeSchema>,
+): Promise<DeletedObject[]> {
+  const changed = await deps.compareChangedPaths(defaultBranch, wipBranch);
+  const removed = changed
+    .filter((c) => c.status === 'removed' && OBJECT_INDEX.test(c.path))
+    .map((c) => c.path);
+  if (removed.length === 0) return [];
+
+  const defaultTree = await deps.loadTree(defaultBranch);
+  const miniSnapshot: RepoSnapshot = new Map(
+    await Promise.all(removed.map(async (path): Promise<[string, string]> => [path, await deps.readFile(path, defaultBranch)])),
+  );
+  // Reuse the real assembly (kind/slug/id/visibility) rather than re-parsing by hand.
+  const model = assembleContent(miniSnapshot, schemas);
+
+  return model.objects.map((object) => {
+    const bundleDir = object.path.replace(/\/index\.md$/, '');
+    const assets = defaultTree.entries
+      .filter((e) => e.type === 'blob' && e.path.startsWith(`${bundleDir}/`) && e.path !== object.path)
+      .map((e) => ({ path: e.path, sha: e.sha }));
+    return { object, assets };
+  });
 }
 
 /**
@@ -50,5 +116,21 @@ export async function loadRepoSession(): Promise<RepoSession> {
   const schemas = loadSchemas(snapshot);
   const model = assembleContent(snapshot, schemas);
 
-  return { client, login, wipBranch, defaultBranch, baseSha, loadedRef, model, treeEntries: tree.entries };
+  // Only the WIP branch can carry pending deletions (a removal relative to main); when
+  // we loaded straight from the default branch there's nothing removed to reconstruct.
+  const deletedObjects = wipSha
+    ? await derivePendingDeletions(client, defaultBranch, wipBranch, schemas)
+    : [];
+
+  return {
+    client,
+    login,
+    wipBranch,
+    defaultBranch,
+    baseSha,
+    loadedRef,
+    model,
+    treeEntries: tree.entries,
+    deletedObjects,
+  };
 }

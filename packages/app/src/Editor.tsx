@@ -54,7 +54,12 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   // `workingModel` recomputes the id index so validation, reference pickers, and the
   // delete guard see these mutations live (a new object is immediately referenceable;
   // a deleted one immediately dangling).
-  const [objects, setObjects] = useState<ContentObject[]>(model.objects);
+  // Live objects plus any pending deletions carried over from a prior session (removed
+  // on WIP, still on main) — the latter render struck-through with a Restore action.
+  const [objects, setObjects] = useState<ContentObject[]>(() => [
+    ...model.objects,
+    ...session.deletedObjects.map((d) => d.object),
+  ]);
   const workingModel: ContentModel = useMemo(
     () => ({
       ...model,
@@ -68,7 +73,16 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   const [showRename, setShowRename] = useState(false);
   // Objects marked for deletion: kept in the list (struck-through, restorable) rather
   // than vanishing, so a pending delete reads as the reversible change it is (SPEC §5).
-  const [deletedPaths, setDeletedPaths] = useState<ReadonlySet<string>>(new Set());
+  // Seeded from the branch (prior-session deletions), then updated as you delete/restore.
+  const [deletedPaths, setDeletedPaths] = useState<ReadonlySet<string>>(
+    () => new Set(session.deletedObjects.map((d) => d.object.path)),
+  );
+  // Bundle asset SHAs for branch-derived deletions, so Restore can re-attach the bytes
+  // (they're gone from the WIP tree, so `session.treeEntries` can't supply them).
+  const deletedAssets = useMemo(
+    () => new Map(session.deletedObjects.map((d) => [d.object.path, d.assets] as const)),
+    [session],
+  );
 
   // Content editing vs. the advanced/admin area (templates + config), gated by the
   // canAccessAdvanced() seam (SPEC §8/§10). Both share this one session + autosave, so
@@ -226,7 +240,10 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   // delete hadn't been committed yet this is a near no-op; either way the object is a
   // live, editable change again.
   function restoreObject(target: ContentObject): void {
-    const moves = bundleAssetEntries(target).map((e) => ({ from: e.path, to: e.path, sha: e.sha }));
+    // Prefer the branch-derived asset SHAs (prior-session delete); fall back to the WIP
+    // tree for an object deleted in this session (its assets are still in treeEntries).
+    const assets = deletedAssets.get(target.path) ?? bundleAssetEntries(target);
+    const moves = assets.map((e) => ({ from: e.path, to: e.path, sha: e.sha }));
     autosave.markObjectRestored(target.path, target.data, target.body, moves);
     void draftStore.current?.put(repoKey, target.path, target.data, target.body);
     setDeletedPaths((prev) => {
