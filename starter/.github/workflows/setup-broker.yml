@@ -41,6 +41,14 @@ jobs:
 
       # ALLOWED_ORIGIN is the exact origin of your editor site (the editor is served at
       # https://<owner>.github.io/<repo>/admin/, whose origin is https://<owner>.github.io).
+      # GitHub Pages lowercases the owner, so lowercase it here to match the browser's
+      # Origin header (the broker also compares case-insensitively as a backstop).
+      - name: Compute the allowed origin
+        id: origin
+        run: |
+          owner_lc="$(printf '%s' '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          echo "value=https://${owner_lc}.github.io" >> "$GITHUB_OUTPUT"
+
       - name: Deploy the broker to Cloudflare
         uses: cloudflare/wrangler-action@v3
         with:
@@ -52,7 +60,7 @@ jobs:
           command: >-
             deploy
             --var GITHUB_CLIENT_ID:${{ vars.GH_OAUTH_CLIENT_ID }}
-            --var ALLOWED_ORIGIN:https://${{ github.repository_owner }}.github.io
+            --var ALLOWED_ORIGIN:${{ steps.origin.outputs.value }}
         env:
           GITHUB_CLIENT_SECRET: ${{ secrets.GH_OAUTH_CLIENT_SECRET }}
 

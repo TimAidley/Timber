@@ -31,7 +31,12 @@ const GITHUB_TOKEN_URL = 'https://github.com/login/oauth/access_token';
 
 export async function handleRequest(request: Request, env: BrokerEnv): Promise<Response> {
   const origin = request.headers.get('Origin');
-  const allowed = origin !== null && origin === env.ALLOWED_ORIGIN;
+  // Match case-insensitively: a browser's Origin lowercases the host (GitHub Pages
+  // serves `https://<owner>.github.io` in lowercase), but `ALLOWED_ORIGIN` may be
+  // configured with the owner's original-case login (e.g. from `github.repository_owner`
+  // = `TimAidley`). We still reflect the request's *actual* origin in the CORS header,
+  // which must byte-match what the browser sent.
+  const allowed = origin !== null && origin.toLowerCase() === env.ALLOWED_ORIGIN.toLowerCase();
 
   // CORS preflight: only greenlight the allowlisted origin.
   if (request.method === 'OPTIONS') {
