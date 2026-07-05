@@ -95,6 +95,30 @@ describe('RepoClient (replayed from fixtures recorded against the real sandbox r
     expect(isExhausted()).toBe(true);
   });
 
+  it('commitFiles() retries on a non-fast-forward ref race, rebuilding on the moved tip', async () => {
+    // First updateRef is rejected 422 "not a fast forward" (the branch tip moved
+    // since we read it — a second editor tab, or the refs read lagging just after a
+    // prior autosave). The client must re-read the tip and re-apply its overlay on
+    // top of it, landing the commit without forcing.
+    const { served, isExhausted } = useCassette('commit-retry-non-ff');
+
+    const result = await makeClient().commitFiles({
+      branch: 'retry_wip',
+      message: 'edit page',
+      files: [{ path: 'content/pages/home/index.md', content: 'Edited.\n' }],
+    });
+
+    // Returns the SECOND commit — the one built on the moved tip and accepted.
+    expect(result.sha).toBe('c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2');
+    // Two ref updates were attempted (the 422, then the success)…
+    expect(served.filter((r) => r.method === 'PATCH').length).toBe(2);
+    // …and the branch tip was re-read after the failure (2 GET ref calls).
+    expect(served.filter((r) => r.method === 'GET' && r.pathname.includes('/git/ref/')).length).toBe(2);
+    // The blob is uploaded only ONCE and reused across the retry.
+    expect(served.filter((r) => r.method === 'POST' && r.pathname.endsWith('/git/blobs')).length).toBe(1);
+    expect(isExhausted()).toBe(true);
+  });
+
   it('commitFiles() targeting a missing branch creates it from the base branch first', async () => {
     const { served, isExhausted } = useCassette('commit-files-new-branch');
 

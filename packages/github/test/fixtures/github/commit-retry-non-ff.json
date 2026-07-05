@@ -1,0 +1,74 @@
+[
+  {
+    "method": "GET",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/ref/heads%2Fretry_wip",
+    "status": 200,
+    "responseBody": {
+      "ref": "refs/heads/retry_wip",
+      "object": { "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "type": "commit" }
+    }
+  },
+  {
+    "method": "POST",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/blobs",
+    "status": 201,
+    "responseBody": { "sha": "b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0" }
+  },
+  {
+    "method": "GET",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "status": 200,
+    "responseBody": { "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "tree": { "sha": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1" } }
+  },
+  {
+    "method": "POST",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/trees",
+    "status": 201,
+    "responseBody": { "sha": "1111111111111111111111111111111111111111" }
+  },
+  {
+    "method": "POST",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/commits",
+    "status": 201,
+    "responseBody": { "sha": "c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1" }
+  },
+  {
+    "method": "PATCH",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/refs/heads%2Fretry_wip",
+    "status": 422,
+    "responseBody": { "message": "Update is not a fast forward", "documentation_url": "https://docs.github.com/rest/git/refs#update-a-reference" }
+  },
+  {
+    "method": "GET",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/ref/heads%2Fretry_wip",
+    "status": 200,
+    "responseBody": {
+      "ref": "refs/heads/retry_wip",
+      "object": { "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "type": "commit" }
+    }
+  },
+  {
+    "method": "GET",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/commits/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "status": 200,
+    "responseBody": { "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "tree": { "sha": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2" } }
+  },
+  {
+    "method": "POST",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/trees",
+    "status": 201,
+    "responseBody": { "sha": "2222222222222222222222222222222222222222" }
+  },
+  {
+    "method": "POST",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/commits",
+    "status": 201,
+    "responseBody": { "sha": "c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2" }
+  },
+  {
+    "method": "PATCH",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/refs/heads%2Fretry_wip",
+    "status": 200,
+    "responseBody": { "ref": "refs/heads/retry_wip", "object": { "sha": "c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2" } }
+  }
+]

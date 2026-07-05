@@ -31,6 +31,22 @@ function isNotFoundError(err: unknown): boolean {
 }
 
 /**
+ * GitHub rejects a non-forced `updateRef` with 422 "Update is not a fast forward"
+ * when the branch tip has moved since we read our base — another editor tab, or the
+ * refs read lagging just after our previous autosave. We recover by re-reading the
+ * tip and re-applying our changes on top of it (see `commitFiles`).
+ */
+function isNonFastForwardError(err: unknown): boolean {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    'status' in err &&
+    (err as { status?: unknown }).status === 422 &&
+    /not a fast forward/i.test((err as { message?: unknown }).message?.toString() ?? '')
+  );
+}
+
+/**
  * Load a repo's content into memory, edit a file, commit back (SPEC §11 / build
  * order Phase 2). Built on the low-level Git Data API (blob -> tree -> commit ->
  * ref update) rather than the Contents API, because Phase 5 needs coalesced
@@ -204,8 +220,8 @@ export class RepoClient {
     const deletions = input.deletions ?? [];
     const moves = input.moves ?? [];
 
-    let baseSha = await this.getBranchSha(branch);
-    if (!baseSha) {
+    let tipSha = await this.getBranchSha(branch);
+    if (!tipSha) {
       const baseBranch = input.baseBranch ?? (await this.getDefaultBranch());
       const baseBranchSha = await this.getBranchSha(baseBranch);
       if (!baseBranchSha) {
@@ -219,15 +235,11 @@ export class RepoClient {
         ref: `refs/heads/${branch}`,
         sha: baseBranchSha,
       });
-      baseSha = baseBranchSha;
+      tipSha = baseBranchSha;
     }
 
-    const { data: baseCommit } = await this.octokit.rest.git.getCommit({
-      owner: this.owner,
-      repo: this.repo,
-      commit_sha: baseSha,
-    });
-
+    // Upload blobs once — they're content-addressed, so they're reused unchanged if
+    // we have to rebuild the tree/commit on a moved tip below.
     const blobs = await Promise.all(files.map((file) => this.createBlob(file)));
 
     // A single tree overlaid on the base: new/updated blobs, blob-reusing moves
@@ -253,29 +265,54 @@ export class RepoClient {
       })),
     ];
 
-    const { data: newTree } = await this.octokit.rest.git.createTree({
-      owner: this.owner,
-      repo: this.repo,
-      base_tree: baseCommit.tree.sha,
-      tree: treeEntries,
-    });
+    // Build the commit on the current tip and fast-forward the ref. If the ref moved
+    // under us (a concurrent tab, or the refs read lagging just after our previous
+    // autosave), GitHub rejects the non-forced update with 422 "not a fast forward";
+    // we re-read the tip and re-apply our overlay on top of it — never forcing, so a
+    // genuinely concurrent commit is preserved, not clobbered. Our files are layered
+    // over `base_tree`, so the other commit's changes survive too.
+    const MAX_ATTEMPTS = 4;
+    for (let attempt = 1; ; attempt += 1) {
+      const { data: baseCommit } = await this.octokit.rest.git.getCommit({
+        owner: this.owner,
+        repo: this.repo,
+        commit_sha: tipSha,
+      });
 
-    const { data: newCommit } = await this.octokit.rest.git.createCommit({
-      owner: this.owner,
-      repo: this.repo,
-      message,
-      tree: newTree.sha,
-      parents: [baseSha],
-    });
+      const { data: newTree } = await this.octokit.rest.git.createTree({
+        owner: this.owner,
+        repo: this.repo,
+        base_tree: baseCommit.tree.sha,
+        tree: treeEntries,
+      });
 
-    await this.octokit.rest.git.updateRef({
-      owner: this.owner,
-      repo: this.repo,
-      ref: `heads/${branch}`,
-      sha: newCommit.sha,
-    });
+      const { data: newCommit } = await this.octokit.rest.git.createCommit({
+        owner: this.owner,
+        repo: this.repo,
+        message,
+        tree: newTree.sha,
+        parents: [tipSha],
+      });
 
-    return { sha: newCommit.sha };
+      try {
+        await this.octokit.rest.git.updateRef({
+          owner: this.owner,
+          repo: this.repo,
+          ref: `heads/${branch}`,
+          sha: newCommit.sha,
+        });
+        return { sha: newCommit.sha };
+      } catch (err) {
+        const latest = await this.getBranchSha(branch);
+        // Give up if we're out of attempts, it's not a fast-forward race, or the tip
+        // hasn't actually advanced (a stale read that a retry can't fix — let the
+        // caller's backoff retry once the refs read catches up).
+        if (attempt >= MAX_ATTEMPTS || !isNonFastForwardError(err) || !latest || latest === tipSha) {
+          throw err;
+        }
+        tipSha = latest;
+      }
+    }
   }
 
   // --- Publish / merge primitives (SPEC §11; Slice 5b) ---
