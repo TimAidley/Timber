@@ -5,6 +5,7 @@ import { gfm } from '@milkdown/kit/preset/gfm';
 import { listener, listenerCtx } from '@milkdown/kit/plugin/listener';
 import { Milkdown, MilkdownProvider, useEditor } from '@milkdown/react';
 import { remarkStringifyOptions } from './milkdown.js';
+import { preventBackspaceNav } from './backspaceFix.js';
 
 interface BodyEditorProps {
   /** Current Markdown body (canonical form). */
@@ -34,7 +35,8 @@ function Wysiwyg({ value, onChange }: BodyEditorProps): React.JSX.Element {
         })
         .use(commonmark)
         .use(gfm)
-        .use(listener),
+        .use(listener)
+        .use(preventBackspaceNav),
     // Re-create the editor when the seed value identity changes (i.e. after the
     // source-mode escape hatch rewrites the body). See BodyEditor.
     [value],
