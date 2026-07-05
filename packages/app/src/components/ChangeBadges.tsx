@@ -99,7 +99,9 @@ const PUBLISH_LABEL: Record<PublishPhase, string> = {
   publishing: 'Publishing…',
   building: 'Building…',
   done: 'Published ✓',
-  failed: 'Publish failed — retry',
+  // Reached only from 'building' — the merge to main already landed and it was the Pages
+  // deploy that failed; retry re-runs the deploy, so name it for what actually broke.
+  failed: 'Deploy failed — retry',
 };
 
 interface PublishButtonProps {

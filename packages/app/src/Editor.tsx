@@ -303,6 +303,23 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
     setShowPublish(true);
   }
 
+  // Retry after a *deploy-leg* failure. The 'failed' phase is only ever reached from
+  // 'building' — i.e. the squash-merge to main already succeeded and it was the Pages
+  // deploy that failed (often a transient "try again later"). WIP was reset to main, so
+  // there is nothing left to publish; recovery is re-running the deploy workflow. We
+  // baseline `deploySince` on the failed run so the poll waits for the *new* run.
+  async function retryDeploy(): Promise<void> {
+    setPublishPhase('building');
+    try {
+      const latest = await session.client.getLatestWorkflowRun(DEPLOY_WORKFLOW, session.defaultBranch);
+      setDeploySince(latest?.createdAt);
+      await session.client.dispatchWorkflow(DEPLOY_WORKFLOW, session.defaultBranch);
+    } catch (err) {
+      console.warn('[timber] deploy retry failed to dispatch', err);
+      setPublishPhase('failed');
+    }
+  }
+
   // Toggle the selected object's Draft/Public flag (SPEC §5). Writes `public` to front
   // matter (an undeclared key the tolerant validator passes through) and mirrors it
   // onto the working object so the sidebar badge + publish validity gate update live.
@@ -326,7 +343,11 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
           syncState={autosave.syncState}
           onSaveNow={autosave.saveNow}
         />
-        <PublishButton phase={publishPhase} hasChanges={hasChanges} onPublish={() => void startPublish()} />
+        <PublishButton
+          phase={publishPhase}
+          hasChanges={hasChanges}
+          onPublish={() => void (publishPhase === 'failed' ? retryDeploy() : startPublish())}
+        />
         {advancedAllowed ? (
           <div className="view-toggle" role="tablist" aria-label="Editor view">
             <button

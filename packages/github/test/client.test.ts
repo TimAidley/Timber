@@ -299,4 +299,18 @@ describe('RepoClient (replayed from fixtures recorded against the real sandbox r
     expect(run?.conclusion).toBeNull();
     expect(run?.url).toContain('/actions/runs/42');
   });
+
+  it('dispatchWorkflow() triggers a workflow_dispatch on a branch (deploy retry)', async () => {
+    // After a transient Pages-deploy failure the publish already landed on main, so the
+    // editor re-runs the deploy rather than re-publishing. The cassette asserts the POST
+    // hits the workflow's /dispatches endpoint with { ref }.
+    const { served, isExhausted } = useCassette('dispatch-workflow');
+
+    await makeClient().dispatchWorkflow('deploy.yml', 'main');
+
+    expect(
+      served.some((r) => r.method === 'POST' && r.pathname.endsWith('/deploy.yml/dispatches')),
+    ).toBe(true);
+    expect(isExhausted()).toBe(true);
+  });
 });

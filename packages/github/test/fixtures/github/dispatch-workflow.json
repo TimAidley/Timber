@@ -1,0 +1,11 @@
+[
+  {
+    "method": "POST",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/actions/workflows/deploy.yml/dispatches",
+    "requestBody": {
+      "ref": "main"
+    },
+    "status": 200,
+    "responseBody": {}
+  }
+]

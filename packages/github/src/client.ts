@@ -421,4 +421,20 @@ export class RepoClient {
       createdAt: run.created_at,
     };
   }
+
+  /**
+   * Manually trigger a workflow (`workflow_dispatch`) on a branch/tag. Used to
+   * **re-run the deploy** after a transient Pages-deploy failure — the publish
+   * (squash-merge to main) already succeeded, so recovery is re-running the deploy,
+   * not re-publishing (SPEC §12). Requires the token's `actions: write` scope, which
+   * `repo`/OAuth grants; the deploy workflow must declare `workflow_dispatch`.
+   */
+  async dispatchWorkflow(workflowFile: string, ref: string): Promise<void> {
+    await this.octokit.rest.actions.createWorkflowDispatch({
+      owner: this.owner,
+      repo: this.repo,
+      workflow_id: workflowFile,
+      ref,
+    });
+  }
 }
