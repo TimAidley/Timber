@@ -16,11 +16,17 @@ interface DeployStatusProps {
   pollKey: number;
 }
 
+// Labels are about the SITE's last deploy to GitHub Pages — deliberately prefixed
+// with "Site" so this isn't misread as the publish state of the page being edited
+// (that's the draft/public flag + the Publish action, not this indicator).
 const LABEL: Record<Exclude<DeployState, 'none'>, string> = {
-  building: 'Building…',
-  published: 'Published ✓',
-  failed: 'Deploy failed',
+  building: 'Site building…',
+  published: 'Site deployed ✓',
+  failed: 'Site deploy failed',
 };
+
+const TITLE =
+  "The site's last deploy to GitHub Pages. This is not whether the page you're editing is published — use Publish to push your changes live.";
 
 const POLL_MS = 5000;
 
@@ -60,7 +66,7 @@ export function DeployStatus({ client, workflowFile, branch, pollKey }: DeploySt
   if (!checked || state === 'none') return null;
 
   return (
-    <div className={`deploy deploy--${state}`}>
+    <div className={`deploy deploy--${state}`} title={TITLE}>
       <span className="deploy__dot" aria-hidden="true" />
       {run?.url ? (
         <a className="deploy__label" href={run.url} target="_blank" rel="noreferrer">
