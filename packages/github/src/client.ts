@@ -243,7 +243,10 @@ export class RepoClient {
     const blobs = await Promise.all(files.map((file) => this.createBlob(file)));
 
     // A single tree overlaid on the base: new/updated blobs, blob-reusing moves
-    // (add at `to`, drop `from`), and deletions (`sha: null` removes the path).
+    // (add at `to`, drop `from`), and deletions (`sha: null` removes the path). A
+    // move with `from === to` is a **re-add** (re-attach an existing blob at its own
+    // path without deleting it) — used to restore a bundle's assets after a cancelled
+    // delete; it contributes the `to` write but no `from` deletion.
     const treeEntries = [
       ...blobs.map((blob) => ({
         path: blob.path,
@@ -257,7 +260,7 @@ export class RepoClient {
         type: 'blob' as const,
         sha: move.sha,
       })),
-      ...[...deletions, ...moves.map((m) => m.from)].map((path) => ({
+      ...[...deletions, ...moves.filter((m) => m.from !== m.to).map((m) => m.from)].map((path) => ({
         path,
         mode: '100644' as const,
         type: 'blob' as const,

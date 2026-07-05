@@ -251,6 +251,36 @@ body {
   margin: 1.25rem 0;
 }
 
+/* Shown in place of the editor when a pending-delete object is selected. */
+.deleted-panel {
+  margin: 1.5rem 0;
+  padding: 1.25rem;
+  border: 1px solid var(--border);
+  border-left: 3px solid #c0392b;
+  border-radius: 8px;
+  background: #fdf3f2;
+}
+
+.deleted-panel h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+  color: #c0392b;
+}
+
+.deleted-panel p {
+  margin: 0 0 1rem;
+  color: var(--muted);
+}
+
+.deleted-panel__restore {
+  padding: 0.4rem 0.9rem;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+
 .schema-form__row {
   display: grid;
   grid-template-columns: 140px 1fr;
@@ -479,6 +509,10 @@ body {
   color: #2f6fb0;
 }
 
+.changes__seg--deleting {
+  color: #c0392b;
+}
+
 .changes__sep {
   color: var(--border);
 }
@@ -505,6 +539,16 @@ body {
 
 .cbadge--saved {
   color: #2f6fb0;
+}
+
+.cbadge--deleting {
+  color: #c0392b;
+}
+
+/* A pending-delete item stays in the list, struck through, dimmed. */
+.object-list button.is-deleting .object-list__title {
+  text-decoration: line-through;
+  color: var(--muted);
 }
 
 /* Visibility badge (Draft/Public), orthogonal to the change lifecycle. */

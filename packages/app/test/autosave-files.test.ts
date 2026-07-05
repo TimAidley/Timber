@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { FileWrite } from '@timber/github';
+import type { FileWrite, MoveEntry } from '@timber/github';
 import { Autosaver } from '../src/state/autosave.js';
 
-type CommitFn = (files: FileWrite[], message: string) => Promise<void>;
+type CommitFn = (files: FileWrite[], message: string, deletions: string[], moves: MoveEntry[]) => Promise<void>;
 
 function setup(commit: CommitFn) {
   const saver = new Autosaver({
@@ -89,5 +89,51 @@ describe('Autosaver.markFileDirty (advanced area — templates/config)', () => {
     expect(commit).toHaveBeenCalledTimes(2);
     const [files] = commit.mock.calls[1]!;
     expect(files[0]!.path).toBe('templates/default.liquid');
+  });
+});
+
+describe('Autosaver delete / restore (SPEC §5)', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  const INDEX = 'content/events/gone/index.md';
+  const ASSET = 'content/events/gone/hero.webp';
+
+  it('markObjectRestored cancels a pending deletion before it commits', async () => {
+    const commit = vi.fn<CommitFn>(async () => undefined);
+    const { saver } = setup(commit);
+
+    // Delete the whole bundle, then restore it before the debounce fires.
+    saver.markPathsDeleted([INDEX, ASSET]);
+    saver.markObjectRestored(INDEX, { title: 'Gone' }, 'body', [{ from: ASSET, to: ASSET, sha: 'ASSET' }]);
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect(commit).toHaveBeenCalledTimes(1);
+    const [files, message, deletions, moves] = commit.mock.calls[0]!;
+    // No deletion survives; the bundle is re-added (index.md write + self-move asset).
+    expect(deletions).toEqual([]);
+    expect(files.map((f) => f.path)).toEqual([INDEX]);
+    expect(moves).toEqual([{ from: ASSET, to: ASSET, sha: 'ASSET' }]);
+    expect(message).toContain('edit');
+  });
+
+  it('markObjectRestored re-adds a bundle whose deletion already committed', async () => {
+    const commit = vi.fn<CommitFn>(async () => undefined);
+    const { saver } = setup(commit);
+
+    // First flush: the deletion lands on WIP.
+    saver.markPathsDeleted([INDEX, ASSET]);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(commit).toHaveBeenCalledTimes(1);
+    expect(commit.mock.calls[0]![2]).toEqual([INDEX, ASSET]); // deletions
+
+    // Restore: a second flush re-adds index.md + re-attaches the asset by SHA.
+    saver.markObjectRestored(INDEX, { title: 'Gone' }, 'body', [{ from: ASSET, to: ASSET, sha: 'ASSET' }]);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(commit).toHaveBeenCalledTimes(2);
+    const [files, , deletions, moves] = commit.mock.calls[1]!;
+    expect(files.map((f) => f.path)).toEqual([INDEX]);
+    expect(deletions).toEqual([]);
+    expect(moves).toEqual([{ from: ASSET, to: ASSET, sha: 'ASSET' }]);
   });
 });

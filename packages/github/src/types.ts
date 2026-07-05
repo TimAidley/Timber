@@ -50,7 +50,11 @@ export interface CommitFilesInput {
   moves?: MoveEntry[];
 }
 
-/** Relocate an existing blob to a new path without re-uploading its bytes. */
+/**
+ * Relocate an existing blob to a new path without re-uploading its bytes. A move with
+ * `from === to` is a **re-add**: it re-attaches the blob at its own path without a
+ * deletion — used to restore a bundle's colocated assets after a cancelled delete.
+ */
 export interface MoveEntry {
   from: string;
   to: string;

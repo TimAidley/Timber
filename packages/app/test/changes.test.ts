@@ -25,16 +25,26 @@ describe('objectChangeState', () => {
   it('is "clean" when nothing pending', () => {
     expect(objectChangeState(A, new Set([B]), new Set([C]))).toBe('clean');
   });
+
+  it('is "deleting" when marked for deletion, overriding editing/saved', () => {
+    expect(objectChangeState(A, new Set([A]), new Set([A]), new Set([A]))).toBe('deleting');
+  });
 });
 
 describe('summarizeChanges', () => {
   it('tallies editing and saved counts, not double-counting a both-state object', () => {
     // A is editing (and also in the saved set); B is saved; C is clean.
     const counts = summarizeChanges([A, B, C], new Set([A]), new Set([A, B]));
-    expect(counts).toEqual({ editing: 1, saved: 1 });
+    expect(counts).toEqual({ editing: 1, saved: 1, deleting: 0 });
+  });
+
+  it('counts a pending deletion under "deleting", not editing/saved', () => {
+    // A is marked deleting (and would otherwise be saved); B is saved; C is clean.
+    const counts = summarizeChanges([A, B, C], new Set(), new Set([A, B]), new Set([A]));
+    expect(counts).toEqual({ editing: 0, saved: 1, deleting: 1 });
   });
 
   it('returns zeros when everything is clean', () => {
-    expect(summarizeChanges([A, B], new Set(), new Set())).toEqual({ editing: 0, saved: 0 });
+    expect(summarizeChanges([A, B], new Set(), new Set())).toEqual({ editing: 0, saved: 0, deleting: 0 });
   });
 });

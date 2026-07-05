@@ -28,8 +28,9 @@ export function DeleteDialog({ object, model, onClose, onConfirm }: DeleteDialog
         </header>
 
         <p className="publish__summary">
-          This removes the whole bundle (<code>{object.path.replace(/\/index\.md$/, '/')}</code>) — its{' '}
-          <code>index.md</code> and any colocated assets — from your working branch.
+          This marks the whole bundle (<code>{object.path.replace(/\/index\.md$/, '/')}</code>) — its{' '}
+          <code>index.md</code> and any colocated assets — for deletion. It stays in the list (struck through) as a
+          pending change you can <strong>restore</strong> until you publish; publishing removes it from the live site.
         </p>
 
         {referrers.length > 0 ? (

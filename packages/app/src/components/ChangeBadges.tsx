@@ -9,6 +9,7 @@ import type { ChangeState } from '../state/changes.js';
 const CHANGE_META: Record<Exclude<ChangeState, 'clean'>, { glyph: string; label: string }> = {
   editing: { glyph: '✎', label: 'Editing — unsaved changes on this device' },
   saved: { glyph: '☁', label: 'Saved to your branch — not yet published' },
+  deleting: { glyph: '✕', label: 'Deleting — will be removed when you publish (restorable until then)' },
 };
 
 /** Per-item lifecycle badge for the sidebar; nothing to show for a clean item. */
@@ -41,6 +42,7 @@ export function VisibilityBadge({ isPublic }: { isPublic: boolean }): React.JSX.
 interface ChangesSummaryProps {
   editing: number;
   saved: number;
+  deleting: number;
   syncState: SyncState;
   onSaveNow: () => void;
 }
@@ -51,7 +53,13 @@ interface ChangesSummaryProps {
  * live save-status (Saving… / Save failed — retrying), absorbing the old standalone
  * sync indicator so there's one thing in this slot, not two.
  */
-export function ChangesSummary({ editing, saved, syncState, onSaveNow }: ChangesSummaryProps): React.JSX.Element {
+export function ChangesSummary({
+  editing,
+  saved,
+  deleting,
+  syncState,
+  onSaveNow,
+}: ChangesSummaryProps): React.JSX.Element {
   if (syncState === 'saving') {
     return (
       <div className="changes changes--saving">
@@ -82,10 +90,16 @@ export function ChangesSummary({ editing, saved, syncState, onSaveNow }: Changes
         <span aria-hidden="true">☁</span> Saved {saved}
       </span>,
     );
+  if (deleting > 0)
+    segments.push(
+      <span key="deleting" className="changes__seg changes__seg--deleting">
+        <span aria-hidden="true">✕</span> Deleting {deleting}
+      </span>,
+    );
   if (segments.length === 0) return <div className="changes changes--clean">No unpublished changes</div>;
 
   return (
-    <div className="changes" aria-label={`${editing} editing, ${saved} saved`}>
+    <div className="changes" aria-label={`${editing} editing, ${saved} saved, ${deleting} deleting`}>
       {segments.flatMap((seg, i) => (i === 0 ? [seg] : [<span key={`sep${i}`} className="changes__sep"> · </span>, seg]))}
     </div>
   );

@@ -157,6 +157,25 @@ export class Autosaver {
     this.schedule();
   }
 
+  /**
+   * Undo a pending/committed delete (SPEC §5 restore). Cancels any pending deletions
+   * for the bundle, then re-adds it: rewrites `index.md` and re-attaches colocated
+   * assets by **reusing their blob SHAs** (self-moves — `from === to`, so no deletion).
+   * Uniform whether or not the delete already reached WIP; if it hadn't flushed yet the
+   * rewrite is identical to the branch (a harmless no-op the publish squash collapses).
+   */
+  markObjectRestored(path: string, data: FrontMatter, body: string, moves: MoveEntry[]): void {
+    const bundleDir = path.replace(/\/index\.md$/, '') + '/';
+    for (const p of [...this.dirtyDeletions]) {
+      if (p === path || p.startsWith(bundleDir)) this.dirtyDeletions.delete(p);
+    }
+    this.dirtyObjects.set(path, { data, body });
+    for (const move of moves) this.dirtyMoves.set(move.to, move);
+    this.notifyDirtyObjects();
+    this.deps.onState('dirty');
+    this.schedule();
+  }
+
   getDirtyObject(path: string): DirtyObject | undefined {
     return this.dirtyObjects.get(path);
   }
@@ -283,6 +302,7 @@ export interface Autosave {
   markAssetDirty: (path: string) => void;
   markPathsDeleted: (paths: string[]) => void;
   markObjectRenamed: (oldPath: string, newPath: string, data: FrontMatter, body: string, moves: MoveEntry[]) => void;
+  markObjectRestored: (path: string, data: FrontMatter, body: string, moves: MoveEntry[]) => void;
   getDirtyObject: (path: string) => DirtyObject | undefined;
   getDirtyFile: (path: string) => string | undefined;
   saveNow: () => void;
@@ -335,6 +355,7 @@ export function useAutosave(session: RepoSession, assetStore: AssetStore): Autos
     markPathsDeleted: (paths) => saver.markPathsDeleted(paths),
     markObjectRenamed: (oldPath, newPath, data, body, moves) =>
       saver.markObjectRenamed(oldPath, newPath, data, body, moves),
+    markObjectRestored: (path, data, body, moves) => saver.markObjectRestored(path, data, body, moves),
     getDirtyObject: (path) => saver.getDirtyObject(path),
     getDirtyFile: (path) => saver.getDirtyFile(path),
     saveNow: () => void saver.saveNow(),

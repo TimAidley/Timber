@@ -66,6 +66,9 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   const [showNew, setShowNew] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ContentObject | null>(null);
   const [showRename, setShowRename] = useState(false);
+  // Objects marked for deletion: kept in the list (struck-through, restorable) rather
+  // than vanishing, so a pending delete reads as the reversible change it is (SPEC §5).
+  const [deletedPaths, setDeletedPaths] = useState<ReadonlySet<string>>(new Set());
 
   // Content editing vs. the advanced/admin area (templates + config), gated by the
   // canAccessAdvanced() seam (SPEC §8/§10). Both share this one session + autosave, so
@@ -133,6 +136,7 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   }
 
   const schema = selected ? model.schemas.get(selected.type) : undefined;
+  const selectedDeleted = selected ? deletedPaths.has(selected.path) : false;
 
   // Device-local draft persistence (SPEC §11): recover unsaved edits after a
   // reload/crash before the WIP commit landed.
@@ -195,24 +199,41 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
     setShowNew(false);
   }
 
-  // Delete an object's whole bundle (index.md + colocated assets from the loaded
-  // tree). markPathsDeleted drops any pending edit and schedules the removal in the
-  // next coalesced WIP commit; the local draft is cleared too.
-  function confirmDelete(target: ContentObject): void {
+  // The colocated asset paths of an object's bundle (everything under its dir except
+  // index.md), from the tree loaded at session start. Powers delete (remove them all)
+  // and restore (re-attach them by blob SHA).
+  function bundleAssetEntries(target: ContentObject): { path: string; sha: string }[] {
     const bundleDir = target.path.replace(/\/index\.md$/, '');
-    const bundleFiles = [
-      target.path,
-      ...session.treeEntries
-        .filter((e) => e.type === 'blob' && e.path.startsWith(`${bundleDir}/`) && e.path !== target.path)
-        .map((e) => e.path),
-    ];
+    return session.treeEntries
+      .filter((e) => e.type === 'blob' && e.path.startsWith(`${bundleDir}/`) && e.path !== target.path)
+      .map((e) => ({ path: e.path, sha: e.sha }));
+  }
+
+  // Delete an object's whole bundle (index.md + colocated assets). Rather than making
+  // it vanish, keep it in the list marked "deleting" (struck-through, restorable) and
+  // schedule the removal in the next coalesced WIP commit. The local draft is cleared;
+  // the in-memory object still holds its data/body so Restore can re-add it.
+  function confirmDelete(target: ContentObject): void {
+    const bundleFiles = [target.path, ...bundleAssetEntries(target).map((e) => e.path)];
     autosave.markPathsDeleted(bundleFiles);
     void draftStore.current?.delete(repoKey, target.path);
-
-    const remaining = objects.filter((o) => o.path !== target.path);
-    setObjects(remaining);
-    if (selectedPath === target.path) setSelectedPath(remaining[0]?.path ?? '');
+    setDeletedPaths((prev) => new Set(prev).add(target.path));
     setDeleteTarget(null);
+  }
+
+  // Restore a pending-delete object: cancel the scheduled deletion and re-add the
+  // bundle (rewrite index.md + re-attach assets by reusing their blob SHAs). If the
+  // delete hadn't been committed yet this is a near no-op; either way the object is a
+  // live, editable change again.
+  function restoreObject(target: ContentObject): void {
+    const moves = bundleAssetEntries(target).map((e) => ({ from: e.path, to: e.path, sha: e.sha }));
+    autosave.markObjectRestored(target.path, target.data, target.body, moves);
+    void draftStore.current?.put(repoKey, target.path, target.data, target.body);
+    setDeletedPaths((prev) => {
+      const next = new Set(prev);
+      next.delete(target.path);
+      return next;
+    });
   }
 
   // Rename the selected object's slug (SPEC §5): append the old slug to `aliases` (so
@@ -268,10 +289,10 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
 
   // Header change counts ("Editing 1 · Saved 4"), tallied over the working objects.
   const counts = useMemo(
-    () => summarizeChanges(objects.map((o) => o.path), autosave.editingPaths, savedPaths),
-    [objects, autosave.editingPaths, savedPaths],
+    () => summarizeChanges(objects.map((o) => o.path), autosave.editingPaths, savedPaths, deletedPaths),
+    [objects, autosave.editingPaths, savedPaths, deletedPaths],
   );
-  const hasChanges = counts.editing > 0 || counts.saved > 0;
+  const hasChanges = counts.editing > 0 || counts.saved > 0 || counts.deleting > 0;
 
   // Whether the selected type renders as a page — visibility (Draft/Public) only
   // applies to those; a config singleton (page: false) has no public presence.
@@ -340,6 +361,7 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
         <ChangesSummary
           editing={counts.editing}
           saved={counts.saved}
+          deleting={counts.deleting}
           syncState={autosave.syncState}
           onSaveNow={autosave.saveNow}
         />
@@ -382,11 +404,13 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
               <li key={o.path}>
                 <button
                   type="button"
-                  className={o.path === selectedPath ? 'is-active' : ''}
+                  className={[o.path === selectedPath ? 'is-active' : '', deletedPaths.has(o.path) ? 'is-deleting' : '']
+                    .filter(Boolean)
+                    .join(' ')}
                   onClick={() => setSelectedPath(o.path)}
                 >
                   <span className="object-list__title">
-                    <ChangeBadge state={objectChangeState(o.path, autosave.editingPaths, savedPaths)} />
+                    <ChangeBadge state={objectChangeState(o.path, autosave.editingPaths, savedPaths, deletedPaths)} />
                     {String(o.data.title ?? o.slug)}
                   </span>
                   <span className="object-list__type">
@@ -405,7 +429,20 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
       ) : (
         <>
       <main className="app__main">
-        {selected && schema ? (
+        {selected && selectedDeleted ? (
+          <section className="deleted-panel" aria-label="Deleted object">
+            <h2>
+              <span aria-hidden="true">✕</span> “{String(selected.data.title ?? selected.slug)}” is marked for deletion
+            </h2>
+            <p>
+              <code>{selected.path.replace(/\/index\.md$/, '/')}</code> will be removed from the live site when you
+              publish. Until then it stays here as a pending change — you can bring it back.
+            </p>
+            <button type="button" className="deleted-panel__restore" onClick={() => restoreObject(selected)}>
+              Restore
+            </button>
+          </section>
+        ) : selected && schema ? (
           <>
             <header className="editor-header">
               <div className="editor-header__title">
@@ -488,7 +525,9 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
 
       <aside className="app__preview">
         <h3>Preview</h3>
-        {selected ? <Preview data={edit.data} body={edit.body} assetStore={assetStore} /> : null}
+        {selected && !selectedDeleted ? (
+          <Preview data={edit.data} body={edit.body} assetStore={assetStore} />
+        ) : null}
       </aside>
         </>
       )}

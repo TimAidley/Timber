@@ -248,6 +248,30 @@ describe('RepoClient (replayed from fixtures recorded against the real sandbox r
     expect(isExhausted()).toBe(true);
   });
 
+  it('commitFiles() re-adds a bundle asset via a self-move (restore, no deletion)', async () => {
+    // Restoring a deleted bundle re-writes index.md and re-attaches its colocated
+    // assets by **reusing their blob SHAs** — expressed as a move with from === to.
+    // The cassette asserts createTree carries the asset at its own path with NO
+    // sha:null deletion entry (a plain move would have emitted one).
+    const { isExhausted } = useCassette('commit-restore-self-move');
+
+    const result = await makeClient().commitFiles({
+      branch: 'octocat_wip',
+      message: 'restore gone',
+      files: [{ path: 'content/events/gone/index.md', content: 'restored body\n' }],
+      moves: [
+        {
+          from: 'content/events/gone/hero.webp',
+          to: 'content/events/gone/hero.webp',
+          sha: 'ASSETSHA',
+        },
+      ],
+    });
+
+    expect(result.sha).toBe('RESTORECOMMIT');
+    expect(isExhausted()).toBe(true);
+  });
+
   // --- Phase 5b: publish / merge primitives ---
 
   it('compareChangedPaths() returns the changed files (publish diff / overlap check)', async () => {
