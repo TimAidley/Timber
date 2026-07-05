@@ -22,7 +22,10 @@ import { objectChangeState, summarizeChanges } from './state/changes.js';
 import { useDeployPoll } from './state/useDeployPoll.js';
 import { NewObjectDialog } from './components/NewObjectDialog.js';
 import { DeleteDialog } from './components/DeleteDialog.js';
+import { DiscardDialog } from './components/DiscardDialog.js';
 import { RenameDialog } from './components/RenameDialog.js';
+import { planBundleReset } from './state/discard.js';
+import { parseFrontMatter } from '@timber/generator';
 import { AdvancedArea } from './advanced/AdvancedArea.js';
 import { canAccessAdvanced } from './github/access.js';
 import { newObject } from './content/newObject.js';
@@ -70,6 +73,8 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   );
   const [showNew, setShowNew] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ContentObject | null>(null);
+  const [discardTarget, setDiscardTarget] = useState<ContentObject | null>(null);
+  const [discarding, setDiscarding] = useState(false);
   const [showRename, setShowRename] = useState(false);
   // Objects marked for deletion: kept in the list (struck-through, restorable) rather
   // than vanishing, so a pending delete reads as the reversible change it is (SPEC §5).
@@ -111,13 +116,20 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   // after each successful autosave/publish. `editingPaths` (local-only) comes from the
   // autosaver; an object that's both counts as Editing (the furthest-back state).
   const [savedPaths, setSavedPaths] = useState<ReadonlySet<string>>(new Set());
+  // Index.md paths that are `added` on WIP (brand-new, not yet on main) — lets the
+  // discard dialog say "remove it" vs "revert to published".
+  const [addedIndexPaths, setAddedIndexPaths] = useState<ReadonlySet<string>>(new Set());
   const refreshSaved = useCallback(async () => {
     try {
       const changed = await session.client.compareChangedPaths(session.defaultBranch, session.wipBranch);
       setSavedPaths(new Set(changed.map((c) => c.path)));
+      setAddedIndexPaths(
+        new Set(changed.filter((c) => c.status === 'added' && c.path.endsWith('/index.md')).map((c) => c.path)),
+      );
     } catch {
       // WIP branch may not exist yet (nothing saved) — nothing published-pending.
       setSavedPaths(new Set());
+      setAddedIndexPaths(new Set());
     }
   }, [session]);
   useEffect(() => {
@@ -253,6 +265,90 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
     });
   }
 
+  // Discard a page's unpublished changes (SPEC §5): revert its bundle to the published
+  // (main) version. Drops local pending state first, then commits a reset to WIP
+  // (main's blobs re-attached, WIP-only files deleted), and reseeds the editor from
+  // main. A brand-new page (never published) has no version to revert to, so it's
+  // removed. The whole thing is one deliberate commit, like publish — not autosave.
+  async function discardChanges(target: ContentObject): Promise<void> {
+    const bundleDir = target.path.replace(/\/index\.md$/, '');
+    setDiscarding(true);
+    try {
+      autosave.forgetBundle(bundleDir); // stop autosave re-committing what we discard
+
+      let bundleChanges: Awaited<ReturnType<typeof session.client.compareChangedPaths>> = [];
+      try {
+        const changed = await session.client.compareChangedPaths(session.defaultBranch, session.wipBranch);
+        bundleChanges = changed.filter((c) => c.path.startsWith(`${bundleDir}/`));
+      } catch {
+        // No WIP branch yet → nothing committed to revert; only local edits to drop.
+      }
+
+      // Is there a published version to revert to?
+      let published: string | null = null;
+      try {
+        published = await session.client.readFile(target.path, session.defaultBranch);
+      } catch {
+        published = null;
+      }
+
+      if (published === null) {
+        // Brand-new page: remove it (delete any WIP copy of the bundle) and drop it.
+        if (bundleChanges.length > 0) {
+          await session.client.commitFiles({
+            branch: session.wipBranch,
+            baseBranch: session.defaultBranch,
+            message: `discard new ${bundleDir.split('/').pop()}`,
+            files: [],
+            deletions: bundleChanges.map((c) => c.path),
+          });
+        }
+        void draftStore.current?.delete(repoKey, target.path);
+        const remaining = objects.filter((o) => o.path !== target.path);
+        setObjects(remaining);
+        if (selectedPath === target.path) setSelectedPath(remaining[0]?.path ?? '');
+        await refreshSaved();
+        return;
+      }
+
+      // Reset the bundle's WIP state back to main (if anything is committed there).
+      if (bundleChanges.length > 0) {
+        const mainTree = await session.client.loadTree(session.defaultBranch);
+        const mainSha = new Map(
+          mainTree.entries.filter((e) => e.type === 'blob').map((e) => [e.path, e.sha] as const),
+        );
+        const { moves, deletions } = planBundleReset(bundleChanges, mainSha);
+        if (moves.length > 0 || deletions.length > 0) {
+          await session.client.commitFiles({
+            branch: session.wipBranch,
+            baseBranch: session.defaultBranch,
+            message: `discard changes to ${bundleDir.split('/').pop()}`,
+            files: [],
+            moves,
+            deletions,
+          });
+        }
+      }
+
+      // Reseed the in-memory object + editor from the published version.
+      const { data, body } = parseFrontMatter(published);
+      const restored: ContentObject = { ...target, data, body, public: data.public === true };
+      setObjects((prev) => prev.map((o) => (o.path === target.path ? restored : o)));
+      if (selectedPath === target.path) {
+        setEdit({ data: { ...data }, body });
+        setBodySeed((s) => s + 1);
+      }
+      void draftStore.current?.delete(repoKey, target.path);
+      await refreshSaved();
+    } catch (err) {
+      console.warn('[timber] discard changes failed', err);
+      await refreshSaved(); // resync the badges to the true branch state
+    } finally {
+      setDiscarding(false);
+      setDiscardTarget(null);
+    }
+  }
+
   // Rename the selected object's slug (SPEC §5): append the old slug to `aliases` (so
   // the build emits a redirect stub), move the bundle (index.md rewritten + old
   // deleted + colocated assets moved by blob SHA), rewrite any front-matter paths that
@@ -314,6 +410,14 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   // Whether the selected type renders as a page — visibility (Draft/Public) only
   // applies to those; a config singleton (page: false) has no public presence.
   const isPageType = schema ? schema.page !== false : false;
+
+  // The selected page's change state — gates the header "Discard changes" button
+  // (shown only when the page has pending edits, and never for a pending-delete page).
+  const selectedState =
+    selected && !selectedDeleted
+      ? objectChangeState(selected.path, autosave.editingPaths, savedPaths)
+      : 'clean';
+  const canDiscard = selectedState === 'editing' || selectedState === 'saved';
 
   // Drive the Publish button's morph from the deploy poll while a build is running.
   useEffect(() => {
@@ -482,6 +586,16 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
                     {edit.data.public === true ? 'Public' : 'Draft'}
                   </button>
                 ) : null}
+                {canDiscard ? (
+                  <button
+                    type="button"
+                    className="editor-header__discard"
+                    onClick={() => setDiscardTarget(selected)}
+                    title="Discard this page's unpublished changes — revert it to the published version."
+                  >
+                    Discard changes
+                  </button>
+                ) : null}
                 {selected.kind === 'collection' ? (
                   <>
                     <button type="button" className="editor-header__rename" onClick={() => setShowRename(true)}>
@@ -559,6 +673,16 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
           model={workingModel}
           onClose={() => setDeleteTarget(null)}
           onConfirm={() => confirmDelete(deleteTarget)}
+        />
+      ) : null}
+
+      {discardTarget ? (
+        <DiscardDialog
+          object={discardTarget}
+          brandNew={addedIndexPaths.has(discardTarget.path)}
+          busy={discarding}
+          onClose={() => (discarding ? undefined : setDiscardTarget(null))}
+          onConfirm={() => void discardChanges(discardTarget)}
         />
       ) : null}
 

@@ -117,6 +117,23 @@ describe('Autosaver delete / restore (SPEC §5)', () => {
     expect(message).toContain('edit');
   });
 
+  it('forgetBundle drops a bundle’s pending edits without committing (discard)', async () => {
+    const commit = vi.fn<CommitFn>(async () => undefined);
+    const { saver } = setup(commit);
+
+    saver.markObjectDirty(INDEX, { title: 'Gone' }, 'edited');
+    saver.markAssetDirty(ASSET);
+    saver.markObjectDirty('content/events/kept/index.md', { title: 'Kept' }, 'body'); // another bundle
+
+    saver.forgetBundle('content/events/gone');
+    await vi.advanceTimersByTimeAsync(2000);
+
+    // Only the other bundle flushes; the forgotten bundle contributes nothing.
+    expect(commit).toHaveBeenCalledTimes(1);
+    const [files] = commit.mock.calls[0]!;
+    expect(files.map((f) => f.path)).toEqual(['content/events/kept/index.md']);
+  });
+
   it('markObjectRestored re-adds a bundle whose deletion already committed', async () => {
     const commit = vi.fn<CommitFn>(async () => undefined);
     const { saver } = setup(commit);

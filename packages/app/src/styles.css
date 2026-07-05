@@ -181,7 +181,8 @@ body {
 }
 
 .editor-header__rename,
-.editor-header__delete {
+.editor-header__delete,
+.editor-header__discard {
   padding: 0.3rem 0.7rem;
   background: none;
   border-radius: 6px;
@@ -207,6 +208,16 @@ body {
 
 .editor-header__delete:hover {
   background: #fdecea;
+}
+
+.editor-header__discard {
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.editor-header__discard:hover {
+  border-color: #c0392b;
+  color: #c0392b;
 }
 
 .rename__preview {

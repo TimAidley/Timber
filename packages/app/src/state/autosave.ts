@@ -176,6 +176,31 @@ export class Autosaver {
     this.schedule();
   }
 
+  /**
+   * Drop all pending local state for a bundle without committing anything (SPEC §5
+   * discard). Used when reverting a page to its published version: the reset itself is
+   * a direct commit, so any queued edits/assets/deletions/moves for the bundle must be
+   * forgotten first or the next flush would re-commit the very changes we discarded.
+   */
+  forgetBundle(bundleDir: string): void {
+    const pref = `${bundleDir}/`;
+    const inBundle = (p: string): boolean => p.startsWith(pref);
+    for (const p of [...this.dirtyObjects.keys()]) if (inBundle(p)) this.dirtyObjects.delete(p);
+    for (const p of [...this.dirtyFiles.keys()]) if (inBundle(p)) this.dirtyFiles.delete(p);
+    for (const p of [...this.dirtyAssets]) if (inBundle(p)) this.dirtyAssets.delete(p);
+    for (const p of [...this.dirtyDeletions]) if (inBundle(p)) this.dirtyDeletions.delete(p);
+    for (const p of [...this.dirtyMoves.keys()]) if (inBundle(p)) this.dirtyMoves.delete(p);
+    for (const p of [...this.dirtyRenames.keys()]) if (inBundle(p)) this.dirtyRenames.delete(p);
+    this.notifyDirtyObjects();
+    const anyDirty =
+      this.dirtyObjects.size ||
+      this.dirtyFiles.size ||
+      this.dirtyAssets.size ||
+      this.dirtyDeletions.size ||
+      this.dirtyMoves.size;
+    if (!anyDirty) this.deps.onState('idle');
+  }
+
   getDirtyObject(path: string): DirtyObject | undefined {
     return this.dirtyObjects.get(path);
   }
@@ -303,6 +328,7 @@ export interface Autosave {
   markPathsDeleted: (paths: string[]) => void;
   markObjectRenamed: (oldPath: string, newPath: string, data: FrontMatter, body: string, moves: MoveEntry[]) => void;
   markObjectRestored: (path: string, data: FrontMatter, body: string, moves: MoveEntry[]) => void;
+  forgetBundle: (bundleDir: string) => void;
   getDirtyObject: (path: string) => DirtyObject | undefined;
   getDirtyFile: (path: string) => string | undefined;
   saveNow: () => void;
@@ -356,6 +382,7 @@ export function useAutosave(session: RepoSession, assetStore: AssetStore): Autos
     markObjectRenamed: (oldPath, newPath, data, body, moves) =>
       saver.markObjectRenamed(oldPath, newPath, data, body, moves),
     markObjectRestored: (path, data, body, moves) => saver.markObjectRestored(path, data, body, moves),
+    forgetBundle: (bundleDir) => saver.forgetBundle(bundleDir),
     getDirtyObject: (path) => saver.getDirtyObject(path),
     getDirtyFile: (path) => saver.getDirtyFile(path),
     saveNow: () => void saver.saveNow(),
