@@ -16,3 +16,4 @@ packages/cli/out/
 # editor local persistence, env
 .env
 .env.local
+.idea
