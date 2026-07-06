@@ -2,7 +2,10 @@
   --border: #d8d8d8;
   --muted: #666;
   --accent: #2b6cb0;
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
   color: #1a1a1a;
 }
 
@@ -103,32 +106,177 @@ body {
 }
 
 .app {
-  display: grid;
-  grid-template-columns: 220px 1fr 360px;
+  display: flex;
+  flex-direction: column;
   height: 100vh;
+  overflow: hidden;
+}
+
+/* Always-present top banner: brand + save status on the left, layout controls +
+   Publish on the right (SPEC §8). */
+.app__banner {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.app__banner-left,
+.app__banner-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.app__banner .changes {
+  margin: 0;
+}
+
+.app__banner .publish-btn {
+  width: auto;
+  margin: 0;
+  padding: 0.4rem 0.9rem;
+}
+
+.app__banner .view-toggle {
+  margin: 0;
+  width: auto;
+}
+
+.app__menu-btn {
+  flex: none;
+  border: 1px solid var(--border);
+  background: none;
+  border-radius: 6px;
+  padding: 0.3rem 0.55rem;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.app__menu-btn[aria-expanded='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.app__repo--banner {
+  font-size: 0.75rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The body under the banner: drawer sidebar + work area. */
+.app__body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  position: relative;
 }
 
 .app__sidebar {
+  flex: 0 0 240px;
   border-right: 1px solid var(--border);
   padding: 1rem;
   overflow-y: auto;
+  background: #fff;
+}
+
+.app__scrim {
+  display: none;
 }
 
 .app__brand {
-  font-size: 1.2rem;
-  margin: 0 0 1rem;
+  font-size: 1.05rem;
+  margin: 0;
+  white-space: nowrap;
+}
+
+/* Work area: side-by-side (resizable), tabbed, or editor-only. */
+.app__work {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.app__work--split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 6px var(--preview-w, 420px);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.app__work--tab,
+.app__work--off {
+  display: flex;
+}
+
+.app__work--tab > .app__main,
+.app__work--tab > .app__preview,
+.app__work--off > .app__main {
+  flex: 1 1 auto;
+}
+
+.app__divider {
+  cursor: col-resize;
+  background: var(--border);
+}
+
+.app__divider:hover {
+  background: var(--accent);
 }
 
 .app__main {
   padding: 1rem 1.5rem;
   overflow-y: auto;
+  min-width: 0;
 }
 
 .app__preview {
   border-left: 1px solid var(--border);
   padding: 1rem;
   overflow-y: auto;
+  min-width: 0;
   background: #fafafa;
+}
+
+.app__preview-empty {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* Below the breakpoint: sidebar becomes an overlay drawer, split is unavailable. */
+@media (max-width: 900px) {
+  .app__sidebar {
+    position: absolute;
+    z-index: 20;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: min(280px, 82vw);
+    box-shadow: 0 0 28px rgba(0, 0, 0, 0.2);
+  }
+
+  .app__scrim {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 15;
+    background: rgba(0, 0, 0, 0.3);
+  }
+
+  .app__repo--banner {
+    display: none;
+  }
+
+  .app__banner {
+    gap: 0.5rem;
+  }
 }
 
 .object-list {
@@ -652,17 +800,16 @@ body {
 }
 
 .view-toggle {
-  display: flex;
+  display: inline-flex;
   gap: 0;
-  margin-bottom: 1rem;
   border: 1px solid var(--border);
   border-radius: 6px;
   overflow: hidden;
 }
 
 .view-toggle button {
-  flex: 1;
-  padding: 0.35rem;
+  flex: 0 0 auto;
+  padding: 0.35rem 0.7rem;
   border: 0;
   background: #fff;
   cursor: pointer;
@@ -676,9 +823,119 @@ body {
   color: #fff;
 }
 
-/* Advanced/admin area (SPEC §8): files | editor | preview, spanning main+preview. */
+/* Preview layout controls in the banner: tab switch + segmented mode + pop-out. */
+.preview-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.tab-switch,
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.tab-switch button,
+.seg button {
+  border: 0;
+  background: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 0.32rem 0.6rem;
+  color: var(--muted);
+}
+
+.tab-switch button.is-active,
+.seg button.is-active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.preview-controls__popout {
+  border: 1px solid var(--border);
+  background: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  line-height: 1;
+  padding: 0.32rem 0.5rem;
+  color: var(--muted);
+}
+
+.preview-controls__popout.is-active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Editor-header action overflow: inline on desktop, a "⋯" dropdown on mobile. */
+.overflow-menu {
+  display: flex;
+}
+
+.overflow-menu__toggle {
+  display: none;
+}
+
+.overflow-menu__items {
+  display: flex;
+  gap: 0.4rem;
+}
+
+@media (max-width: 900px) {
+  .editor-header {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .overflow-menu {
+    position: relative;
+  }
+
+  .overflow-menu__toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    cursor: pointer;
+    list-style: none;
+    font-size: 1.1rem;
+  }
+
+  .overflow-menu__toggle::-webkit-details-marker {
+    display: none;
+  }
+
+  .overflow-menu__items {
+    display: none;
+  }
+
+  .overflow-menu[open] .overflow-menu__items {
+    display: flex;
+    flex-direction: column;
+    position: absolute;
+    right: 0;
+    top: calc(100% + 4px);
+    min-width: 160px;
+    padding: 0.4rem;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    z-index: 25;
+  }
+}
+
+/* Advanced/admin area (SPEC §8): files | editor | preview, filling the work area. */
 .advanced {
-  grid-column: 2 / -1;
+  flex: 1;
+  min-width: 0;
   display: grid;
   grid-template-columns: 240px 1fr 360px;
   min-height: 0;
@@ -687,8 +944,27 @@ body {
 
 .advanced--loading,
 .advanced--error {
+  flex: 1;
   padding: 1.5rem;
-  grid-column: 2 / -1;
+}
+
+/* On mobile the advanced area stacks; its preview is dropped to keep editing usable. */
+@media (max-width: 900px) {
+  .advanced {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .advanced__files {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    max-height: 30vh;
+  }
+
+  .advanced__preview {
+    display: none;
+  }
 }
 
 .advanced__files {
