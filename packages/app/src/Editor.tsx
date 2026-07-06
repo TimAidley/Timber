@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { canPublish, Validator, type ContentModel, type ContentObject, type ContentTypeSchema } from '@timber/content';
+import {
+  canPublish,
+  Validator,
+  type ContentModel,
+  type ContentObject,
+  type ContentTypeSchema,
+} from '@timber/content';
 import type { FrontMatter } from '@timber/generator';
 import type { RepoSession } from './state/repoSession.js';
 import { AssetStore } from './state/assets.js';
@@ -10,6 +16,8 @@ import { repoConfig } from './github/config.js';
 import { SchemaForm } from './forms/SchemaForm.js';
 import { BodyEditor } from './editor/BodyEditor.js';
 import { Preview } from './preview/Preview.js';
+import { useRenderedPreview } from './preview/useRenderedPreview.js';
+import { usePreviewWindow } from './preview/usePreviewWindow.js';
 import {
   ChangeBadge,
   ChangesSummary,
@@ -17,6 +25,13 @@ import {
   VisibilityBadge,
   type PublishPhase,
 } from './components/ChangeBadges.js';
+import { PreviewControls } from './components/LayoutControls.js';
+import {
+  useLayout,
+  MIN_MAIN_WIDTH,
+  MIN_PREVIEW_WIDTH,
+  type PreviewMode,
+} from './state/layout.js';
 import { PublishDialog } from './components/PublishDialog.js';
 import { objectChangeState, summarizeChanges } from './state/changes.js';
 import { useDeployPoll } from './state/useDeployPoll.js';
@@ -121,10 +136,17 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   const [addedIndexPaths, setAddedIndexPaths] = useState<ReadonlySet<string>>(new Set());
   const refreshSaved = useCallback(async () => {
     try {
-      const changed = await session.client.compareChangedPaths(session.defaultBranch, session.wipBranch);
+      const changed = await session.client.compareChangedPaths(
+        session.defaultBranch,
+        session.wipBranch,
+      );
       setSavedPaths(new Set(changed.map((c) => c.path)));
       setAddedIndexPaths(
-        new Set(changed.filter((c) => c.status === 'added' && c.path.endsWith('/index.md')).map((c) => c.path)),
+        new Set(
+          changed
+            .filter((c) => c.status === 'added' && c.path.endsWith('/index.md'))
+            .map((c) => c.path),
+        ),
       );
     } catch {
       // WIP branch may not exist yet (nothing saved) — nothing published-pending.
@@ -140,7 +162,9 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   }, [autosave.syncState, refreshSaved]);
 
   const [selectedPath, setSelectedPath] = useState<string>(model.objects[0]?.path ?? '');
-  const selected: ContentObject | undefined = objects.find((o) => o.path === selectedPath);
+  const selected: ContentObject | undefined = objects.find(
+    (o) => o.path === selectedPath,
+  );
 
   const [edit, setEdit] = useState<EditState>(() => {
     const first = model.objects[0];
@@ -157,7 +181,11 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   if (selected && editingPath !== selectedPath) {
     setEditingPath(selectedPath);
     const dirty = autosave.getDirtyObject(selectedPath);
-    setEdit(dirty ? { data: { ...dirty.data }, body: dirty.body } : { data: { ...selected.data }, body: selected.body });
+    setEdit(
+      dirty
+        ? { data: { ...dirty.data }, body: dirty.body }
+        : { data: { ...selected.data }, body: selected.body },
+    );
     setBodySeed((s) => s + 1);
   }
 
@@ -216,7 +244,9 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   // matter, staged as an unsaved edit + IndexedDB draft; autosave commits its
   // index.md to the WIP branch like any other edit.
   function createObject(schema: ContentTypeSchema, title: string): void {
-    const taken = new Set(objects.filter((o) => o.type === schema.name).map((o) => o.slug));
+    const taken = new Set(
+      objects.filter((o) => o.type === schema.name).map((o) => o.slug),
+    );
     const created = newObject(schema.name, title, schema, taken);
     setObjects((prev) => [...prev, created]);
     setSelectedPath(created.path);
@@ -231,7 +261,12 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   function bundleAssetEntries(target: ContentObject): { path: string; sha: string }[] {
     const bundleDir = target.path.replace(/\/index\.md$/, '');
     return session.treeEntries
-      .filter((e) => e.type === 'blob' && e.path.startsWith(`${bundleDir}/`) && e.path !== target.path)
+      .filter(
+        (e) =>
+          e.type === 'blob' &&
+          e.path.startsWith(`${bundleDir}/`) &&
+          e.path !== target.path,
+      )
       .map((e) => ({ path: e.path, sha: e.sha }));
   }
 
@@ -276,9 +311,13 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
     try {
       autosave.forgetBundle(bundleDir); // stop autosave re-committing what we discard
 
-      let bundleChanges: Awaited<ReturnType<typeof session.client.compareChangedPaths>> = [];
+      let bundleChanges: Awaited<ReturnType<typeof session.client.compareChangedPaths>> =
+        [];
       try {
-        const changed = await session.client.compareChangedPaths(session.defaultBranch, session.wipBranch);
+        const changed = await session.client.compareChangedPaths(
+          session.defaultBranch,
+          session.wipBranch,
+        );
         bundleChanges = changed.filter((c) => c.path.startsWith(`${bundleDir}/`));
       } catch {
         // No WIP branch yet → nothing committed to revert; only local edits to drop.
@@ -315,7 +354,9 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
       if (bundleChanges.length > 0) {
         const mainTree = await session.client.loadTree(session.defaultBranch);
         const mainSha = new Map(
-          mainTree.entries.filter((e) => e.type === 'blob').map((e) => [e.path, e.sha] as const),
+          mainTree.entries
+            .filter((e) => e.type === 'blob')
+            .map((e) => [e.path, e.sha] as const),
         );
         const { moves, deletions } = planBundleReset(bundleChanges, mainSha);
         if (moves.length > 0 || deletions.length > 0) {
@@ -332,7 +373,12 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
 
       // Reseed the in-memory object + editor from the published version.
       const { data, body } = parseFrontMatter(published);
-      const restored: ContentObject = { ...target, data, body, public: data.public === true };
+      const restored: ContentObject = {
+        ...target,
+        data,
+        body,
+        public: data.public === true,
+      };
       setObjects((prev) => prev.map((o) => (o.path === target.path ? restored : o)));
       if (selectedPath === target.path) {
         setEdit({ data: { ...data }, body });
@@ -364,18 +410,29 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
     const prevAliases = Array.isArray(edit.data.aliases)
       ? edit.data.aliases.filter((a): a is string => typeof a === 'string')
       : [];
-    const aliases = prevAliases.includes(selected.slug) ? prevAliases : [...prevAliases, selected.slug];
+    const aliases = prevAliases.includes(selected.slug)
+      ? prevAliases
+      : [...prevAliases, selected.slug];
 
     // Repoint any front-matter value (e.g. an image field) that lived in the bundle.
     const data: FrontMatter = { aliases };
     for (const [k, v] of Object.entries(edit.data)) {
       if (k === 'aliases') continue;
-      data[k] = typeof v === 'string' && v.startsWith(`${oldDir}/`) ? `${newDir}/${v.slice(oldDir.length + 1)}` : v;
+      data[k] =
+        typeof v === 'string' && v.startsWith(`${oldDir}/`)
+          ? `${newDir}/${v.slice(oldDir.length + 1)}`
+          : v;
     }
 
     const moves = session.treeEntries
-      .filter((e) => e.type === 'blob' && e.path.startsWith(`${oldDir}/`) && e.path !== oldPath)
-      .map((e) => ({ from: e.path, to: `${newDir}/${e.path.slice(oldDir.length + 1)}`, sha: e.sha }));
+      .filter(
+        (e) => e.type === 'blob' && e.path.startsWith(`${oldDir}/`) && e.path !== oldPath,
+      )
+      .map((e) => ({
+        from: e.path,
+        to: `${newDir}/${e.path.slice(oldDir.length + 1)}`,
+        sha: e.sha,
+      }));
 
     autosave.markObjectRenamed(oldPath, newPath, data, edit.body, moves);
     void draftStore.current?.delete(repoKey, oldPath);
@@ -402,7 +459,13 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
 
   // Header change counts ("Editing 1 · Saved 4"), tallied over the working objects.
   const counts = useMemo(
-    () => summarizeChanges(objects.map((o) => o.path), autosave.editingPaths, savedPaths, deletedPaths),
+    () =>
+      summarizeChanges(
+        objects.map((o) => o.path),
+        autosave.editingPaths,
+        savedPaths,
+        deletedPaths,
+      ),
     [objects, autosave.editingPaths, savedPaths, deletedPaths],
   );
   const hasChanges = counts.editing > 0 || counts.saved > 0 || counts.deleting > 0;
@@ -437,7 +500,10 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
     setPublishPhase('idle'); // clear a prior done/failed
     autosave.saveNow();
     try {
-      const latest = await session.client.getLatestWorkflowRun(DEPLOY_WORKFLOW, session.defaultBranch);
+      const latest = await session.client.getLatestWorkflowRun(
+        DEPLOY_WORKFLOW,
+        session.defaultBranch,
+      );
       setDeploySince(latest?.createdAt);
     } catch {
       setDeploySince(undefined);
@@ -453,7 +519,10 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   async function retryDeploy(): Promise<void> {
     setPublishPhase('building');
     try {
-      const latest = await session.client.getLatestWorkflowRun(DEPLOY_WORKFLOW, session.defaultBranch);
+      const latest = await session.client.getLatestWorkflowRun(
+        DEPLOY_WORKFLOW,
+        session.defaultBranch,
+      );
       setDeploySince(latest?.createdAt);
       await session.client.dispatchWorkflow(DEPLOY_WORKFLOW, session.defaultBranch);
     } catch (err) {
@@ -469,202 +538,398 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
     if (!selected) return;
     const next = !(edit.data.public === true);
     updateField('public', next ? true : undefined);
-    setObjects((prev) => prev.map((o) => (o.path === selected.path ? { ...o, public: next } : o)));
+    setObjects((prev) =>
+      prev.map((o) => (o.path === selected.path ? { ...o, public: next } : o)),
+    );
   }
+
+  // ---- Layout: banner + drawer sidebar + split/tab/off preview (SPEC §8) ----------
+  const layout = useLayout();
+  // Side-by-side isn't workable on a phone, so a narrow viewport downgrades it to tabs.
+  const effectivePreviewMode: PreviewMode =
+    layout.isMobile && layout.previewMode === 'split' ? 'tab' : layout.previewMode;
+  const showMain = effectivePreviewMode !== 'tab' || layout.previewTab === 'edit';
+  const showPreviewPane =
+    effectivePreviewMode === 'split' ||
+    (effectivePreviewMode === 'tab' && layout.previewTab === 'preview');
+
+  // Render the preview once, here, so the same HTML feeds both the pane and a
+  // popped-out window. Skip the work entirely when nothing needs it. The pop-out's
+  // open state is read from a ref (previous render's value) to keep hook order stable
+  // — a one-render lag on first open is harmless.
+  const previewWindowOpenRef = useRef(false);
+  const previewLive = !!selected && !selectedDeleted;
+  const { html: previewHtml, error: previewError } = useRenderedPreview(
+    edit.data,
+    edit.body,
+    assetStore,
+    previewLive && (showPreviewPane || previewWindowOpenRef.current),
+  );
+  const previewWin = usePreviewWindow(previewHtml, previewError);
+  previewWindowOpenRef.current = previewWin.isOpen;
+
+  // Drag the split divider to resize the preview pane; persist the width on drop.
+  const workRef = useRef<HTMLDivElement | null>(null);
+  function onDividerDown(e: React.PointerEvent<HTMLDivElement>): void {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = layout.previewWidth;
+    let last = startW;
+    const move = (ev: PointerEvent): void => {
+      const container = workRef.current;
+      const maxW = container
+        ? container.clientWidth - MIN_MAIN_WIDTH
+        : Number.POSITIVE_INFINITY;
+      last = Math.max(MIN_PREVIEW_WIDTH, Math.min(maxW, startW - (ev.clientX - startX)));
+      layout.setPreviewWidth(last, false);
+    };
+    const up = (): void => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      document.body.style.userSelect = '';
+      layout.setPreviewWidth(last, true);
+    };
+    document.body.style.userSelect = 'none';
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  }
+
+  // Keyboard shortcuts for the two layout toggles (⌘/Ctrl-B sidebar, ⌘/Ctrl-. cycles
+  // the preview mode). Modifier-gated so they never intercept editor typing.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+      if (e.key === 'b' || e.key === 'B') {
+        e.preventDefault();
+        layout.toggleSidebar();
+      } else if (e.key === '.') {
+        e.preventDefault();
+        const order: PreviewMode[] = ['split', 'tab', 'off'];
+        const next =
+          order[(order.indexOf(layout.previewMode) + 1) % order.length] ?? 'split';
+        layout.setPreviewMode(next);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [layout.toggleSidebar, layout.setPreviewMode, layout.previewMode]);
 
   return (
     <div className="app">
-      <aside className="app__sidebar">
-        <h1 className="app__brand">Timber</h1>
-        <p className="app__repo">
-          <code>{session.loadedRef}</code>
-        </p>
-        <ChangesSummary
-          editing={counts.editing}
-          saved={counts.saved}
-          deleting={counts.deleting}
-          syncState={autosave.syncState}
-          onSaveNow={autosave.saveNow}
-        />
-        <PublishButton
-          phase={publishPhase}
-          hasChanges={hasChanges}
-          onPublish={() => void (publishPhase === 'failed' ? retryDeploy() : startPublish())}
-        />
-        {advancedAllowed ? (
-          <div className="view-toggle" role="tablist" aria-label="Editor view">
+      <header className="app__banner">
+        <div className="app__banner-left">
+          {view === 'content' ? (
             <button
               type="button"
-              role="tab"
-              aria-selected={view === 'content'}
-              className={view === 'content' ? 'is-active' : ''}
-              onClick={() => setView('content')}
+              className="app__menu-btn"
+              onClick={() => layout.toggleSidebar()}
+              aria-label={layout.sidebarOpen ? 'Hide content list' : 'Show content list'}
+              aria-expanded={layout.sidebarOpen}
+              title="Toggle content list (⌘/Ctrl-B)"
             >
-              Content
+              ☰
             </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={view === 'advanced'}
-              className={view === 'advanced' ? 'is-active' : ''}
-              onClick={() => setView('advanced')}
-            >
-              Advanced
-            </button>
-          </div>
-        ) : null}
-        <nav>
-          <div className="object-list__head">
-            <span>Content</span>
-            <button type="button" className="object-list__new" onClick={() => setShowNew(true)}>
-              ＋ New
-            </button>
-          </div>
-          <ul className="object-list">
-            {objects.map((o) => (
-              <li key={o.path}>
-                <button
-                  type="button"
-                  className={[o.path === selectedPath ? 'is-active' : '', deletedPaths.has(o.path) ? 'is-deleting' : '']
-                    .filter(Boolean)
-                    .join(' ')}
-                  onClick={() => setSelectedPath(o.path)}
-                >
-                  <span className="object-list__title">
-                    <ChangeBadge state={objectChangeState(o.path, autosave.editingPaths, savedPaths, deletedPaths)} />
-                    {String(o.data.title ?? o.slug)}
-                  </span>
-                  <span className="object-list__type">
-                    {(model.schemas.get(o.type)?.page ?? true) ? <VisibilityBadge isPublic={o.public} /> : null}
-                    {o.type}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </nav>
-      </aside>
+          ) : null}
+          <h1 className="app__brand">Timber</h1>
+          <code className="app__repo app__repo--banner">{session.loadedRef}</code>
+          <ChangesSummary
+            editing={counts.editing}
+            saved={counts.saved}
+            deleting={counts.deleting}
+            syncState={autosave.syncState}
+            onSaveNow={autosave.saveNow}
+          />
+        </div>
+        <div className="app__banner-right">
+          {advancedAllowed ? (
+            <div className="view-toggle" role="tablist" aria-label="Editor view">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={view === 'content'}
+                className={view === 'content' ? 'is-active' : ''}
+                onClick={() => setView('content')}
+              >
+                Content
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={view === 'advanced'}
+                className={view === 'advanced' ? 'is-active' : ''}
+                onClick={() => setView('advanced')}
+              >
+                Advanced
+              </button>
+            </div>
+          ) : null}
+          {view === 'content' ? (
+            <PreviewControls
+              mode={layout.previewMode}
+              effectiveMode={effectivePreviewMode}
+              tab={layout.previewTab}
+              isMobile={layout.isMobile}
+              popOutOpen={previewWin.isOpen}
+              onMode={layout.setPreviewMode}
+              onTab={layout.setPreviewTab}
+              onPopOut={() =>
+                previewWin.isOpen ? previewWin.close() : previewWin.open()
+              }
+            />
+          ) : null}
+          <PublishButton
+            phase={publishPhase}
+            hasChanges={hasChanges}
+            onPublish={() =>
+              void (publishPhase === 'failed' ? retryDeploy() : startPublish())
+            }
+          />
+        </div>
+      </header>
 
-      {view === 'advanced' ? (
-        <AdvancedArea session={session} autosave={autosave} />
-      ) : (
-        <>
-      <main className="app__main">
-        {selected && selectedDeleted ? (
-          <section className="deleted-panel" aria-label="Deleted object">
-            <h2>
-              <span aria-hidden="true">✕</span> “{String(selected.data.title ?? selected.slug)}” is marked for deletion
-            </h2>
-            <p>
-              <code>{selected.path.replace(/\/index\.md$/, '/')}</code> will be removed from the live site when you
-              publish. Until then it stays here as a pending change — you can bring it back.
-            </p>
-            <button type="button" className="deleted-panel__restore" onClick={() => restoreObject(selected)}>
-              Restore
-            </button>
-          </section>
-        ) : selected && schema ? (
+      <div className="app__body">
+        {view === 'content' && layout.sidebarOpen ? (
           <>
-            <header className="editor-header">
-              <div className="editor-header__title">
-                <h2>{String(edit.data.title ?? selected.slug)}</h2>
-                <code>{selected.path}</code>
-              </div>
-              <div className="editor-header__actions">
-                {isPageType ? (
+            {layout.isMobile ? (
+              <div
+                className="app__scrim"
+                onClick={() => layout.setSidebarOpen(false)}
+                aria-hidden="true"
+              />
+            ) : null}
+            <aside className="app__sidebar">
+              <nav>
+                <div className="object-list__head">
+                  <span>Content</span>
                   <button
                     type="button"
-                    className={`editor-header__visibility is-${edit.data.public === true ? 'public' : 'draft'}`}
-                    onClick={toggleVisibility}
-                    title={
-                      edit.data.public === true
-                        ? 'Public — appears on the live site. Click to make it a draft.'
-                        : 'Draft — hidden from the live site. Click to make it public.'
-                    }
+                    className="object-list__new"
+                    onClick={() => setShowNew(true)}
                   >
-                    <VisibilityBadge isPublic={edit.data.public === true} />
-                    {edit.data.public === true ? 'Public' : 'Draft'}
+                    ＋ New
                   </button>
-                ) : null}
-                {canDiscard ? (
-                  <button
-                    type="button"
-                    className="editor-header__discard"
-                    onClick={() => setDiscardTarget(selected)}
-                    title="Discard this page's unpublished changes — revert it to the published version."
-                  >
-                    Discard changes
-                  </button>
-                ) : null}
-                {selected.kind === 'collection' ? (
-                  <>
-                    <button type="button" className="editor-header__rename" onClick={() => setShowRename(true)}>
-                      Rename
-                    </button>
+                </div>
+                <ul className="object-list">
+                  {objects.map((o) => (
+                    <li key={o.path}>
+                      <button
+                        type="button"
+                        className={[
+                          o.path === selectedPath ? 'is-active' : '',
+                          deletedPaths.has(o.path) ? 'is-deleting' : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
+                        onClick={() => {
+                          setSelectedPath(o.path);
+                          if (layout.isMobile) layout.setSidebarOpen(false);
+                        }}
+                      >
+                        <span className="object-list__title">
+                          <ChangeBadge
+                            state={objectChangeState(
+                              o.path,
+                              autosave.editingPaths,
+                              savedPaths,
+                              deletedPaths,
+                            )}
+                          />
+                          {String(o.data.title ?? o.slug)}
+                        </span>
+                        <span className="object-list__type">
+                          {(model.schemas.get(o.type)?.page ?? true) ? (
+                            <VisibilityBadge isPublic={o.public} />
+                          ) : null}
+                          {o.type}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </nav>
+            </aside>
+          </>
+        ) : null}
+
+        {view === 'advanced' ? (
+          <AdvancedArea session={session} autosave={autosave} />
+        ) : (
+          <div
+            ref={workRef}
+            className={`app__work app__work--${effectivePreviewMode}`}
+            style={
+              effectivePreviewMode === 'split'
+                ? ({ '--preview-w': `${layout.previewWidth}px` } as React.CSSProperties)
+                : undefined
+            }
+          >
+            {showMain ? (
+              <main className="app__main">
+                {selected && selectedDeleted ? (
+                  <section className="deleted-panel" aria-label="Deleted object">
+                    <h2>
+                      <span aria-hidden="true">✕</span> “
+                      {String(selected.data.title ?? selected.slug)}” is marked for
+                      deletion
+                    </h2>
+                    <p>
+                      <code>{selected.path.replace(/\/index\.md$/, '/')}</code> will be
+                      removed from the live site when you publish. Until then it stays
+                      here as a pending change — you can bring it back.
+                    </p>
                     <button
                       type="button"
-                      className="editor-header__delete"
-                      onClick={() => setDeleteTarget(selected)}
+                      className="deleted-panel__restore"
+                      onClick={() => restoreObject(selected)}
                     >
-                      Delete
+                      Restore
                     </button>
+                  </section>
+                ) : selected && schema ? (
+                  <>
+                    <header className="editor-header">
+                      <div className="editor-header__title">
+                        <h2>{String(edit.data.title ?? selected.slug)}</h2>
+                        <code>{selected.path}</code>
+                      </div>
+                      <div className="editor-header__actions">
+                        {isPageType ? (
+                          <button
+                            type="button"
+                            className={`editor-header__visibility is-${edit.data.public === true ? 'public' : 'draft'}`}
+                            onClick={toggleVisibility}
+                            title={
+                              edit.data.public === true
+                                ? 'Public — appears on the live site. Click to make it a draft.'
+                                : 'Draft — hidden from the live site. Click to make it public.'
+                            }
+                          >
+                            <VisibilityBadge isPublic={edit.data.public === true} />
+                            {edit.data.public === true ? 'Public' : 'Draft'}
+                          </button>
+                        ) : null}
+                        {canDiscard || selected.kind === 'collection' ? (
+                          <details className="overflow-menu">
+                            <summary
+                              className="overflow-menu__toggle"
+                              aria-label="More actions"
+                              title="More actions"
+                            >
+                              ⋯
+                            </summary>
+                            <div className="overflow-menu__items">
+                              {canDiscard ? (
+                                <button
+                                  type="button"
+                                  className="editor-header__discard"
+                                  onClick={() => setDiscardTarget(selected)}
+                                  title="Discard this page's unpublished changes — revert it to the published version."
+                                >
+                                  Discard changes
+                                </button>
+                              ) : null}
+                              {selected.kind === 'collection' ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="editor-header__rename"
+                                    onClick={() => setShowRename(true)}
+                                  >
+                                    Rename
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="editor-header__delete"
+                                    onClick={() => setDeleteTarget(selected)}
+                                  >
+                                    Delete
+                                  </button>
+                                </>
+                              ) : null}
+                            </div>
+                          </details>
+                        ) : null}
+                      </div>
+                    </header>
+
+                    <section className="editor-panel">
+                      <h3>Fields</h3>
+                      <SchemaForm
+                        schema={schema}
+                        data={edit.data}
+                        model={workingModel}
+                        assetStore={assetStore}
+                        bundleDir={selected.path.replace(/\/index\.md$/, '')}
+                        onAssetStaged={autosave.markAssetDirty}
+                        onChange={updateField}
+                      />
+                    </section>
+
+                    <section className="editor-panel">
+                      <h3>Body</h3>
+                      <BodyEditor
+                        docKey={bodySeed}
+                        value={edit.body}
+                        onChange={(body) => applyEdit({ ...edit, body })}
+                      />
+                    </section>
+
+                    {validation ? (
+                      <section
+                        className={`validation ${validation.valid ? 'validation--ok' : 'validation--bad'}`}
+                      >
+                        <strong>
+                          {validation.valid ? '✓ Valid' : '✗ Invalid'} —{' '}
+                          {canPublish(validation) ? 'can be published' : 'draft only'}
+                        </strong>
+                        {validation.errors.length > 0 ? (
+                          <ul>
+                            {validation.errors.map((e, i) => (
+                              <li key={i}>
+                                {e.field ? <code>{e.field}</code> : null} {e.message}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null}
+                      </section>
+                    ) : null}
                   </>
-                ) : null}
-              </div>
-            </header>
-
-            <section className="editor-panel">
-              <h3>Fields</h3>
-              <SchemaForm
-                schema={schema}
-                data={edit.data}
-                model={workingModel}
-                assetStore={assetStore}
-                bundleDir={selected.path.replace(/\/index\.md$/, '')}
-                onAssetStaged={autosave.markAssetDirty}
-                onChange={updateField}
-              />
-            </section>
-
-            <section className="editor-panel">
-              <h3>Body</h3>
-              <BodyEditor docKey={bodySeed} value={edit.body} onChange={(body) => applyEdit({ ...edit, body })} />
-            </section>
-
-            {validation ? (
-              <section className={`validation ${validation.valid ? 'validation--ok' : 'validation--bad'}`}>
-                <strong>
-                  {validation.valid ? '✓ Valid' : '✗ Invalid'} —{' '}
-                  {canPublish(validation) ? 'can be published' : 'draft only'}
-                </strong>
-                {validation.errors.length > 0 ? (
-                  <ul>
-                    {validation.errors.map((e, i) => (
-                      <li key={i}>
-                        {e.field ? <code>{e.field}</code> : null} {e.message}
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-              </section>
+                ) : (
+                  <p>No object selected.</p>
+                )}
+              </main>
             ) : null}
-          </>
-        ) : (
-          <p>No object selected.</p>
-        )}
-      </main>
 
-      <aside className="app__preview">
-        <h3>Preview</h3>
-        {selected && !selectedDeleted ? (
-          <Preview data={edit.data} body={edit.body} assetStore={assetStore} />
-        ) : null}
-      </aside>
-        </>
-      )}
+            {effectivePreviewMode === 'split' && showPreviewPane ? (
+              <div
+                className="app__divider"
+                role="separator"
+                aria-orientation="vertical"
+                aria-label="Drag to resize preview"
+                onPointerDown={onDividerDown}
+              />
+            ) : null}
+
+            {showPreviewPane ? (
+              <aside className="app__preview">
+                <h3>Preview</h3>
+                {selected && !selectedDeleted ? (
+                  <Preview html={previewHtml} error={previewError} />
+                ) : (
+                  <p className="app__preview-empty">Nothing to preview.</p>
+                )}
+              </aside>
+            ) : null}
+          </div>
+        )}
+      </div>
 
       {showNew ? (
-        <NewObjectDialog model={workingModel} onClose={() => setShowNew(false)} onCreate={createObject} />
+        <NewObjectDialog
+          model={workingModel}
+          onClose={() => setShowNew(false)}
+          onCreate={createObject}
+        />
       ) : null}
 
       {deleteTarget ? (
@@ -689,7 +954,13 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
       {showRename && selected ? (
         <RenameDialog
           object={selected}
-          takenSlugs={new Set(objects.filter((o) => o.type === selected.type && o.path !== selected.path).map((o) => o.slug))}
+          takenSlugs={
+            new Set(
+              objects
+                .filter((o) => o.type === selected.type && o.path !== selected.path)
+                .map((o) => o.slug),
+            )
+          }
           onClose={() => setShowRename(false)}
           onRename={renameObject}
         />
@@ -698,7 +969,11 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
       {showPublish ? (
         <PublishDialog
           client={session.client}
-          ctx={{ wipBranch: session.wipBranch, defaultBranch: session.defaultBranch, baseSha }}
+          ctx={{
+            wipBranch: session.wipBranch,
+            defaultBranch: session.defaultBranch,
+            baseSha,
+          }}
           onClose={() => setShowPublish(false)}
           onPublished={(sha) => {
             setBaseSha(sha);
