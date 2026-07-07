@@ -95,5 +95,17 @@ function TemplatePreview({
   if (!valid)
     return <p className="app__preview-empty">Fix the template to see the preview.</p>;
   if (error) return <pre className="preview preview--error">{error}</pre>;
-  return <iframe className="advanced__frame" title="Template preview" srcDoc={html} />;
+  // A `srcDoc` iframe is `about:srcdoc` — SAME-ORIGIN with this token-holding app,
+  // and scripts in it run — so an edited/loaded template containing `<script>` could
+  // reach `window.parent` and the GitHub token. `sandbox="allow-scripts"` (WITHOUT
+  // `allow-same-origin`) gives the frame an opaque origin: template scripts still run
+  // for preview fidelity, but can't touch this app's origin or its storage.
+  return (
+    <iframe
+      className="advanced__frame"
+      title="Template preview"
+      sandbox="allow-scripts"
+      srcDoc={html}
+    />
+  );
 }

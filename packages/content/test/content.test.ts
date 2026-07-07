@@ -174,9 +174,9 @@ describe('parseVideoUrl', () => {
       provider: 'youtube',
       id: 'dQw4w9WgXcQ',
     });
-    expect(parseVideoUrl('https://youtu.be/abc123')).toEqual({
+    expect(parseVideoUrl('https://youtu.be/aBc_1-2XyZ0')).toEqual({
       provider: 'youtube',
-      id: 'abc123',
+      id: 'aBc_1-2XyZ0',
     });
     expect(parseVideoUrl('https://vimeo.com/123456789')).toEqual({
       provider: 'vimeo',
@@ -187,5 +187,16 @@ describe('parseVideoUrl', () => {
   it('rejects non-allow-listed hosts and malformed URLs', () => {
     expect(parseVideoUrl('https://evil.example.com/embed/xyz')).toBeUndefined();
     expect(parseVideoUrl('not a url')).toBeUndefined();
+  });
+
+  it('rejects a YouTube id that is not 11 url-safe chars (injection guard)', () => {
+    // The id is interpolated into a template-built embed URL, so an id carrying
+    // quotes/brackets must never pass the allowlist boundary.
+    expect(parseVideoUrl('https://www.youtube.com/watch?v="><script>')).toBeUndefined();
+    expect(parseVideoUrl('https://youtu.be/short')).toBeUndefined();
+  });
+
+  it('rejects plaintext http (mixed content)', () => {
+    expect(parseVideoUrl('http://www.youtube.com/watch?v=dQw4w9WgXcQ')).toBeUndefined();
   });
 });

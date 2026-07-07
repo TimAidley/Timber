@@ -3,8 +3,24 @@ import remarkParse from 'remark-parse';
 import remarkGfm from 'remark-gfm';
 import remarkFrontmatter from 'remark-frontmatter';
 import remarkRehype from 'remark-rehype';
+import rehypeSanitize, { defaultSchema, type Options as SanitizeSchema } from 'rehype-sanitize';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeStringify from 'rehype-stringify';
+
+// remark-rehype already drops raw HTML (no `allowDangerousHtml`), but it does NOT
+// filter URL *protocols*, so a `[x](javascript:…)` link or a `data:` image would
+// survive into the output and execute on click. rehype-sanitize enforces a safe
+// protocol allowlist (http/https/mailto/…) on `href`/`src`. It runs BEFORE
+// rehype-highlight so the trusted highlighter spans it emits aren't stripped; we
+// extend the default schema only to preserve the `language-*` class the highlighter
+// needs to detect a fenced block's language.
+const sanitizeSchema: SanitizeSchema = {
+  ...defaultSchema,
+  attributes: {
+    ...defaultSchema.attributes,
+    code: [...(defaultSchema.attributes?.code ?? []), ['className', /^language-./]],
+  },
+};
 
 // The SPEC §6 Markdown pipeline, assembled once and reused. Pure JS, identical in
 // browser and Node. remark-frontmatter is included so a stray front-matter block
@@ -15,6 +31,7 @@ const processor = unified()
   .use(remarkGfm)
   .use(remarkFrontmatter, ['yaml'])
   .use(remarkRehype)
+  .use(rehypeSanitize, sanitizeSchema)
   .use(rehypeHighlight)
   .use(rehypeStringify);
 

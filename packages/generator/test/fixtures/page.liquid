@@ -7,7 +7,7 @@
   </head>
   <body>
     <article data-id="{{ page.id }}"{% unless page.public %} data-draft="true"{% endunless %}>
-      {{ content }}
+      {{ content | raw }}
     </article>
   </body>
 </html>

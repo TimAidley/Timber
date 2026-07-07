@@ -24,6 +24,13 @@ describe('redirectStubHtml', () => {
     expect(html).toContain('<link rel="canonical" href="/events/summer-fete/">');
     expect(html).toContain('href="/events/summer-fete/"');
   });
+
+  it('HTML-escapes the target URL (a hostile slug cannot inject markup)', () => {
+    const html = redirectStubHtml('/events/x"><script>alert(1)</script>/');
+    expect(html).not.toContain('<script>alert(1)</script>');
+    expect(html).toContain('&lt;script&gt;');
+    expect(html).toContain('&quot;&gt;'); // the attribute-breakout `">` is neutralised
+  });
 });
 
 describe('aliasUrls', () => {

@@ -30,4 +30,21 @@ describe('sanitizeSvg', () => {
     expect(out).toMatch(/<path/i);
     expect(out).toContain('M4 4h16v16H4z');
   });
+
+  it('strips elements that fetch external resources (exfil / tracking channel)', () => {
+    // `<image>`/`<use href>` and CSS `url()` in a standalone image/svg+xml document
+    // fire external requests even with scripts removed.
+    const out = sanitizeSvg(
+      '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">' +
+        '<image href="https://evil.example/track.png"/>' +
+        '<use xlink:href="https://evil.example/x.svg#a"/>' +
+        '<style>@import url(https://evil.example/x.css);</style>' +
+        '<rect width="10" height="10"/></svg>',
+    );
+    expect(out).not.toMatch(/<image/i);
+    expect(out).not.toMatch(/<use/i);
+    expect(out).not.toMatch(/<style/i);
+    expect(out).not.toContain('evil.example');
+    expect(out).toMatch(/<rect/i); // legitimate content still survives
+  });
 });

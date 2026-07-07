@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { sanitizePreviewHtml } from './sanitizePreview.js';
 
 function escapeHtml(s: string): string {
   return s.replace(/[&<>]/g, (c) => (c === '&' ? '&amp;' : c === '<' ? '&lt;' : '&gt;'));
@@ -47,9 +48,13 @@ export function usePreviewWindow(
   useEffect(() => {
     const w = winRef.current;
     if (!isOpen || !w || w.closed) return;
+    // The popup is opened with `window.open('')` — a SAME-ORIGIN document with a live
+    // `opener` handle back to this token-holding app, and `document.write` parses a
+    // full document so any injected `<script>` would EXECUTE. Sanitize the rendered
+    // (author-supplied) HTML before writing so it can't reach `opener`/the token.
     const body = error
       ? `<pre style="color:#c0392b;white-space:pre-wrap">${escapeHtml(error)}</pre>`
-      : html;
+      : sanitizePreviewHtml(html);
     w.document.open();
     w.document.write(wrapDoc(body));
     w.document.close();

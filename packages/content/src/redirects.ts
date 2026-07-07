@@ -8,19 +8,32 @@ import type { ContentObject, ContentTypeSchema } from './types.js';
  * `<link rel="canonical">` tells crawlers the real destination.
  */
 export function redirectStubHtml(toUrl: string): string {
+  // `toUrl` derives from the object's slug via `urlFor` — editable, so not trusted.
+  // Escape it before interpolating into HTML/attributes so a slug like `"><script>…`
+  // can't turn this generated stub into a stored-XSS page.
+  const safe = escapeHtml(toUrl);
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="refresh" content="0; url=${toUrl}">
-<link rel="canonical" href="${toUrl}">
+<meta http-equiv="refresh" content="0; url=${safe}">
+<link rel="canonical" href="${safe}">
 <title>Redirecting…</title>
 </head>
 <body>
-<p>This page has moved to <a href="${toUrl}">${toUrl}</a>.</p>
+<p>This page has moved to <a href="${safe}">${safe}</a>.</p>
 </body>
 </html>
 `;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 /**

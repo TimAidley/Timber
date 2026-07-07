@@ -47,6 +47,29 @@ describe('generator fidelity', () => {
     expect(html).not.toContain('id: 01J8Z3K9Q7');
     expect(html).not.toContain('<hr>'); // front matter must not render as a rule
   });
+
+  it('HTML-escapes front-matter output but emits body content raw', async () => {
+    const evil = [
+      '---',
+      'title: \'"><img src=x onerror=alert(1)>\'',
+      '---',
+      '# Hello',
+      '',
+      '[link](javascript:alert(1)) and normal **text**.',
+    ].join('\n');
+    const tpl = '<h1>{{ page.title }}</h1>{{ content | raw }}';
+    const html = await renderPage({ markdown: evil, template: tpl });
+
+    // Front-matter value is escaped — no live <img onerror> in the output.
+    expect(html).not.toContain('<img src=x onerror=alert(1)>');
+    expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
+
+    // Markdown body is still emitted as real HTML (raw)...
+    expect(html).toContain('<h1>Hello</h1>');
+    expect(html).toContain('<strong>text</strong>');
+    // ...but a javascript: link protocol is stripped by rehype-sanitize.
+    expect(html).not.toContain('javascript:alert(1)');
+  });
 });
 
 describe('parseFrontMatter', () => {
