@@ -57,7 +57,9 @@ describe('generator fidelity', () => {
       '',
       '[link](javascript:alert(1)) and normal **text**.',
     ].join('\n');
-    const tpl = '<h1>{{ page.title }}</h1>{{ content | raw }}';
+    // A BARE `{{ content }}` — the form every existing theme uses — must render the
+    // body as HTML (regression guard: global output-escaping must not escape it).
+    const tpl = '<h1>{{ page.title }}</h1>{{ content }}';
     const html = await renderPage({ markdown: evil, template: tpl });
 
     // Front-matter value is escaped — no live <img onerror> in the output.
@@ -69,6 +71,15 @@ describe('generator fidelity', () => {
     expect(html).toContain('<strong>text</strong>');
     // ...but a javascript: link protocol is stripped by rehype-sanitize.
     expect(html).not.toContain('javascript:alert(1)');
+  });
+
+  it('emits body content raw with an explicit `| raw` filter too', async () => {
+    const html = await renderPage({
+      markdown: '# Hi\n\n**bold**',
+      template: '{{ content | raw }}',
+    });
+    expect(html).toContain('<strong>bold</strong>');
+    expect(html).not.toContain('&lt;strong&gt;');
   });
 });
 

@@ -1,6 +1,6 @@
 import { parseFrontMatter } from './frontmatter.js';
 import { renderMarkdown } from './markdown.js';
-import { engine } from './liquid.js';
+import { engine, SafeHtml } from './liquid.js';
 import type { RenderPageInput } from './types.js';
 
 /**
@@ -22,7 +22,9 @@ export async function renderPage(input: RenderPageInput): Promise<string> {
 
   const html = await engine.parseAndRender(input.template, {
     page: data,
-    content,
+    // The body is already rendered + sanitized HTML — mark it trusted so `{{ content }}`
+    // emits it raw while every other output is auto-escaped (see liquid.ts).
+    content: new SafeHtml(content),
     site: input.site ?? {},
     seo: input.seo ?? {},
   });

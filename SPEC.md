@@ -106,6 +106,8 @@ Chosen over Nunjucks. Reasons: it's **safe by construction** (parsed to an AST, 
 
 Liquid is deliberately **"logic-light":** math is done via filters (`{{ a | plus: b }}`, not `{{ a + b }}`), there are no parentheses in boolean conditions, no inline ternary, and no macros (reusable chunks are separate snippet files via `{% render %}`). This is a feature for this project: **compute in the generator (JavaScript), format in the template.** Enable the `jsTruthy` option to avoid Shopify-style truthiness surprises (blank string is otherwise truthy).
 
+**Output is HTML-escaped by default** (a custom `outputEscape`), so untrusted front-matter / config values (title, description, nav labels, slugs…) can never inject markup — a template author doesn't have to remember `| escape`. The one exception is the rendered Markdown **body**, which is already sanitized HTML: the generator passes it wrapped as trusted, so a bare `{{ content }}` emits it raw with no `| raw` needed. This keeps existing themes working unchanged while making injection the exception, not the default. A template that genuinely needs to emit other trusted HTML opts in with `| raw`.
+
 ### Markdown pipeline
 unified/remark/rehype: `remark-parse` → `remark-gfm` → `remark-frontmatter` → `remark-rehype` → `rehype-stringify`, plus syntax highlighting. Pure JS, runs identically in browser (preview) and Node (build).
 
