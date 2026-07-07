@@ -14,6 +14,8 @@ interface PreviewControlsProps {
   tab: PreviewTab;
   isMobile: boolean;
   popOutOpen: boolean;
+  /** Pop-out is content-only (advanced has its own iframe preview). */
+  showPopOut: boolean;
   onMode: (mode: PreviewMode) => void;
   onTab: (tab: PreviewTab) => void;
   onPopOut: () => void;
@@ -30,6 +32,7 @@ export function PreviewControls({
   tab,
   isMobile,
   popOutOpen,
+  showPopOut,
   onMode,
   onTab,
   onPopOut,
@@ -73,18 +76,20 @@ export function PreviewControls({
           </button>
         ))}
       </div>
-      <button
-        type="button"
-        className={`preview-controls__popout${popOutOpen ? ' is-active' : ''}`}
-        onClick={onPopOut}
-        aria-pressed={popOutOpen}
-        title={popOutOpen ? 'Close the preview window' : 'Open preview in a new window'}
-        aria-label={
-          popOutOpen ? 'Close the preview window' : 'Open preview in a new window'
-        }
-      >
-        ↗
-      </button>
+      {showPopOut ? (
+        <button
+          type="button"
+          className={`preview-controls__popout${popOutOpen ? ' is-active' : ''}`}
+          onClick={onPopOut}
+          aria-pressed={popOutOpen}
+          title={popOutOpen ? 'Close the preview window' : 'Open preview in a new window'}
+          aria-label={
+            popOutOpen ? 'Close the preview window' : 'Open preview in a new window'
+          }
+        >
+          ↗
+        </button>
+      ) : null}
     </div>
   );
 }

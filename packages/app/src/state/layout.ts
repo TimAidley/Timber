@@ -17,7 +17,6 @@ export const MOBILE_QUERY = '(max-width: 900px)';
 /** Clamp bounds for the draggable split so neither pane can be crushed away. */
 export const MIN_PREVIEW_WIDTH = 280;
 export const MIN_MAIN_WIDTH = 360;
-const DEFAULT_PREVIEW_WIDTH = 420;
 
 const LS = {
   sidebar: 'timber:layout:sidebar',
@@ -58,7 +57,8 @@ export interface Layout {
   setPreviewMode: (mode: PreviewMode) => void;
   previewTab: PreviewTab;
   setPreviewTab: (tab: PreviewTab) => void;
-  previewWidth: number;
+  /** Preview-pane width in px, or `null` for the default **equal** split (50/50). */
+  previewWidth: number | null;
   /** `persist=false` during a live drag; persist once on drop to avoid LS churn. */
   setPreviewWidth: (width: number, persist?: boolean) => void;
 }
@@ -108,11 +108,13 @@ export function useLayout(): Layout {
 
   const [previewTab, setPreviewTab] = useState<PreviewTab>('edit');
 
-  const [previewWidth, setPreviewWidthState] = useState<number>(() => {
-    const stored = Number(readLS(LS.previewWidth));
-    return Number.isFinite(stored) && stored >= MIN_PREVIEW_WIDTH
+  const [previewWidth, setPreviewWidthState] = useState<number | null>(() => {
+    const raw = readLS(LS.previewWidth);
+    const stored = Number(raw);
+    // A stored width means the user has dragged before; otherwise null → equal split.
+    return raw !== null && Number.isFinite(stored) && stored >= MIN_PREVIEW_WIDTH
       ? stored
-      : DEFAULT_PREVIEW_WIDTH;
+      : null;
   });
   const setPreviewWidth = useCallback((width: number, persist = true) => {
     setPreviewWidthState(width);

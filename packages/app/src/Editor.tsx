@@ -41,7 +41,9 @@ import { DiscardDialog } from './components/DiscardDialog.js';
 import { RenameDialog } from './components/RenameDialog.js';
 import { planBundleReset } from './state/discard.js';
 import { parseFrontMatter } from '@timber/generator';
-import { AdvancedArea } from './advanced/AdvancedArea.js';
+import { useAdvanced } from './advanced/useAdvanced.js';
+import { AdvancedPreview } from './advanced/AdvancedPreview.js';
+import { CodeEditor } from './advanced/CodeEditor.js';
 import { canAccessAdvanced } from './github/access.js';
 import { newObject } from './content/newObject.js';
 import { useBackNavigationGuard } from './editor/backNavGuard.js';
@@ -109,6 +111,9 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   // switching never drops unsaved state and edits coalesce into the same WIP commit.
   const advancedAllowed = canAccessAdvanced();
   const [view, setView] = useState<'content' | 'advanced'>('content');
+  // Only load advanced files once the user first opens that view (lazy). Once seen,
+  // the hook keeps its state so switching back and forth is instant.
+  const [advancedSeen, setAdvancedSeen] = useState(false);
 
   // Publish dialog + the conflict base SHA, which advances each time we publish.
   const [showPublish, setShowPublish] = useState(false);
@@ -543,8 +548,17 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
     );
   }
 
+  // Advanced/admin state (templates + config), lazily loaded on first visit. Its file
+  // list renders in the shared sidebar and its editor/preview in the shared work area.
+  const advanced = useAdvanced(session, autosave, advancedSeen);
+
   // ---- Layout: banner + drawer sidebar + split/tab/off preview (SPEC §8) ----------
   const layout = useLayout();
+  function openView(next: 'content' | 'advanced'): void {
+    if (next === 'advanced') setAdvancedSeen(true);
+    setView(next);
+    if (layout.isMobile) layout.setSidebarOpen(false);
+  }
   // Side-by-side isn't workable on a phone, so a narrow viewport downgrades it to tabs.
   const effectivePreviewMode: PreviewMode =
     layout.isMobile && layout.previewMode === 'split' ? 'tab' : layout.previewMode;
@@ -553,12 +567,12 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
     effectivePreviewMode === 'split' ||
     (effectivePreviewMode === 'tab' && layout.previewTab === 'preview');
 
-  // Render the preview once, here, so the same HTML feeds both the pane and a
-  // popped-out window. Skip the work entirely when nothing needs it. The pop-out's
-  // open state is read from a ref (previous render's value) to keep hook order stable
-  // — a one-render lag on first open is harmless.
+  // Render the content preview once, here, so the same HTML feeds both the pane and a
+  // popped-out window. Skip the work entirely when nothing needs it (advanced view has
+  // its own template preview). The pop-out's open state is read from a ref (previous
+  // render's value) to keep hook order stable — a one-render lag on first open is fine.
   const previewWindowOpenRef = useRef(false);
-  const previewLive = !!selected && !selectedDeleted;
+  const previewLive = view === 'content' && !!selected && !selectedDeleted;
   const { html: previewHtml, error: previewError } = useRenderedPreview(
     edit.data,
     edit.body,
@@ -569,11 +583,14 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   previewWindowOpenRef.current = previewWin.isOpen;
 
   // Drag the split divider to resize the preview pane; persist the width on drop.
+  // Starting width is the current pane width (measured when we're at the equal default).
   const workRef = useRef<HTMLDivElement | null>(null);
+  const previewRef = useRef<HTMLElement | null>(null);
   function onDividerDown(e: React.PointerEvent<HTMLDivElement>): void {
     e.preventDefault();
     const startX = e.clientX;
-    const startW = layout.previewWidth;
+    const startW =
+      layout.previewWidth ?? previewRef.current?.offsetWidth ?? MIN_PREVIEW_WIDTH;
     let last = startW;
     const move = (ev: PointerEvent): void => {
       const container = workRef.current;
@@ -614,22 +631,219 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
     return () => window.removeEventListener('keydown', onKey);
   }, [layout.toggleSidebar, layout.setPreviewMode, layout.previewMode]);
 
+  // The work area's two panes, rendered into the shared split/tab/off scaffold below.
+  // Content and advanced share the same chrome; only the inner editor + preview differ.
+  const mainContent =
+    view === 'advanced' ? (
+      advanced.loadError ? (
+        <p className="advanced__load">
+          Couldn’t load advanced files: {advanced.loadError}
+        </p>
+      ) : !advanced.files ? (
+        <p>Loading templates &amp; config…</p>
+      ) : advanced.selected ? (
+        <>
+          <header className="editor-header">
+            <div className="editor-header__title">
+              <h2>{advanced.selected.path.split('/').pop()}</h2>
+              <code>{advanced.selected.path}</code>
+            </div>
+          </header>
+          <section className="editor-panel">
+            <CodeEditor
+              value={advanced.value}
+              kind={advanced.selected.kind}
+              onChange={advanced.onEdit}
+            />
+            {advanced.validation && !advanced.validation.valid ? (
+              <div
+                className="advanced__validation advanced__validation--bad"
+                role="alert"
+              >
+                <strong>
+                  Not saved to your branch — fix before it can be committed:
+                </strong>
+                <ul>
+                  {advanced.validation.errors.map((e, i) => (
+                    <li key={i}>{e}</li>
+                  ))}
+                </ul>
+                <p className="advanced__hint">
+                  Your draft is kept locally so nothing is lost.
+                </p>
+              </div>
+            ) : (
+              <div className="advanced__validation advanced__validation--ok">
+                ✓ Valid — saved to your branch
+              </div>
+            )}
+          </section>
+        </>
+      ) : (
+        <p>No editable file selected.</p>
+      )
+    ) : selected && selectedDeleted ? (
+      <section className="deleted-panel" aria-label="Deleted object">
+        <h2>
+          <span aria-hidden="true">✕</span> “
+          {String(selected.data.title ?? selected.slug)}” is marked for deletion
+        </h2>
+        <p>
+          <code>{selected.path.replace(/\/index\.md$/, '/')}</code> will be removed from
+          the live site when you publish. Until then it stays here as a pending change —
+          you can bring it back.
+        </p>
+        <button
+          type="button"
+          className="deleted-panel__restore"
+          onClick={() => restoreObject(selected)}
+        >
+          Restore
+        </button>
+      </section>
+    ) : selected && schema ? (
+      <>
+        <header className="editor-header">
+          <div className="editor-header__title">
+            <h2>{String(edit.data.title ?? selected.slug)}</h2>
+            <code>{selected.path}</code>
+          </div>
+          <div className="editor-header__actions">
+            {isPageType ? (
+              <button
+                type="button"
+                className={`editor-header__visibility is-${edit.data.public === true ? 'public' : 'draft'}`}
+                onClick={toggleVisibility}
+                title={
+                  edit.data.public === true
+                    ? 'Public — appears on the live site. Click to make it a draft.'
+                    : 'Draft — hidden from the live site. Click to make it public.'
+                }
+              >
+                <VisibilityBadge isPublic={edit.data.public === true} />
+                {edit.data.public === true ? 'Public' : 'Draft'}
+              </button>
+            ) : null}
+            {canDiscard || selected.kind === 'collection' ? (
+              <details className="overflow-menu">
+                <summary
+                  className="overflow-menu__toggle"
+                  aria-label="More actions"
+                  title="More actions"
+                >
+                  ⋯
+                </summary>
+                <div className="overflow-menu__items">
+                  {canDiscard ? (
+                    <button
+                      type="button"
+                      className="editor-header__discard"
+                      onClick={() => setDiscardTarget(selected)}
+                      title="Discard this page's unpublished changes — revert it to the published version."
+                    >
+                      Discard changes
+                    </button>
+                  ) : null}
+                  {selected.kind === 'collection' ? (
+                    <>
+                      <button
+                        type="button"
+                        className="editor-header__rename"
+                        onClick={() => setShowRename(true)}
+                      >
+                        Rename
+                      </button>
+                      <button
+                        type="button"
+                        className="editor-header__delete"
+                        onClick={() => setDeleteTarget(selected)}
+                      >
+                        Delete
+                      </button>
+                    </>
+                  ) : null}
+                </div>
+              </details>
+            ) : null}
+          </div>
+        </header>
+
+        <section className="editor-panel">
+          <h3>Fields</h3>
+          <SchemaForm
+            schema={schema}
+            data={edit.data}
+            model={workingModel}
+            assetStore={assetStore}
+            bundleDir={selected.path.replace(/\/index\.md$/, '')}
+            onAssetStaged={autosave.markAssetDirty}
+            onChange={updateField}
+          />
+        </section>
+
+        <section className="editor-panel">
+          <h3>Body</h3>
+          <BodyEditor
+            docKey={bodySeed}
+            value={edit.body}
+            onChange={(body) => applyEdit({ ...edit, body })}
+          />
+        </section>
+
+        {validation ? (
+          <section
+            className={`validation ${validation.valid ? 'validation--ok' : 'validation--bad'}`}
+          >
+            <strong>
+              {validation.valid ? '✓ Valid' : '✗ Invalid'} —{' '}
+              {canPublish(validation) ? 'can be published' : 'draft only'}
+            </strong>
+            {validation.errors.length > 0 ? (
+              <ul>
+                {validation.errors.map((e, i) => (
+                  <li key={i}>
+                    {e.field ? <code>{e.field}</code> : null} {e.message}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </section>
+        ) : null}
+      </>
+    ) : (
+      <p>No object selected.</p>
+    );
+
+  const previewContent =
+    view === 'advanced' ? (
+      advanced.selected ? (
+        <AdvancedPreview
+          session={session}
+          kind={advanced.selected.kind}
+          template={advanced.value}
+          valid={advanced.validation?.valid ?? false}
+        />
+      ) : null
+    ) : selected && !selectedDeleted ? (
+      <Preview html={previewHtml} error={previewError} />
+    ) : (
+      <p className="app__preview-empty">Nothing to preview.</p>
+    );
+
   return (
     <div className="app">
       <header className="app__banner">
         <div className="app__banner-left">
-          {view === 'content' ? (
-            <button
-              type="button"
-              className="app__menu-btn"
-              onClick={() => layout.toggleSidebar()}
-              aria-label={layout.sidebarOpen ? 'Hide content list' : 'Show content list'}
-              aria-expanded={layout.sidebarOpen}
-              title="Toggle content list (⌘/Ctrl-B)"
-            >
-              ☰
-            </button>
-          ) : null}
+          <button
+            type="button"
+            className="app__menu-btn"
+            onClick={() => layout.toggleSidebar()}
+            aria-label={layout.sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
+            aria-expanded={layout.sidebarOpen}
+            title="Toggle sidebar (⌘/Ctrl-B)"
+          >
+            ☰
+          </button>
           <h1 className="app__brand">Timber</h1>
           <code className="app__repo app__repo--banner">{session.loadedRef}</code>
           <ChangesSummary
@@ -641,42 +855,17 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
           />
         </div>
         <div className="app__banner-right">
-          {advancedAllowed ? (
-            <div className="view-toggle" role="tablist" aria-label="Editor view">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={view === 'content'}
-                className={view === 'content' ? 'is-active' : ''}
-                onClick={() => setView('content')}
-              >
-                Content
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={view === 'advanced'}
-                className={view === 'advanced' ? 'is-active' : ''}
-                onClick={() => setView('advanced')}
-              >
-                Advanced
-              </button>
-            </div>
-          ) : null}
-          {view === 'content' ? (
-            <PreviewControls
-              mode={layout.previewMode}
-              effectiveMode={effectivePreviewMode}
-              tab={layout.previewTab}
-              isMobile={layout.isMobile}
-              popOutOpen={previewWin.isOpen}
-              onMode={layout.setPreviewMode}
-              onTab={layout.setPreviewTab}
-              onPopOut={() =>
-                previewWin.isOpen ? previewWin.close() : previewWin.open()
-              }
-            />
-          ) : null}
+          <PreviewControls
+            mode={layout.previewMode}
+            effectiveMode={effectivePreviewMode}
+            tab={layout.previewTab}
+            isMobile={layout.isMobile}
+            popOutOpen={previewWin.isOpen}
+            showPopOut={view === 'content'}
+            onMode={layout.setPreviewMode}
+            onTab={layout.setPreviewTab}
+            onPopOut={() => (previewWin.isOpen ? previewWin.close() : previewWin.open())}
+          />
           <PublishButton
             phase={publishPhase}
             hasChanges={hasChanges}
@@ -688,7 +877,7 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
       </header>
 
       <div className="app__body">
-        {view === 'content' && layout.sidebarOpen ? (
+        {layout.sidebarOpen ? (
           <>
             {layout.isMobile ? (
               <div
@@ -698,230 +887,149 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
               />
             ) : null}
             <aside className="app__sidebar">
-              <nav>
-                <div className="object-list__head">
-                  <span>Content</span>
+              {advancedAllowed ? (
+                <div
+                  className="view-toggle view-toggle--sidebar"
+                  role="tablist"
+                  aria-label="Editor view"
+                >
                   <button
                     type="button"
-                    className="object-list__new"
-                    onClick={() => setShowNew(true)}
+                    role="tab"
+                    aria-selected={view === 'content'}
+                    className={view === 'content' ? 'is-active' : ''}
+                    onClick={() => openView('content')}
                   >
-                    ＋ New
+                    Content
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={view === 'advanced'}
+                    className={view === 'advanced' ? 'is-active' : ''}
+                    onClick={() => openView('advanced')}
+                  >
+                    Advanced
                   </button>
                 </div>
-                <ul className="object-list">
-                  {objects.map((o) => (
-                    <li key={o.path}>
-                      <button
-                        type="button"
-                        className={[
-                          o.path === selectedPath ? 'is-active' : '',
-                          deletedPaths.has(o.path) ? 'is-deleting' : '',
-                        ]
-                          .filter(Boolean)
-                          .join(' ')}
-                        onClick={() => {
-                          setSelectedPath(o.path);
-                          if (layout.isMobile) layout.setSidebarOpen(false);
-                        }}
-                      >
-                        <span className="object-list__title">
-                          <ChangeBadge
-                            state={objectChangeState(
-                              o.path,
-                              autosave.editingPaths,
-                              savedPaths,
-                              deletedPaths,
-                            )}
-                          />
-                          {String(o.data.title ?? o.slug)}
-                        </span>
-                        <span className="object-list__type">
-                          {(model.schemas.get(o.type)?.page ?? true) ? (
-                            <VisibilityBadge isPublic={o.public} />
-                          ) : null}
-                          {o.type}
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </nav>
+              ) : null}
+
+              {view === 'content' ? (
+                <nav>
+                  <div className="object-list__head">
+                    <span>Content</span>
+                    <button
+                      type="button"
+                      className="object-list__new"
+                      onClick={() => setShowNew(true)}
+                    >
+                      ＋ New
+                    </button>
+                  </div>
+                  <ul className="object-list">
+                    {objects.map((o) => (
+                      <li key={o.path}>
+                        <button
+                          type="button"
+                          className={[
+                            o.path === selectedPath ? 'is-active' : '',
+                            deletedPaths.has(o.path) ? 'is-deleting' : '',
+                          ]
+                            .filter(Boolean)
+                            .join(' ')}
+                          onClick={() => {
+                            setSelectedPath(o.path);
+                            if (layout.isMobile) layout.setSidebarOpen(false);
+                          }}
+                        >
+                          <span className="object-list__title">
+                            <ChangeBadge
+                              state={objectChangeState(
+                                o.path,
+                                autosave.editingPaths,
+                                savedPaths,
+                                deletedPaths,
+                              )}
+                            />
+                            {String(o.data.title ?? o.slug)}
+                          </span>
+                          <span className="object-list__type">
+                            {(model.schemas.get(o.type)?.page ?? true) ? (
+                              <VisibilityBadge isPublic={o.public} />
+                            ) : null}
+                            {o.type}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </nav>
+              ) : (
+                <nav>
+                  <div className="object-list__head">
+                    <span>Templates &amp; config</span>
+                  </div>
+                  {advanced.loadError ? (
+                    <p className="object-list__empty">Couldn’t load files.</p>
+                  ) : !advanced.files ? (
+                    <p className="object-list__empty">Loading…</p>
+                  ) : (
+                    <ul className="object-list">
+                      {advanced.files.map((f) => (
+                        <li key={f.path}>
+                          <button
+                            type="button"
+                            className={
+                              f.path === advanced.selectedPath ? 'is-active' : ''
+                            }
+                            onClick={() => {
+                              advanced.setSelectedPath(f.path);
+                              if (layout.isMobile) layout.setSidebarOpen(false);
+                            }}
+                          >
+                            <span className="object-list__title">
+                              {f.path.split('/').pop()}
+                            </span>
+                            <span className="object-list__type">{f.path}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </nav>
+              )}
             </aside>
           </>
         ) : null}
 
-        {view === 'advanced' ? (
-          <AdvancedArea session={session} autosave={autosave} />
-        ) : (
-          <div
-            ref={workRef}
-            className={`app__work app__work--${effectivePreviewMode}`}
-            style={
-              effectivePreviewMode === 'split'
-                ? ({ '--preview-w': `${layout.previewWidth}px` } as React.CSSProperties)
-                : undefined
-            }
-          >
-            {showMain ? (
-              <main className="app__main">
-                {selected && selectedDeleted ? (
-                  <section className="deleted-panel" aria-label="Deleted object">
-                    <h2>
-                      <span aria-hidden="true">✕</span> “
-                      {String(selected.data.title ?? selected.slug)}” is marked for
-                      deletion
-                    </h2>
-                    <p>
-                      <code>{selected.path.replace(/\/index\.md$/, '/')}</code> will be
-                      removed from the live site when you publish. Until then it stays
-                      here as a pending change — you can bring it back.
-                    </p>
-                    <button
-                      type="button"
-                      className="deleted-panel__restore"
-                      onClick={() => restoreObject(selected)}
-                    >
-                      Restore
-                    </button>
-                  </section>
-                ) : selected && schema ? (
-                  <>
-                    <header className="editor-header">
-                      <div className="editor-header__title">
-                        <h2>{String(edit.data.title ?? selected.slug)}</h2>
-                        <code>{selected.path}</code>
-                      </div>
-                      <div className="editor-header__actions">
-                        {isPageType ? (
-                          <button
-                            type="button"
-                            className={`editor-header__visibility is-${edit.data.public === true ? 'public' : 'draft'}`}
-                            onClick={toggleVisibility}
-                            title={
-                              edit.data.public === true
-                                ? 'Public — appears on the live site. Click to make it a draft.'
-                                : 'Draft — hidden from the live site. Click to make it public.'
-                            }
-                          >
-                            <VisibilityBadge isPublic={edit.data.public === true} />
-                            {edit.data.public === true ? 'Public' : 'Draft'}
-                          </button>
-                        ) : null}
-                        {canDiscard || selected.kind === 'collection' ? (
-                          <details className="overflow-menu">
-                            <summary
-                              className="overflow-menu__toggle"
-                              aria-label="More actions"
-                              title="More actions"
-                            >
-                              ⋯
-                            </summary>
-                            <div className="overflow-menu__items">
-                              {canDiscard ? (
-                                <button
-                                  type="button"
-                                  className="editor-header__discard"
-                                  onClick={() => setDiscardTarget(selected)}
-                                  title="Discard this page's unpublished changes — revert it to the published version."
-                                >
-                                  Discard changes
-                                </button>
-                              ) : null}
-                              {selected.kind === 'collection' ? (
-                                <>
-                                  <button
-                                    type="button"
-                                    className="editor-header__rename"
-                                    onClick={() => setShowRename(true)}
-                                  >
-                                    Rename
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="editor-header__delete"
-                                    onClick={() => setDeleteTarget(selected)}
-                                  >
-                                    Delete
-                                  </button>
-                                </>
-                              ) : null}
-                            </div>
-                          </details>
-                        ) : null}
-                      </div>
-                    </header>
+        <div
+          ref={workRef}
+          className={`app__work app__work--${effectivePreviewMode}`}
+          style={
+            effectivePreviewMode === 'split' && layout.previewWidth != null
+              ? ({ '--preview-w': `${layout.previewWidth}px` } as React.CSSProperties)
+              : undefined
+          }
+        >
+          {showMain ? <main className="app__main">{mainContent}</main> : null}
 
-                    <section className="editor-panel">
-                      <h3>Fields</h3>
-                      <SchemaForm
-                        schema={schema}
-                        data={edit.data}
-                        model={workingModel}
-                        assetStore={assetStore}
-                        bundleDir={selected.path.replace(/\/index\.md$/, '')}
-                        onAssetStaged={autosave.markAssetDirty}
-                        onChange={updateField}
-                      />
-                    </section>
+          {effectivePreviewMode === 'split' && showPreviewPane ? (
+            <div
+              className="app__divider"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Drag to resize preview"
+              onPointerDown={onDividerDown}
+            />
+          ) : null}
 
-                    <section className="editor-panel">
-                      <h3>Body</h3>
-                      <BodyEditor
-                        docKey={bodySeed}
-                        value={edit.body}
-                        onChange={(body) => applyEdit({ ...edit, body })}
-                      />
-                    </section>
-
-                    {validation ? (
-                      <section
-                        className={`validation ${validation.valid ? 'validation--ok' : 'validation--bad'}`}
-                      >
-                        <strong>
-                          {validation.valid ? '✓ Valid' : '✗ Invalid'} —{' '}
-                          {canPublish(validation) ? 'can be published' : 'draft only'}
-                        </strong>
-                        {validation.errors.length > 0 ? (
-                          <ul>
-                            {validation.errors.map((e, i) => (
-                              <li key={i}>
-                                {e.field ? <code>{e.field}</code> : null} {e.message}
-                              </li>
-                            ))}
-                          </ul>
-                        ) : null}
-                      </section>
-                    ) : null}
-                  </>
-                ) : (
-                  <p>No object selected.</p>
-                )}
-              </main>
-            ) : null}
-
-            {effectivePreviewMode === 'split' && showPreviewPane ? (
-              <div
-                className="app__divider"
-                role="separator"
-                aria-orientation="vertical"
-                aria-label="Drag to resize preview"
-                onPointerDown={onDividerDown}
-              />
-            ) : null}
-
-            {showPreviewPane ? (
-              <aside className="app__preview">
-                <h3>Preview</h3>
-                {selected && !selectedDeleted ? (
-                  <Preview html={previewHtml} error={previewError} />
-                ) : (
-                  <p className="app__preview-empty">Nothing to preview.</p>
-                )}
-              </aside>
-            ) : null}
-          </div>
-        )}
+          {showPreviewPane ? (
+            <aside className="app__preview" ref={previewRef}>
+              <h3>Preview</h3>
+              {previewContent}
+            </aside>
+          ) : null}
+        </div>
       </div>
 
       {showNew ? (
