@@ -1,0 +1,100 @@
+# Production auth: GitHub App + shared broker (multi-site)
+
+This is the recommended production sign-in for Timber. It replaces the classic OAuth
+App (account-wide `repo` scope) with a **GitHub App** that is installed on just the
+repo(s) you edit, issuing **short-lived, least-privilege** user-to-server tokens. One
+App + one broker can serve **several of your sites**.
+
+It slots in behind the existing `getToken()` seam — no app/commit/publish code changes
+when you switch. You keep the dev paste-a-PAT gate for local work.
+
+## Why a GitHub App (vs the classic OAuth App)
+
+| | Classic OAuth App | GitHub App (this doc) |
+|---|---|---|
+| Scope of a token | **All** the user's repos (`repo`) | Only the installed repo(s), granular permissions |
+| Token lifetime | Non-expiring by default | Short-lived (~8h) with expiry enabled |
+| Multi-site | One registration, but broad scope | One registration, installed per repo |
+| Public/shared later | Users grant account-wide access | Users install with **scoped** consent |
+| Obligation on you | — | **None while private/per-deployer** |
+
+A GitHub App can be kept **private** ("Only on this account"), so adopting it creates
+no support surface or dependency on you. If you later want others to use a hosted
+instance, you flip the App to public and widen the broker — see "Going shared" below.
+
+## One-time setup
+
+### 1. Register the GitHub App
+GitHub → Settings → Developer settings → **GitHub Apps** → **New GitHub App**.
+
+- **Callback URL:** the editor's own URL, e.g. `https://you.github.io/your-site/`
+  (the SPA parses `?code` itself). Add one callback per site if you run several, plus
+  `http://localhost:5173/` for dev. **Enable "Request user authorization (OAuth) during
+  installation"** is optional; what matters is the callback list.
+- **Expire user authorization tokens:** **ON** (gives ~8h tokens).
+- **Webhook:** not needed — uncheck Active.
+- **Where can this be installed?** "Only on this account" (keep it private for now).
+- **Repository permissions:**
+  - **Contents:** Read & write  — commits via the Git Data API
+  - **Actions:** Read & write   — deploy-status reads + `workflow_dispatch` re-run
+  - **Pages:** Read             — deploy status
+  - **Metadata:** Read (mandatory, auto-selected)
+- Save, then note the **Client ID** and generate a **Client secret**.
+
+### 2. Install it on your repo(s)
+App page → **Install App** → your account → **Only select repositories** → pick each
+content repo you edit with Timber. (Re-run this to add a repo later; no re-registration.)
+
+### 3. Deploy the broker
+The broker is unchanged apart from a multi-origin allowlist. From `packages/oauth-broker`:
+
+```sh
+npx wrangler secret put GITHUB_CLIENT_SECRET      # the App's client secret
+npx wrangler deploy --var GITHUB_CLIENT_ID:<client-id> \
+  --var ALLOWED_ORIGINS:"https://you.github.io, https://blog.example"
+```
+
+`ALLOWED_ORIGINS` is the comma-separated list of your sites' **exact** origins (scheme
++ host, no path). One broker serves them all.
+
+### 4. Configure each site's editor build
+Every site's host page pins the **same** App/broker, its **own** repo, and its **own**
+pinned redirect URI:
+
+```
+VITE_TIMBER_OAUTH_CLIENT_ID=<client-id>          # same App for every site
+VITE_TIMBER_OAUTH_BROKER_URL=https://timber-oauth-broker.<you>.workers.dev
+VITE_TIMBER_OAUTH_REDIRECT_URI=https://you.github.io/your-site/   # this site's registered callback
+VITE_TIMBER_OAUTH_SCOPE=                         # EMPTY for a GitHub App (scope is ignored)
+VITE_TIMBER_OWNER=you
+VITE_TIMBER_REPO=this-sites-content-repo
+```
+
+`VITE_TIMBER_OAUTH_SCOPE=` (empty) is important: a GitHub App ignores `scope`, so the
+app omits the param. (Leave it as `repo` only if you stay on a classic OAuth App.)
+
+## Token handling (current posture)
+
+- The access token is held **in memory + `sessionStorage`** (session-scoped, cleared on
+  tab close). A **refresh token is never stored** — on expiry the user re-runs the flow,
+  which is normally a single silent redirect because GitHub remembers the authorization.
+- The broker **enforces PKCE** (`code_verifier` required) and never logs or echoes the
+  secret. The `Origin` allowlist is anti-CSRF hardening, not authentication.
+
+## Going shared later (deferred — Phase B)
+
+If you decide to let others use one hosted instance without registering their own App:
+
+1. Flip the App to **"Any account"** (public) and, if desired, list it on the
+   Marketplace. Users then **install** it on their own repo with scoped consent.
+2. Replace the static `ALLOWED_ORIGINS` allowlist with **dynamic origin validation**
+   (e.g. accept any `*.github.io` Pages origin, or check the installation), so you're
+   not hand-maintaining the list.
+3. For zero JS token exposure, move token custody server-side: the broker sets an
+   **`HttpOnly` cookie** and proxies GitHub calls, so the token never reaches the
+   browser. This is a broker rearchitecture (stateful or encrypted-cookie custody) and
+   is the only part that makes the broker a real dependency — hence deferred until you
+   actually want the shared model.
+
+None of this requires touching the editor app's commit/publish code; it stays behind
+`getToken()` and the per-site build env.

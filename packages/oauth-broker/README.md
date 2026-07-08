@@ -7,6 +7,12 @@ under PKCE — GitHub doesn't yet distinguish public clients) and its token endp
 stateless worker does exactly one thing: trade the OAuth `code` for an access token,
 holding the secret server-side. No database, no sessions.
 
+Works with either a classic **OAuth App** or a **GitHub App** — the code→token
+endpoint is identical. A **GitHub App is recommended** (per-repo, least-privilege,
+short-lived tokens); the full GitHub App + multi-site walkthrough is in
+**[`docs/auth-github-app.md`](../../docs/auth-github-app.md)**. The steps below cover
+the broker mechanics common to both.
+
 ```
 Browser (Pages) ──code──▶ broker ──code + client_secret──▶ github.com/login/oauth/access_token
 Browser (Pages) ◀─token── broker ◀──────────── access_token ──────────────
@@ -14,35 +20,44 @@ Browser (Pages) ◀─token── broker ◀────────────
 
 ## One-time setup
 
-### 1. Register an OAuth App
-GitHub → Settings → Developer settings → **OAuth Apps** → New OAuth App.
-- **Homepage URL / Authorization callback URL:** your editor's URL, e.g.
-  `https://you.github.io/your-site/` (the SPA handles the `?code` itself, so the
-  callback is the app's own URL). Add a second app or `http://localhost:5173/` for dev.
+### 1. Register an App
+GitHub → Settings → Developer settings → **GitHub Apps** (recommended) **or OAuth
+Apps** → New.
+- **Authorization callback URL:** your editor's URL, e.g. `https://you.github.io/your-site/`
+  (the SPA handles the `?code` itself, so the callback is the app's own URL). Add
+  `http://localhost:5173/` for dev.
 - Copy the **Client ID** (public) and generate a **Client secret** (private).
+- For a GitHub App: set repo permissions (Contents R/W, Actions R/W, Pages R, Metadata
+  R), enable **Expire user authorization tokens**, and **install it** on your repo(s).
 
 ### 2. Deploy the broker (Cloudflare Workers)
 ```sh
 cd packages/oauth-broker
 npx wrangler secret put GITHUB_CLIENT_SECRET   # paste the secret — never committed
-npx wrangler deploy --var GITHUB_CLIENT_ID:<client-id> --var ALLOWED_ORIGIN:https://you.github.io
+npx wrangler deploy --var GITHUB_CLIENT_ID:<client-id> \
+  --var ALLOWED_ORIGINS:"https://you.github.io, https://blog.example"
 ```
-(Or set `GITHUB_CLIENT_ID` / `ALLOWED_ORIGIN` under `[vars]` in `wrangler.toml`.)
-`ALLOWED_ORIGIN` must be the **exact** origin of your editor site (scheme + host, no
-path, no trailing slash) — the broker rejects every other origin.
+(Or set `GITHUB_CLIENT_ID` / `ALLOWED_ORIGINS` under `[vars]` in `wrangler.toml`.)
+`ALLOWED_ORIGINS` is a **comma-separated** list of the **exact** origins of your editor
+site(s) (scheme + host, no path, no trailing slash) — one App + one broker can serve
+several sites; every other origin is rejected. (The legacy single `ALLOWED_ORIGIN` is
+still honoured.)
 
 ### 3. Point the app at the broker
-In the editor app's build env (`packages/app/.env` or your host's env):
+In each editor app's build env (`packages/app/.env` or your host's env):
 ```
 VITE_TIMBER_OAUTH_CLIENT_ID=<client-id>
 VITE_TIMBER_OAUTH_BROKER_URL=https://timber-oauth-broker.<you>.workers.dev
+VITE_TIMBER_OAUTH_REDIRECT_URI=https://you.github.io/your-site/   # pin to the registered callback
+VITE_TIMBER_OAUTH_SCOPE=                                          # empty for a GitHub App; "repo" for an OAuth App
 ```
-With both set, the app shows **Sign in with GitHub**. Unset ⇒ it falls back to the
-dev paste-a-PAT gate.
+With client id + broker set, the app shows **Sign in with GitHub**. Unset ⇒ it falls
+back to the dev paste-a-PAT gate.
 
 ## Endpoint
 `POST /` with JSON `{ code, code_verifier, redirect_uri }` → `{ access_token, token_type, scope }`.
-`OPTIONS` is handled for CORS preflight. Only the allowlisted origin is accepted.
+`code_verifier` is **required** (PKCE enforced). `OPTIONS` is handled for CORS
+preflight. Only an allow-listed origin is accepted.
 
 ## Portability
 All logic is in `src/handler.ts` as a web-standard `fetch` handler; `src/worker.ts`
@@ -54,5 +69,10 @@ env values.
 - The client secret lives only in the worker's secret store — never in the browser
   bundle, never in git.
 - The broker is stateless and holds no tokens; it relays one request and forgets.
-- Origin allowlist + reflected CORS (never `*`) stop other sites from using it.
+- **PKCE is enforced:** an exchange without a `code_verifier` is rejected, so a stolen
+  `code` alone can't be redeemed.
+- Origin allowlist + reflected CORS (never `*`) stop other *websites* from driving the
+  broker from a victim's browser. This is **anti-CSRF hardening, not authentication** —
+  the `Origin` header is spoofable by non-browser clients; the client secret + PKCE +
+  GitHub's short code TTL are what actually protect the exchange.
 - Nothing is logged, so the secret and token never reach logs.

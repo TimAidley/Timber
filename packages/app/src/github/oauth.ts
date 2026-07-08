@@ -9,9 +9,13 @@ import { repoConfig } from './config.js';
  * — generating the PKCE challenge, the redirect, validating `state`, storing the token —
  * happens here with **Web Crypto**, no dependencies.
  *
- * The token is kept in memory and mirrored to `sessionStorage` (session-scoped, not
- * shared across tabs, cleared on close) — a deliberate step up from the dev PAT's
- * `localStorage`, per SPEC §9's memory-over-localStorage posture.
+ * The access token is kept in memory and mirrored to `sessionStorage` (session-scoped,
+ * not shared across tabs, cleared on close) — a deliberate step up from the dev PAT's
+ * `localStorage`, per SPEC §9's memory-over-localStorage posture. A **refresh token is
+ * never persisted** (or even requested for storage): with GitHub App expiring tokens,
+ * on expiry the user re-runs the flow (usually a single silent redirect). Broker-side
+ * token custody behind an HttpOnly cookie — so the token never touches JS — is the
+ * deferred Phase B (SPEC §16).
  */
 
 const VERIFIER_KEY = 'timber.oauth.verifier';
@@ -19,12 +23,13 @@ const STATE_KEY = 'timber.oauth.state';
 const TOKEN_KEY = 'timber.oauth.token';
 
 const AUTHORIZE_URL = 'https://github.com/login/oauth/authorize';
-const SCOPE = 'repo';
 
-/** The redirect target GitHub returns to — the app's own URL (it parses `?code` itself).
- * Must match the OAuth App's registered callback. */
+/** The redirect target GitHub returns to — the app parses `?code` itself. Pinned to
+ * the configured value (must match the App's registered callback) so the `?code` can
+ * only be delivered to the intended path; falls back to the app's own current URL when
+ * unset (dev). */
 function redirectUri(): string {
-  return window.location.origin + window.location.pathname;
+  return repoConfig.oauth.redirectUri ?? window.location.origin + window.location.pathname;
 }
 
 // --- token store (in-memory, mirrored to sessionStorage) ---------------------
@@ -105,7 +110,9 @@ export async function beginLogin(): Promise<void> {
   const url = new URL(AUTHORIZE_URL);
   url.searchParams.set('client_id', clientId);
   url.searchParams.set('redirect_uri', redirectUri());
-  url.searchParams.set('scope', SCOPE);
+  // A GitHub App ignores `scope` (permissions come from the App); OAuth Apps need it.
+  // Config sets scope to '' in App mode, so we only send the param when non-empty.
+  if (repoConfig.oauth.scope) url.searchParams.set('scope', repoConfig.oauth.scope);
   url.searchParams.set('state', state);
   url.searchParams.set('code_challenge', await pkceChallenge(verifier));
   url.searchParams.set('code_challenge_method', 'S256');
@@ -145,6 +152,8 @@ export async function completeLogin(): Promise<boolean> {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ code, code_verifier: verifier, redirect_uri: redirectUri() }),
   });
+  // We read only `access_token` — any `refresh_token` in the response is deliberately
+  // not captured, so no long-lived credential is ever stored in the browser.
   const data = (await response.json().catch(() => ({}))) as { access_token?: string; error?: string };
   if (!response.ok || !data.access_token) {
     throw new Error(`Sign-in failed: ${data.error ?? `token exchange returned ${response.status}`}.`);
