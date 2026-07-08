@@ -44,15 +44,22 @@ several sites; every other origin is rejected. (The legacy single `ALLOWED_ORIGI
 still honoured.)
 
 ### 3. Point the app at the broker
-In each editor app's build env (`packages/app/.env` or your host's env):
+Edit the site's runtime `config.js` (a copy of `packages/app/public/config.js`, served
+next to the editor) — no rebuild, no build vars:
+```js
+window.__TIMBER_CONFIG__ = {
+  owner: 'you',
+  repo: 'your-content-repo',
+  oauth: {
+    clientId: '<client-id>',
+    brokerUrl: 'https://timber-oauth-broker.<you>.workers.dev',
+    scope: '',   // empty for a GitHub App; 'repo' for a classic OAuth App
+  },
+};
 ```
-VITE_TIMBER_OAUTH_CLIENT_ID=<client-id>
-VITE_TIMBER_OAUTH_BROKER_URL=https://timber-oauth-broker.<you>.workers.dev
-VITE_TIMBER_OAUTH_REDIRECT_URI=https://you.github.io/your-site/   # pin to the registered callback
-VITE_TIMBER_OAUTH_SCOPE=                                          # empty for a GitHub App; "repo" for an OAuth App
-```
-With client id + broker set, the app shows **Sign in with GitHub**. Unset ⇒ it falls
-back to the dev paste-a-PAT gate.
+With client id + broker set, the app shows **Sign in with GitHub**. Omit the `oauth`
+block ⇒ it falls back to the dev paste-a-PAT gate. (Legacy `VITE_*` build vars still
+work as a fallback — see `docs/auth-github-app.md`.)
 
 ## Endpoint
 `POST /` with JSON `{ code, code_verifier, redirect_uri }` → `{ access_token, token_type, scope }`.

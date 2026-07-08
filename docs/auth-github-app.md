@@ -57,21 +57,33 @@ npx wrangler deploy --var GITHUB_CLIENT_ID:<client-id> \
 `ALLOWED_ORIGINS` is the comma-separated list of your sites' **exact** origins (scheme
 + host, no path). One broker serves them all.
 
-### 4. Configure each site's editor build
-Every site's host page pins the **same** App/broker, its **own** repo, and its **own**
-pinned redirect URI:
+### 4. Configure each site (edit `config.js` — no build vars, no rebuild)
+The editor reads its config **at runtime** from a `config.js` served next to it (it sets
+`window.__TIMBER_CONFIG__`). So the built editor bundle is a version-pinned artifact you
+drop in unchanged; a site is just its own `config.js`. Edit the `config.js` in your
+site's `admin/` (a copy of `packages/app/public/config.js`):
 
-```
-VITE_TIMBER_OAUTH_CLIENT_ID=<client-id>          # same App for every site
-VITE_TIMBER_OAUTH_BROKER_URL=https://timber-oauth-broker.<you>.workers.dev
-VITE_TIMBER_OAUTH_REDIRECT_URI=https://you.github.io/your-site/   # this site's registered callback
-VITE_TIMBER_OAUTH_SCOPE=                         # EMPTY for a GitHub App (scope is ignored)
-VITE_TIMBER_OWNER=you
-VITE_TIMBER_REPO=this-sites-content-repo
+```js
+window.__TIMBER_CONFIG__ = {
+  owner: 'you',
+  repo: 'this-sites-content-repo',
+  oauth: {
+    clientId: '<client-id>',                                   // same App for every site
+    brokerUrl: 'https://timber-oauth-broker.<you>.workers.dev',
+    scope: '',                                                 // empty for a GitHub App
+    // redirectUri: omit — defaults to the editor's own URL (which is the callback).
+  },
+};
 ```
 
-`VITE_TIMBER_OAUTH_SCOPE=` (empty) is important: a GitHub App ignores `scope`, so the
-app omits the param. (Leave it as `repo` only if you stay on a classic OAuth App.)
+That's the whole per-site config: `owner`, `repo`, `clientId`, `brokerUrl`. It holds no
+secrets (the client *secret* lives only in the broker), so it's safe to commit. Changing
+it needs **no rebuild** and **no GitHub Actions variables** — just edit the file.
+
+> Legacy: the same values can still be supplied as `VITE_*` **build** env vars
+> (`VITE_TIMBER_OAUTH_CLIENT_ID`, `_BROKER_URL`, `_SCOPE`, `_REDIRECT_URI`,
+> `VITE_TIMBER_OWNER`, `VITE_TIMBER_REPO`). `config.js` takes precedence; the build
+> vars remain as a fallback for existing setups and local dev.
 
 ## Token handling (current posture)
 

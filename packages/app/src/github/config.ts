@@ -11,36 +11,81 @@ export interface RepoConfig {
     clientId: string | undefined;
     brokerUrl: string | undefined;
     /**
-     * OAuth `scope` to request. Classic **OAuth Apps** need `repo` (the default) to
-     * write a private repo's contents. A **GitHub App** ignores `scope` entirely —
+     * OAuth `scope` to request. Classic **OAuth Apps** need `repo` (the default when
+     * unset) to write a private repo's contents. A **GitHub App** ignores `scope` —
      * its permissions come from the App registration — so set this to `''` in App
      * mode to omit the param.
      */
     scope: string | undefined;
     /**
      * Exact OAuth callback to use, matching the App's registered callback. When unset
-     * it falls back to the app's own current URL (origin + pathname). Pin it in
-     * production so the `?code` can only ever be delivered to the intended path
-     * (avoids same-origin code delivery to another Pages project — SPEC §9).
+     * it falls back to the app's own current URL (origin + pathname) — which is where
+     * the editor is served, i.e. the callback anyway. Set it only to override.
      */
     redirectUri: string | undefined;
   };
 }
 
 /**
- * The content repo this Timber instance edits (SPEC §3: single-tenant; a site is a
- * thin host page pinning config). Overridable via Vite env for dev; defaults to the
- * shared sandbox repo used by the github package's live tests.
+ * The **runtime** config shape a site provides via a `config.js` that sets
+ * `window.__TIMBER_CONFIG__` before the app bundle runs (see `public/config.js`). This
+ * is the distribution model SPEC §2 calls for — a **thin host page pinning config**, so
+ * the built app is a version-pinned artifact and a site is just its own `config.js`, no
+ * per-site rebuild. Every field is optional; anything omitted falls back to a `VITE_*`
+ * build var (legacy / dev) and then a default.
  */
-export const repoConfig: RepoConfig = {
-  owner: (import.meta.env.VITE_TIMBER_OWNER as string | undefined) ?? 'TimAidley',
-  repo: (import.meta.env.VITE_TIMBER_REPO as string | undefined) ?? 'Timber-test-sandbox',
-  oauth: {
-    clientId: import.meta.env.VITE_TIMBER_OAUTH_CLIENT_ID as string | undefined,
-    brokerUrl: import.meta.env.VITE_TIMBER_OAUTH_BROKER_URL as string | undefined,
-    // Defaults to `repo` (classic OAuth App). Set VITE_TIMBER_OAUTH_SCOPE='' for a
-    // GitHub App, which ignores scope.
-    scope: (import.meta.env.VITE_TIMBER_OAUTH_SCOPE as string | undefined) ?? 'repo',
-    redirectUri: import.meta.env.VITE_TIMBER_OAUTH_REDIRECT_URI as string | undefined,
-  },
-};
+export interface RuntimeConfig {
+  owner?: string;
+  repo?: string;
+  oauth?: {
+    clientId?: string;
+    brokerUrl?: string;
+    scope?: string;
+    redirectUri?: string;
+  };
+}
+
+/** A subset of `import.meta.env` — just the keys we read (kept loose for testing). */
+type EnvLike = Record<string, string | undefined>;
+
+/** A non-empty string, else undefined — so a blank runtime field or CI var falls back. */
+function str(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+/**
+ * Resolve the effective config from the runtime global (highest priority) over the
+ * `VITE_*` build vars, then defaults. Pure + injectable so it's unit-testable without
+ * module-load gymnastics.
+ */
+export function resolveConfig(runtime: RuntimeConfig, env: EnvLike): RepoConfig {
+  return {
+    owner: str(runtime.owner) ?? str(env.VITE_TIMBER_OWNER) ?? 'TimAidley',
+    repo: str(runtime.repo) ?? str(env.VITE_TIMBER_REPO) ?? 'Timber-test-sandbox',
+    oauth: {
+      clientId: str(runtime.oauth?.clientId) ?? str(env.VITE_TIMBER_OAUTH_CLIENT_ID),
+      brokerUrl: str(runtime.oauth?.brokerUrl) ?? str(env.VITE_TIMBER_OAUTH_BROKER_URL),
+      // `scope` differs: an EMPTY string is a meaningful value (GitHub App mode), so
+      // preserve it with `??` and only fall back to `repo` when it is truly absent.
+      scope: runtime.oauth?.scope ?? env.VITE_TIMBER_OAUTH_SCOPE ?? 'repo',
+      redirectUri:
+        str(runtime.oauth?.redirectUri) ?? str(env.VITE_TIMBER_OAUTH_REDIRECT_URI),
+    },
+  };
+}
+
+/** Read the site-provided runtime config, if any (browser only). */
+function runtimeConfig(): RuntimeConfig {
+  if (typeof window === 'undefined') return {};
+  return (window as unknown as { __TIMBER_CONFIG__?: RuntimeConfig }).__TIMBER_CONFIG__ ?? {};
+}
+
+/**
+ * The content repo this Timber instance edits (SPEC §3: single-tenant). Resolved once
+ * at load: a site's `config.js` (`window.__TIMBER_CONFIG__`) wins, else `VITE_*` build
+ * vars, else the shared sandbox defaults.
+ */
+export const repoConfig: RepoConfig = resolveConfig(
+  runtimeConfig(),
+  import.meta.env as unknown as EnvLike,
+);
