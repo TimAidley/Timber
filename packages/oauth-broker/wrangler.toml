@@ -1,17 +1,22 @@
 # Cloudflare Workers config for the Timber OAuth broker (see README.md).
 #
 # Deploy:
-#   npx wrangler secret put GITHUB_CLIENT_SECRET   # paste the App's client secret (NOT committed)
+#   npx wrangler secret put OAUTH_CLIENT_SECRET    # paste the App's client secret (NOT committed)
 #   npx wrangler deploy
 #
-# Set GITHUB_CLIENT_ID + ALLOWED_ORIGINS below (they are NOT secret), or pass them
+# Set OAUTH_CLIENT_ID + ALLOWED_ORIGINS below (they are NOT secret), or pass them
 # with `--var` at deploy time. ALLOWED_ORIGINS is a comma-separated list of the exact
 # origins of your editor site(s), e.g. https://you.github.io (no trailing slash, no
 # path). Listing several lets one App + one broker serve multiple sites.
+#
+# NOTE: the names are OAUTH_* (not GITHUB_*) because GitHub Actions reserves the
+# `GITHUB_` prefix — a `GITHUB_`-named secret/variable can't be created in a workflow,
+# and the broker is normally deployed from one. (Legacy GITHUB_CLIENT_ID/SECRET are
+# still read if your broker was configured before the rename.)
 name = "timber-oauth-broker"
 main = "src/worker.ts"
 compatibility_date = "2025-01-01"
 
 [vars]
-# GITHUB_CLIENT_ID = "Iv1.0123456789abcdef"
+# OAUTH_CLIENT_ID = "Iv1.0123456789abcdef"
 # ALLOWED_ORIGINS = "https://you.github.io, https://blog.example"

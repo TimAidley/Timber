@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { handleRequest, type BrokerEnv } from '../src/handler.js';
 
 const env: BrokerEnv = {
-  GITHUB_CLIENT_ID: 'client-123',
-  GITHUB_CLIENT_SECRET: 'super-secret-value',
+  OAUTH_CLIENT_ID: 'client-123',
+  OAUTH_CLIENT_SECRET: 'super-secret-value',
   ALLOWED_ORIGINS: 'https://you.github.io',
 };
 
@@ -49,8 +49,31 @@ describe('oauth broker handler', () => {
     );
     const res = await handleRequest(post({ code: 'c', code_verifier: 'v' }), env);
     const raw = await res.clone().text();
-    expect(raw).not.toContain(env.GITHUB_CLIENT_SECRET);
-    for (const [, value] of res.headers) expect(value).not.toContain(env.GITHUB_CLIENT_SECRET);
+    expect(raw).not.toContain(env.OAUTH_CLIENT_SECRET);
+    for (const [, value] of res.headers) expect(value).not.toContain(env.OAUTH_CLIENT_SECRET);
+  });
+
+  it('still reads the legacy GITHUB_CLIENT_ID/SECRET names', async () => {
+    const legacyEnv: BrokerEnv = {
+      GITHUB_CLIENT_ID: 'legacy-id',
+      GITHUB_CLIENT_SECRET: 'legacy-secret',
+      ALLOWED_ORIGINS: FIRST_ORIGIN,
+    };
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ access_token: 'gho_abc' }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const res = await handleRequest(post({ code: 'c', code_verifier: 'v' }), legacyEnv);
+    expect(res.status).toBe(200);
+    const sent = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string);
+    expect(sent).toMatchObject({ client_id: 'legacy-id', client_secret: 'legacy-secret' });
+  });
+
+  it('returns 500 broker_misconfigured when client id/secret are absent', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const res = await handleRequest(post({ code: 'c', code_verifier: 'v' }), { ALLOWED_ORIGINS: FIRST_ORIGIN });
+    expect(res.status).toBe(500);
+    expect((await res.json()).error).toBe('broker_misconfigured');
+    expect(fetchMock).not.toHaveBeenCalled(); // never calls GitHub without credentials
   });
 
   it('allows an origin that differs only in case, reflecting the browser origin', async () => {

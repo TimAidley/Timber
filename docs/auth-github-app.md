@@ -46,16 +46,26 @@ App page → **Install App** → your account → **Only select repositories** �
 content repo you edit with Timber. (Re-run this to add a repo later; no re-registration.)
 
 ### 3. Deploy the broker
-The broker is unchanged apart from a multi-origin allowlist. From `packages/oauth-broker`:
+The broker needs three values: the App's client id + secret and the origin allowlist.
+From `packages/oauth-broker` (local equivalent — most people deploy it from a workflow):
 
 ```sh
-npx wrangler secret put GITHUB_CLIENT_SECRET      # the App's client secret
-npx wrangler deploy --var GITHUB_CLIENT_ID:<client-id> \
+npx wrangler secret put OAUTH_CLIENT_SECRET       # the App's client secret
+npx wrangler deploy --var OAUTH_CLIENT_ID:<client-id> \
   --var ALLOWED_ORIGINS:"https://you.github.io, https://blog.example"
 ```
 
 `ALLOWED_ORIGINS` is the comma-separated list of your sites' **exact** origins (scheme
 + host, no path). One broker serves them all.
+
+> **Deploying via GitHub Actions?** The env var names are `OAUTH_*`, not `GITHUB_*`,
+> because GitHub Actions **reserves** the `GITHUB_` prefix — you cannot create a secret,
+> variable, or workflow env var starting with `GITHUB_`. Store the secret in an Actions
+> secret named e.g. `OAUTH_CLIENT_SECRET`, then map it to the Worker in your deploy step
+> (e.g. `echo "${{ secrets.OAUTH_CLIENT_SECRET }}" | wrangler secret put OAUTH_CLIENT_SECRET`,
+> or via `cloudflare/wrangler-action`'s `secrets:` input). The Cloudflare-side names are
+> `OAUTH_CLIENT_ID` / `OAUTH_CLIENT_SECRET`. (Legacy `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`
+> are still read if your broker was configured before this rename.)
 
 ### 4. Configure each site (edit `config.js` — no build vars, no rebuild)
 The editor reads its config **at runtime** from a `config.js` served next to it (it sets

@@ -33,15 +33,22 @@ Apps** → New.
 ### 2. Deploy the broker (Cloudflare Workers)
 ```sh
 cd packages/oauth-broker
-npx wrangler secret put GITHUB_CLIENT_SECRET   # paste the secret — never committed
-npx wrangler deploy --var GITHUB_CLIENT_ID:<client-id> \
+npx wrangler secret put OAUTH_CLIENT_SECRET   # paste the secret — never committed
+npx wrangler deploy --var OAUTH_CLIENT_ID:<client-id> \
   --var ALLOWED_ORIGINS:"https://you.github.io, https://blog.example"
 ```
-(Or set `GITHUB_CLIENT_ID` / `ALLOWED_ORIGINS` under `[vars]` in `wrangler.toml`.)
+(Or set `OAUTH_CLIENT_ID` / `ALLOWED_ORIGINS` under `[vars]` in `wrangler.toml`.)
 `ALLOWED_ORIGINS` is a **comma-separated** list of the **exact** origins of your editor
 site(s) (scheme + host, no path, no trailing slash) — one App + one broker can serve
 several sites; every other origin is rejected. (The legacy single `ALLOWED_ORIGIN` is
 still honoured.)
+
+> **Env var names are `OAUTH_*`, not `GITHUB_*`.** GitHub Actions **reserves** the
+> `GITHUB_` prefix, so a `GITHUB_`-named secret/variable can't be created in a workflow —
+> and the broker is usually deployed from one. If your broker predates this and was set
+> up with `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`, those are still read as a fallback.
+> When deploying via a workflow, store the value in an Actions secret named e.g.
+> `OAUTH_CLIENT_SECRET` (no `GITHUB_` prefix) and pass it through to the Worker.
 
 ### 3. Point the app at the broker
 Edit the site's runtime `config.js` (a copy of `packages/app/public/config.js`, served

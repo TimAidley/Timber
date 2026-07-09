@@ -22,10 +22,19 @@
  * list, so one App + one broker can serve several content-repo deployments.
  */
 export interface BrokerEnv {
-  /** The GitHub/OAuth App's client id (public — safe to expose). */
-  GITHUB_CLIENT_ID: string;
-  /** The App's client secret (set via `wrangler secret put`; NEVER committed). */
-  GITHUB_CLIENT_SECRET: string;
+  /**
+   * The GitHub/OAuth App's client id (public — safe to expose). Named without a
+   * `GITHUB_` prefix on purpose: GitHub Actions **reserves** that prefix, so a
+   * `GITHUB_`-named secret/variable/env can't be created in a workflow — which is how
+   * the broker is normally deployed. The legacy `GITHUB_CLIENT_ID` is still read.
+   */
+  OAUTH_CLIENT_ID?: string;
+  /** The App's client secret (set as a secret; NEVER committed). See `OAUTH_CLIENT_ID`. */
+  OAUTH_CLIENT_SECRET?: string;
+  /** @deprecated Reserved-prefix name, still honoured. Prefer `OAUTH_CLIENT_ID`. */
+  GITHUB_CLIENT_ID?: string;
+  /** @deprecated Reserved-prefix name, still honoured. Prefer `OAUTH_CLIENT_SECRET`. */
+  GITHUB_CLIENT_SECRET?: string;
   /**
    * Origins allowed to call this broker — comma/space-separated for multi-site use,
    * e.g. `https://you.github.io, https://blog.example`. Each is an exact origin
@@ -93,12 +102,20 @@ export async function handleRequest(request: Request, env: BrokerEnv): Promise<R
     return json({ error: 'missing_code_verifier' }, 400, origin);
   }
 
+  // Prefer the prefix-free names; fall back to the legacy `GITHUB_*` for brokers that
+  // were configured before the rename.
+  const clientId = env.OAUTH_CLIENT_ID ?? env.GITHUB_CLIENT_ID;
+  const clientSecret = env.OAUTH_CLIENT_SECRET ?? env.GITHUB_CLIENT_SECRET;
+  if (!clientId || !clientSecret) {
+    return json({ error: 'broker_misconfigured' }, 500, origin);
+  }
+
   const githubResponse = await fetch(GITHUB_TOKEN_URL, {
     method: 'POST',
     headers: { 'content-type': 'application/json', accept: 'application/json' },
     body: JSON.stringify({
-      client_id: env.GITHUB_CLIENT_ID,
-      client_secret: env.GITHUB_CLIENT_SECRET,
+      client_id: clientId,
+      client_secret: clientSecret,
       code: body.code,
       code_verifier: body.code_verifier,
       ...(body.redirect_uri ? { redirect_uri: body.redirect_uri } : {}),
