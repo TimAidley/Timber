@@ -34,10 +34,9 @@ GitHub → Settings → Developer settings → **GitHub Apps** → **New GitHub 
 - **Expire user authorization tokens:** **ON** (gives ~8h tokens).
 - **Webhook:** not needed — uncheck Active.
 - **Where can this be installed?** "Only on this account" (keep it private for now).
-- **Repository permissions:**
+- **Repository permissions** (nothing else — the editor's token needs no more):
   - **Contents:** Read & write  — commits via the Git Data API
   - **Actions:** Read & write   — deploy-status reads + `workflow_dispatch` re-run
-  - **Pages:** Read             — deploy status
   - **Metadata:** Read (mandatory, auto-selected)
 - Save, then note the **Client ID** and generate a **Client secret**.
 
@@ -67,11 +66,20 @@ npx wrangler deploy --var OAUTH_CLIENT_ID:<client-id> \
 > `OAUTH_CLIENT_ID` / `OAUTH_CLIENT_SECRET`. (Legacy `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`
 > are still read if your broker was configured before this rename.)
 
-### 4. Configure each site (edit `config.js` — no build vars, no rebuild)
-The editor reads its config **at runtime** from a `config.js` served next to it (it sets
-`window.__TIMBER_CONFIG__`). So the built editor bundle is a version-pinned artifact you
-drop in unchanged; a site is just its own `config.js`. Edit the `config.js` in your
-site's `admin/` (a copy of `packages/app/public/config.js`):
+### 4. Configure each site
+The per-site config is just `owner`, `repo`, `clientId`, `brokerUrl` (no secrets — the
+client *secret* lives only in the broker). How you supply it depends on how you deploy:
+
+**Fork-and-go (the template — the common path).** The `deploy.yml` workflow bakes the
+config into the editor build from repo values: `owner`/`repo` come from the repo itself,
+`clientId` from the `GH_OAUTH_CLIENT_ID` **variable**, and `brokerUrl` from the
+`.timber-broker-url` the Setup workflow commits. So you set the `GH_OAUTH_CLIENT_ID`
+variable (INSTALL step 5) and everything else is automatic — **you do not edit
+`config.js`** (the deploy ships an empty one, and would overwrite edits anyway).
+
+**Self-hosting the editor** (you drop a prebuilt Timber build somewhere yourself, no
+build step). Then configure it **at runtime** via `config.js` — copy
+`packages/app/public/config.js` (which ships empty) next to the editor and fill it in:
 
 ```js
 window.__TIMBER_CONFIG__ = {
@@ -86,14 +94,9 @@ window.__TIMBER_CONFIG__ = {
 };
 ```
 
-That's the whole per-site config: `owner`, `repo`, `clientId`, `brokerUrl`. It holds no
-secrets (the client *secret* lives only in the broker), so it's safe to commit. Changing
-it needs **no rebuild** and **no GitHub Actions variables** — just edit the file.
-
-> Legacy: the same values can still be supplied as `VITE_*` **build** env vars
-> (`VITE_TIMBER_OAUTH_CLIENT_ID`, `_BROKER_URL`, `_SCOPE`, `_REDIRECT_URI`,
-> `VITE_TIMBER_OWNER`, `VITE_TIMBER_REPO`). `config.js` takes precedence; the build
-> vars remain as a fallback for existing setups and local dev.
+`config.js` (runtime, highest priority) wins over `VITE_TIMBER_*` **build** env vars,
+which win over defaults. The fork-and-go path uses the build vars; `config.js` is for the
+self-hosted path.
 
 ## Token handling (current posture)
 
@@ -109,8 +112,10 @@ If you'd rather not hold a client secret at all, use the **device flow** — a
 public-client sign-in that needs no secret. Trade-offs and specifics:
 
 - On the GitHub App, tick **Enable Device Flow** (General settings).
-- In each site's `config.js`, set `oauth: { ..., flow: 'device' }`. No `redirectUri` is
-  used (the device flow has no callback), and there's **no client secret anywhere**.
+- Select the flow the same way you configure the rest (step 4): fork-and-go sets the
+  **`TIMBER_OAUTH_FLOW` repo variable** to `device`; a self-hosted editor sets
+  `oauth: { ..., flow: 'device' }` in its `config.js`. No `redirectUri` is used (the
+  device flow has no callback), and there's **no client secret anywhere**.
 - The broker is still needed, but only as a **secret-less relay**: GitHub's device
   endpoints send no CORS, so the browser can't call them directly. The same
   `@timber/oauth-broker` serves `POST /device/code` and `POST /device/token` as

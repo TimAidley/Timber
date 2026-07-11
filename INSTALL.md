@@ -210,8 +210,9 @@ URL. (The env var names are `OAUTH_*`, not `GITHUB_*`, because GitHub Actions re
 `GITHUB_` prefix; the broker still reads legacy `GITHUB_CLIENT_ID/SECRET` if you set those.)
 
 ### C. Run the editor locally
-Two ways to give the editor its config. **Runtime `config.js`** (no rebuild) is simplest:
-copy `packages/app/public/config.js` and fill it in, or set it before starting Vite.
+Two ways to give the editor its config. **Runtime `config.js`** (no rebuild): edit
+`packages/app/public/config.js` — it ships empty, so uncomment the `window.__TIMBER_CONFIG__`
+block and fill it in (Vite serves it at `/config.js`).
 
 Or use **build env vars** — `cp packages/app/.env.example packages/app/.env` and set:
 ```ini

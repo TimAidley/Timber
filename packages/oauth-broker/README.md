@@ -51,8 +51,11 @@ still honoured.)
 > `OAUTH_CLIENT_SECRET` (no `GITHUB_` prefix) and pass it through to the Worker.
 
 ### 3. Point the app at the broker
-Edit the site's runtime `config.js` (a copy of `packages/app/public/config.js`, served
-next to the editor) — no rebuild, no build vars:
+The editor needs the broker URL + client id in its config. **Fork-and-go** sites do this
+automatically — the deploy workflow bakes them in from the `GH_OAUTH_CLIENT_ID` variable
+and the committed broker URL (see `INSTALL.md`), so there's nothing to edit here. If you
+**self-host** the editor, configure it at runtime via `config.js` (a copy of
+`packages/app/public/config.js`, which ships empty, served next to the editor):
 ```js
 window.__TIMBER_CONFIG__ = {
   owner: 'you',
@@ -64,9 +67,9 @@ window.__TIMBER_CONFIG__ = {
   },
 };
 ```
-With client id + broker set, the app shows **Sign in with GitHub**. Omit the `oauth`
-block ⇒ it falls back to the dev paste-a-PAT gate. (Legacy `VITE_*` build vars still
-work as a fallback — see `docs/auth-github-app.md`.)
+With client id + broker set (either way), the app shows **Sign in with GitHub**; with
+neither it falls back to the dev paste-a-PAT gate. Precedence: `config.js` > `VITE_*`
+build vars > defaults. Full setup: `docs/auth-github-app.md`.
 
 ## Endpoint
 `POST /` with JSON `{ code, code_verifier, redirect_uri }` → `{ access_token, token_type, scope }`.
