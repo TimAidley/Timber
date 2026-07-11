@@ -145,6 +145,27 @@ and installs the App).
 - **Pages 404 after a green deploy** → confirm **Settings → Pages → Source = GitHub
   Actions** and give it a minute.
 
+### Alternative sign-in: device flow (no client secret)
+Don't want to hold a client secret? Use the **device flow** instead of the redirect
+flow. It's a public-client sign-in, so **no client secret exists** — the broker is only
+a secret-less relay (needed because GitHub's device endpoints, like its token endpoint,
+send no CORS). Changes from the steps above:
+
+- On the GitHub App: **General → Enable Device Flow** (tick it).
+- Step 3's **Callback URL** is irrelevant to this flow (device flow has no redirect) —
+  you can leave it set; it's just unused.
+- Step 5: you can **omit `GH_OAUTH_CLIENT_SECRET`** — there's no secret. Keep the
+  Cloudflare secrets (`CLOUDFLARE_*`) and `GH_OAUTH_CLIENT_ID`; the relay still deploys.
+- In the site's **`config.js`**, add `flow: 'device'` to the `oauth` block:
+  ```js
+  oauth: { clientId: '<client-id>', brokerUrl: '<broker-url>', flow: 'device' }
+  ```
+
+**How sign-in looks:** the editor shows a short code (e.g. `WDJB-MJHT`), opens
+`github.com/login/device` in a tab; you enter the code, approve, and you're in. One
+extra step than the redirect, in exchange for zero secret to manage. Full detail:
+[`docs/auth-github-app.md`](docs/auth-github-app.md).
+
 ### Using a classic OAuth App instead
 Prefer a classic OAuth App? It works with the same template and the same secret/variable
 names (`GH_OAUTH_CLIENT_ID` / `GH_OAUTH_CLIENT_SECRET`). Register it under **Developer
