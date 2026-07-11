@@ -1,35 +1,27 @@
-// Timber site config — the ONLY file you edit per site.
+// Timber site config — OPTIONAL runtime override.
 //
-// This is a runtime config (not baked into the build), so the Timber editor bundle is
-// a version-pinned artifact you can drop in unchanged; each site just ships its own
-// copy of this file. It is loaded before the app, is public by design (it holds no
-// secrets — the client *secret* lives only in the broker), and changing it needs no
-// rebuild.
+// Timber reads its config from three places, highest priority first:
+//   1. window.__TIMBER_CONFIG__ set in THIS file,
+//   2. VITE_TIMBER_* build vars — what the fork-and-go GitHub Action sets in deploy.yml,
+//   3. built-in defaults.
 //
-// Fill in the four values below. Delete the OAuth block entirely to fall back to the
-// dev "paste a Personal Access Token" sign-in.
-window.__TIMBER_CONFIG__ = {
-  // The content repo this editor edits.
-  owner: 'your-github-login',
-  repo: 'your-content-repo',
+// The fork-and-go deploy configures the editor via (2), so this file ships EMPTY — an
+// empty object overrides nothing, and editing the deployed copy would be overwritten on
+// the next deploy anyway. Configure the fork-and-go path via repo Variables, not here.
+//
+// You only edit this file if you HOST THE EDITOR YOURSELF (drop in a prebuilt Timber
+// build) and want to configure it with NO rebuild. It holds no secrets — the client
+// secret lives only in the broker. To use it, uncomment and fill in:
+//
+// window.__TIMBER_CONFIG__ = {
+//   owner: 'your-github-login',
+//   repo: 'your-content-repo',
+//   oauth: {
+//     clientId: '',
+//     brokerUrl: '',
+//     scope: '',          // '' for a GitHub App, 'repo' for a classic OAuth App
+//     // flow: 'device',  // device flow (no client secret); omit for the redirect flow
+//   },
+// };
 
-  oauth: {
-    // From your GitHub App (or OAuth App): Settings → Developer settings.
-    clientId: '',
-    // Your deployed token-exchange broker (see packages/oauth-broker).
-    brokerUrl: '',
-
-    // Leave '' for a GitHub App (it ignores scope). Set to 'repo' only for a classic
-    // OAuth App.
-    scope: '',
-
-    // Optional: pin the OAuth callback. Omit to use the editor's own URL (which is the
-    // callback anyway). Set it only if you need to override that.
-    // redirectUri: 'https://you.github.io/your-site/admin/',
-
-    // Sign-in flow: omit (or 'redirect') for the authorization-code + PKCE redirect;
-    // 'device' for the device flow — no client secret, so the broker is just a
-    // secret-less relay (enable "Device Flow" on the GitHub App). See docs/auth-github-app.md.
-    // flow: 'device',
-  },
-};
+window.__TIMBER_CONFIG__ = {};

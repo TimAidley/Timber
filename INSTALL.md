@@ -156,10 +156,12 @@ send no CORS). Changes from the steps above:
   you can leave it set; it's just unused.
 - Step 5: you can **omit `GH_OAUTH_CLIENT_SECRET`** — there's no secret. Keep the
   Cloudflare secrets (`CLOUDFLARE_*`) and `GH_OAUTH_CLIENT_ID`; the relay still deploys.
-- In the site's **`config.js`**, add `flow: 'device'` to the `oauth` block:
-  ```js
-  oauth: { clientId: '<client-id>', brokerUrl: '<broker-url>', flow: 'device' }
-  ```
+- Add one repo **Variable**: `TIMBER_OAUTH_FLOW` = `device` (Settings → Secrets and
+  variables → Actions → Variables). The deploy builds the editor in device-flow mode.
+  Then re-run **Setup OAuth broker** (or **Build & deploy site**).
+
+(Self-hosting the editor instead of the fork-and-go deploy? Set `flow: 'device'` in the
+`oauth` block of your `config.js` rather than a repo variable.)
 
 **How sign-in looks:** the editor shows a short code (e.g. `WDJB-MJHT`), opens
 `github.com/login/device` in a tab; you enter the code, approve, and you're in. One
