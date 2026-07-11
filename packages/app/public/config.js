@@ -26,5 +26,10 @@ window.__TIMBER_CONFIG__ = {
     // Optional: pin the OAuth callback. Omit to use the editor's own URL (which is the
     // callback anyway). Set it only if you need to override that.
     // redirectUri: 'https://you.github.io/your-site/admin/',
+
+    // Sign-in flow: omit (or 'redirect') for the authorization-code + PKCE redirect;
+    // 'device' for the device flow — no client secret, so the broker is just a
+    // secret-less relay (enable "Device Flow" on the GitHub App). See docs/auth-github-app.md.
+    // flow: 'device',
   },
 };

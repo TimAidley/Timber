@@ -103,6 +103,27 @@ it needs **no rebuild** and **no GitHub Actions variables** — just edit the fi
 - The broker **enforces PKCE** (`code_verifier` required) and never logs or echoes the
   secret. The `Origin` allowlist is anti-CSRF hardening, not authentication.
 
+## Alternative: device flow (no client secret)
+
+If you'd rather not hold a client secret at all, use the **device flow** — a
+public-client sign-in that needs no secret. Trade-offs and specifics:
+
+- On the GitHub App, tick **Enable Device Flow** (General settings).
+- In each site's `config.js`, set `oauth: { ..., flow: 'device' }`. No `redirectUri` is
+  used (the device flow has no callback), and there's **no client secret anywhere**.
+- The broker is still needed, but only as a **secret-less relay**: GitHub's device
+  endpoints send no CORS, so the browser can't call them directly. The same
+  `@timber/oauth-broker` serves `POST /device/code` and `POST /device/token` as
+  pass-throughs — you can deploy it **without** `OAUTH_CLIENT_SECRET` if you only use
+  device sign-in. One relay can serve all your sites.
+- **UX:** the editor shows a short code (e.g. `WDJB-MJHT`), opens `github.com/login/device`
+  in a tab, you enter the code + approve, and the editor signs you in. One extra step
+  vs the redirect flow, but zero secret to manage.
+
+This is the lightest-dependency "Sign in with GitHub": no per-deployer secret, and the
+relay holds nothing. (It still sees tokens transit, so run your own relay or trust the
+host — the same as any proxy.)
+
 ## Going shared later (deferred — Phase B)
 
 If you decide to let others use one hosted instance without registering their own App:

@@ -57,6 +57,32 @@ body {
   padding: 0.55rem 1.1rem;
 }
 
+.device-flow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.device-flow__code {
+  margin: 0.25rem 0;
+}
+
+.device-flow__code code {
+  font-size: 1.8rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  padding: 0.4rem 0.7rem;
+  border: 1px solid var(--border, #d0d0d0);
+  border-radius: 6px;
+  user-select: all;
+}
+
+.device-flow__status {
+  font-size: 0.9rem;
+  color: var(--muted, #666);
+}
+
 .app__repo {
   margin: 0 0 0.5rem;
   font-size: 0.75rem;

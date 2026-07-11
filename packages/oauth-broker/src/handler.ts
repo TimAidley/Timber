@@ -6,6 +6,11 @@
  * (which lives only here, never in the browser bundle), POSTs to GitHub, and returns
  * the token. It holds no state, no sessions, no database.
  *
+ * It also serves the **device flow** as a *secret-less relay*: `POST /device/code` and
+ * `POST /device/token` just forward to GitHub's device endpoints (which also send no
+ * CORS) and add CORS. The device flow is a public-client flow, so **no client secret is
+ * used** on that path — a broker can serve device sign-in with the secret unset.
+ *
  * Security posture:
  * - **Origin allowlist** (`ALLOWED_ORIGINS`): a browser will only send requests from
  *   an allow-listed site, and CORS is reflected to that origin only (never `*`), so
@@ -52,6 +57,8 @@ interface ExchangeRequest {
 }
 
 const GITHUB_TOKEN_URL = 'https://github.com/login/oauth/access_token';
+const GITHUB_DEVICE_CODE_URL = 'https://github.com/login/device/code';
+const DEVICE_CODE_GRANT = 'urn:ietf:params:oauth:grant-type:device_code';
 
 /**
  * The set of allow-listed origins (lowercased), from `ALLOWED_ORIGINS` (preferred)
@@ -87,12 +94,30 @@ export async function handleRequest(request: Request, env: BrokerEnv): Promise<R
     return json({ error: 'origin_not_allowed' }, 403, null);
   }
 
-  let body: ExchangeRequest;
+  let body: Record<string, unknown>;
   try {
-    body = (await request.json()) as ExchangeRequest;
+    body = (await request.json()) as Record<string, unknown>;
   } catch {
     return json({ error: 'invalid_json' }, 400, origin);
   }
+
+  // Device flow (SPEC §9): the broker is a **secret-less relay** for GitHub's device
+  // endpoints (they send no CORS, so the browser can't call them directly). No client
+  // secret is used — that's the whole point of the device flow.
+  const path = new URL(request.url).pathname;
+  if (path.endsWith('/device/code')) return relayDeviceCode(body, origin);
+  if (path.endsWith('/device/token')) return relayDeviceToken(body, origin);
+
+  // Otherwise: the authorization-code exchange (needs the client secret).
+  return exchangeCode(body as ExchangeRequest, env, origin);
+}
+
+/** The authorization-code → token exchange (redirect/PKCE flow; uses the client secret). */
+async function exchangeCode(
+  body: ExchangeRequest,
+  env: BrokerEnv,
+  origin: string | null,
+): Promise<Response> {
   if (!body.code) {
     return json({ error: 'missing_code' }, 400, origin);
   }
@@ -135,6 +160,40 @@ export async function handleRequest(request: Request, env: BrokerEnv): Promise<R
     200,
     origin,
   );
+}
+
+/** Relay `POST /login/device/code` (no secret). Returns GitHub's JSON verbatim — it holds
+ * only the device/user codes + verification URL, nothing sensitive. */
+async function relayDeviceCode(body: Record<string, unknown>, origin: string | null): Promise<Response> {
+  const clientId = typeof body.client_id === 'string' ? body.client_id : undefined;
+  if (!clientId) return json({ error: 'missing_client_id' }, 400, origin);
+
+  const gh = await fetch(GITHUB_DEVICE_CODE_URL, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', accept: 'application/json' },
+    body: JSON.stringify({
+      client_id: clientId,
+      ...(typeof body.scope === 'string' && body.scope ? { scope: body.scope } : {}),
+    }),
+  });
+  const data = (await gh.json().catch(() => ({}))) as Record<string, unknown>;
+  return json(data, typeof data.device_code === 'string' ? 200 : 400, origin);
+}
+
+/** Relay `POST /login/oauth/access_token` for the device grant (no secret). Passed through
+ * verbatim so the app sees `authorization_pending` / `slow_down` / the access token. */
+async function relayDeviceToken(body: Record<string, unknown>, origin: string | null): Promise<Response> {
+  const clientId = typeof body.client_id === 'string' ? body.client_id : undefined;
+  const deviceCode = typeof body.device_code === 'string' ? body.device_code : undefined;
+  if (!clientId || !deviceCode) return json({ error: 'missing_params' }, 400, origin);
+
+  const gh = await fetch(GITHUB_TOKEN_URL, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', accept: 'application/json' },
+    body: JSON.stringify({ client_id: clientId, device_code: deviceCode, grant_type: DEVICE_CODE_GRANT }),
+  });
+  const data = (await gh.json().catch(() => ({}))) as Record<string, unknown>;
+  return json(data, 200, origin);
 }
 
 /** CORS headers, reflecting the allowed origin only (never `*`). */

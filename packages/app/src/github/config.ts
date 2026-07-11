@@ -23,6 +23,13 @@ export interface RepoConfig {
      * the editor is served, i.e. the callback anyway. Set it only to override.
      */
     redirectUri: string | undefined;
+    /**
+     * Which sign-in flow to use when `clientId` + `brokerUrl` are set: `'redirect'`
+     * (default) is the authorization-code + PKCE flow; `'device'` is the device flow —
+     * no client secret, so the broker acts as a secret-less relay (SPEC §9). Anything
+     * else falls back to `'redirect'`.
+     */
+    flow: string | undefined;
   };
 }
 
@@ -42,6 +49,7 @@ export interface RuntimeConfig {
     brokerUrl?: string;
     scope?: string;
     redirectUri?: string;
+    flow?: string;
   };
 }
 
@@ -70,6 +78,7 @@ export function resolveConfig(runtime: RuntimeConfig, env: EnvLike): RepoConfig 
       scope: runtime.oauth?.scope ?? env.VITE_TIMBER_OAUTH_SCOPE ?? 'repo',
       redirectUri:
         str(runtime.oauth?.redirectUri) ?? str(env.VITE_TIMBER_OAUTH_REDIRECT_URI),
+      flow: str(runtime.oauth?.flow) ?? str(env.VITE_TIMBER_OAUTH_FLOW),
     },
   };
 }

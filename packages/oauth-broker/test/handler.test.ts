@@ -123,6 +123,70 @@ describe('oauth broker handler', () => {
     expect(fetchMock).not.toHaveBeenCalled(); // never even calls GitHub
   });
 
+  // --- device flow (secret-less relay) ---
+
+  function devicePost(path: string, body: unknown, origin: string | null = FIRST_ORIGIN): Request {
+    const headers: Record<string, string> = { 'content-type': 'application/json' };
+    if (origin) headers['Origin'] = origin;
+    return new Request(`https://broker.example${path}`, { method: 'POST', headers, body: JSON.stringify(body) });
+  }
+
+  it('relays /device/code to GitHub without using the client secret', async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({ device_code: 'dc', user_code: 'WDJB-MJHT', verification_uri: 'https://github.com/login/device', interval: 5, expires_in: 900 }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await handleRequest(devicePost('/device/code', { client_id: 'client-123', scope: '' }), env);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('access-control-allow-origin')).toBe(FIRST_ORIGIN);
+    expect((await res.json()).user_code).toBe('WDJB-MJHT');
+
+    // Forwarded to GitHub's device-code endpoint with only the client id — no secret.
+    const [calledUrl, init] = fetchMock.mock.calls[0]!;
+    expect(String(calledUrl)).toBe('https://github.com/login/device/code');
+    const sent = JSON.parse((init as RequestInit).body as string);
+    expect(sent).toEqual({ client_id: 'client-123' });
+    expect(sent).not.toHaveProperty('client_secret');
+  });
+
+  it('relays /device/token, passing through authorization_pending', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ error: 'authorization_pending' }), { status: 200 })));
+    const res = await handleRequest(devicePost('/device/token', { client_id: 'client-123', device_code: 'dc' }), env);
+    expect(res.status).toBe(200);
+    expect((await res.json()).error).toBe('authorization_pending');
+  });
+
+  it('relays /device/token, passing through the access token on success', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ access_token: 'gho_dev', token_type: 'bearer' }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const res = await handleRequest(devicePost('/device/token', { client_id: 'client-123', device_code: 'dc' }), env);
+    expect(res.status).toBe(200);
+    expect((await res.json()).access_token).toBe('gho_dev');
+
+    const sent = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string);
+    expect(sent).toMatchObject({ client_id: 'client-123', device_code: 'dc', grant_type: 'urn:ietf:params:oauth:grant-type:device_code' });
+    expect(sent).not.toHaveProperty('client_secret');
+  });
+
+  it('device relay still enforces the origin allowlist', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const res = await handleRequest(devicePost('/device/code', { client_id: 'c' }, 'https://evil.example'), env);
+    expect(res.status).toBe(403);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('device relay works even with no client secret configured (public-client flow)', async () => {
+    const noSecretEnv: BrokerEnv = { OAUTH_CLIENT_ID: 'client-123', ALLOWED_ORIGINS: FIRST_ORIGIN };
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ device_code: 'dc', user_code: 'U', verification_uri: 'https://github.com/login/device' }), { status: 200 })));
+    const res = await handleRequest(devicePost('/device/code', { client_id: 'client-123' }), noSecretEnv);
+    expect(res.status).toBe(200);
+  });
+
   it('rejects a disallowed origin with 403 and no CORS header', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);

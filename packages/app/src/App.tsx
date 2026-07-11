@@ -3,9 +3,11 @@ import { repoConfig } from './github/config.js';
 import { authMode } from './github/auth.js';
 import { getStoredToken, setStoredToken, clearStoredToken } from './github/token.js';
 import * as oauth from './github/oauth.js';
+import * as device from './github/deviceFlow.js';
 import { loadRepoSession, type RepoSession } from './state/repoSession.js';
 import { TokenGate } from './components/TokenGate.js';
 import { SignIn } from './components/SignIn.js';
+import { DeviceSignIn } from './components/DeviceSignIn.js';
 import { Editor } from './Editor.js';
 
 /**
@@ -16,7 +18,11 @@ import { Editor } from './Editor.js';
  */
 export function App(): React.JSX.Element {
   const [authed, setAuthed] = useState(() =>
-    authMode === 'oauth' ? oauth.isAuthenticated() : getStoredToken() !== null,
+    authMode === 'oauth'
+      ? oauth.isAuthenticated()
+      : authMode === 'device'
+        ? device.isAuthenticated()
+        : getStoredToken() !== null,
   );
   // Only block on "Signing in…" when we're actually returning from GitHub (`?code`).
   const [oauthResolving, setOauthResolving] = useState(
@@ -69,6 +75,7 @@ export function App(): React.JSX.Element {
 
   function signOut(): void {
     if (authMode === 'oauth') oauth.signOut();
+    else if (authMode === 'device') device.signOut();
     else clearStoredToken();
     setSession(null);
     setError(null);
@@ -81,15 +88,21 @@ export function App(): React.JSX.Element {
   }
 
   if (!authed) {
-    return authMode === 'oauth' ? (
-      <SignIn
-        onSignIn={() => {
-          setAuthError(null);
-          void oauth.beginLogin();
-        }}
-        error={authError}
-      />
-    ) : (
+    if (authMode === 'oauth') {
+      return (
+        <SignIn
+          onSignIn={() => {
+            setAuthError(null);
+            void oauth.beginLogin();
+          }}
+          error={authError}
+        />
+      );
+    }
+    if (authMode === 'device') {
+      return <DeviceSignIn onAuthed={() => setAuthed(true)} />;
+    }
+    return (
       <TokenGate
         onSubmit={(token) => {
           setStoredToken(token);
@@ -106,7 +119,7 @@ export function App(): React.JSX.Element {
           Couldn’t load <code>{repoConfig.owner}/{repoConfig.repo}</code>: {error}
         </p>
         <button type="button" onClick={signOut}>
-          {authMode === 'oauth' ? 'Sign out' : 'Use a different token'}
+          {authMode === 'pat' ? 'Use a different token' : 'Sign out'}
         </button>
       </div>
     );
