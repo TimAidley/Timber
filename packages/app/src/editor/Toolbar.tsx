@@ -20,7 +20,8 @@ export type IconName =
   | 'quote'
   | 'codeBlock'
   | 'hr'
-  | 'table';
+  | 'table'
+  | 'image';
 
 export interface ToolbarAction {
   /** Accessible name + tooltip base (e.g. "Bold"). */
@@ -188,6 +189,13 @@ const ICON_PATHS: Record<IconName, React.JSX.Element> = {
       <line x1="3" y1="10" x2="21" y2="10" />
       <line x1="3" y1="15" x2="21" y2="15" />
       <line x1="9" y1="4" x2="9" y2="20" />
+    </>
+  ),
+  image: (
+    <>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <circle cx="9" cy="9" r="1.6" fill="currentColor" stroke="none" />
+      <path d="M4 17l5-5 4 4 3-3 4 4" />
     </>
   ),
 };

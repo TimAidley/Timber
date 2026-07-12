@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { BodyEditor } from '../src/editor/BodyEditor.js';
+import { AssetStore } from '../src/state/assets.js';
 import '@milkdown/kit/prose/view/style/prosemirror.css';
 import '../src/styles.css';
 
@@ -22,7 +23,14 @@ function mount(props: {
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
-  root.render(React.createElement(BodyEditor, { docKey: 0, ...props }));
+  root.render(
+    React.createElement(BodyEditor, {
+      docKey: 0,
+      assetStore: new AssetStore(),
+      bundleDir: 'content/pages/home',
+      ...props,
+    }),
+  );
 }
 
 afterEach(() => {
@@ -147,5 +155,51 @@ describe('BodyEditor toolbar + tabs (real browser)', () => {
     );
     const padLeft = parseFloat(getComputedStyle(pm).paddingLeft);
     expect(padLeft).toBeGreaterThanOrEqual(6);
+  });
+
+  it('exposes an Image button on the toolbar', async () => {
+    mount({ value: 'hello', onChange: () => {} });
+    await waitFor(() => (btn('Bold') ? true : null));
+    expect(btn('Image')).toBeTruthy();
+  });
+
+  it('renders a :::figure as a live NodeView with an image, caption and controls', async () => {
+    const md = [
+      ':::figure{layout="center" size="sm"}',
+      '![A cat](media/cat.webp)',
+      '',
+      'A wild _cat_.',
+      ':::',
+      '',
+    ].join('\n');
+    mount({ value: md, onChange: () => {} });
+
+    const figure = await waitFor(() =>
+      document.querySelector<HTMLElement>('.body-editor .figure-node'),
+    );
+    expect(figure.classList.contains('fig--center')).toBe(true);
+    expect(figure.classList.contains('fig--sm')).toBe(true);
+    expect(figure.querySelector('img')?.getAttribute('alt')).toBe('A cat');
+    expect(figure.querySelector('figcaption')?.textContent).toContain('cat');
+    // Layout + size controls are present.
+    expect(figure.querySelector('button[title="Wrap right"]')).toBeTruthy();
+    expect(figure.querySelector('button[title="Large"]')).toBeTruthy();
+  });
+
+  it('edits figure layout from the NodeView and re-serializes canonically', async () => {
+    let latest = '';
+    const md = [':::figure', '![A cat](media/cat.webp)', '', 'Caption.', ':::', ''].join('\n');
+    mount({ value: md, onChange: (m) => (latest = m) });
+
+    const wrapBtn = await waitFor(() =>
+      document.querySelector<HTMLButtonElement>('.figure-node__bar button[title="Wrap right"]'),
+    );
+    wrapBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    wrapBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+
+    await waitFor(() => (latest.includes('layout="wrap-right"') ? true : null));
+    expect(latest).toContain(':::figure{layout="wrap-right"}');
+    expect(latest).toContain('![A cat](media/cat.webp)');
+    expect(latest).toContain('Caption.');
   });
 });

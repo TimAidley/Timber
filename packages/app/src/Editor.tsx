@@ -858,6 +858,9 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
               docKey={bodySeed}
               value={edit.body}
               onChange={(body) => applyEdit({ ...edit, body })}
+              assetStore={assetStore}
+              bundleDir={selected.path.replace(/\/index\.md$/, '')}
+              onStaged={autosave.markAssetDirty}
             />
           </section>
         ) : null}

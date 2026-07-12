@@ -958,6 +958,79 @@ body {
   width: 100%;
 }
 
+/* Editor-only chrome for the figure NodeView (the `.fig` layout rules above still
+   apply, so the editor mirrors the built layout). The control bar and caption
+   placeholder exist only while authoring. */
+.figure-node {
+  position: relative;
+  padding-top: 1.9rem;
+}
+
+.figure-node.is-selected {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.figure-node__bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.15rem 0;
+}
+
+.figure-node__group {
+  display: flex;
+  gap: 0.15rem;
+}
+
+.figure-node__bar button {
+  font: inherit;
+  font-size: 0.68rem;
+  line-height: 1;
+  padding: 0.2rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: #fff;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.figure-node__bar button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.figure-node__bar button.is-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.figure-node__bar button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.figure-node__missing {
+  padding: 1rem;
+  border: 1px dashed var(--border);
+  border-radius: 3px;
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.figure-node figcaption:empty::before {
+  content: attr(data-placeholder);
+  color: var(--muted);
+  font-style: italic;
+}
+
 /* Header change summary (Editing/Saved counts + inline save status). */
 .changes {
   display: flex;

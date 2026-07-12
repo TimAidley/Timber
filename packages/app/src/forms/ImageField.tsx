@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { processImage } from '../media/processImage.js';
+import { bundleImagePath } from '../media/assetName.js';
 import type { ProcessedImage } from '../media/types.js';
 import type { AssetStore } from '../state/assets.js';
 
@@ -16,31 +17,6 @@ interface ImageFieldProps {
   bundleDir: string;
   /** Notified with the staged asset's repo path so autosave can commit its bytes. */
   onStaged?: ((path: string) => void) | undefined;
-}
-
-const EXT_BY_MIME: Record<string, string> = {
-  'image/webp': 'webp',
-  'image/svg+xml': 'svg',
-  'image/gif': 'gif',
-  'image/png': 'png',
-  'image/jpeg': 'jpg',
-};
-
-function extFor(mime: string, fallbackName: string): string {
-  if (EXT_BY_MIME[mime]) return EXT_BY_MIME[mime];
-  const dot = fallbackName.lastIndexOf('.');
-  return dot >= 0 ? fallbackName.slice(dot + 1).toLowerCase() : 'bin';
-}
-
-function baseName(name: string): string {
-  const dot = name.lastIndexOf('.');
-  const stem = dot > 0 ? name.slice(0, dot) : name;
-  return (
-    stem
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '') || 'image'
-  );
 }
 
 function formatBytes(n: number): string {
@@ -99,7 +75,7 @@ export function ImageField({
     setError(null);
     try {
       const processed = await processImage(file);
-      const target = `${bundleDir}/images/${baseName(file.name)}.${extFor(processed.mime, file.name)}`;
+      const target = bundleImagePath(bundleDir, file.name, processed.mime);
       assetStore.stage(target, processed.blob);
       setResult(processed);
       onChangePath(target);

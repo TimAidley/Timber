@@ -19,6 +19,7 @@
     "@codemirror/view": "^6.43.4",
     "@milkdown/kit": "^7.6.0",
     "@milkdown/react": "^7.6.0",
+    "@prosemirror-adapter/react": "^0.5.3",
     "@timber/content": "workspace:*",
     "@timber/generator": "workspace:*",
     "@timber/github": "workspace:*",
