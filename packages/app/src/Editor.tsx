@@ -163,14 +163,20 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
 
   // A triggered update reuses the deploy workflow + poll: dispatching deploy.yml rebuilds
   // the site AND the editor from the latest Timber. `updatePhase` drives the banner; the
-  // poll (baselined on the pre-dispatch run) tells us when the rebuild has landed.
+  // poll (baselined on the pre-dispatch run) tells us when the rebuild has landed — only
+  // then do we offer Reload, since the deploy takes ~a minute and the new bundle isn't
+  // live until it finishes. `updateArmed` gates the poll so it never runs before the
+  // baseline is captured: activating it with an undefined `since` would treat a prior
+  // completed deploy as "ours" and flash Reload immediately (the merge/publish poll
+  // avoids this by capturing its baseline well before the build phase begins).
   const [updatePhase, setUpdatePhase] = useState<UpdatePhase>('idle');
   const [updateSince, setUpdateSince] = useState<string | undefined>(undefined);
+  const [updateArmed, setUpdateArmed] = useState(false);
   const updateDeployState = useDeployPoll(
     session.client,
     DEPLOY_WORKFLOW,
     session.defaultBranch,
-    updatePhase === 'updating',
+    updatePhase === 'updating' && updateArmed,
     updateSince,
   );
   useEffect(() => {
@@ -181,9 +187,12 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
     else if (updateDeployState === 'failed') setUpdatePhase('failed');
   }, [updateDeployState, updatePhase]);
 
-  // Trigger (or retry) a redeploy that ships the newer Timber. Baseline the poll on the
-  // current latest run so a stale completed deploy can't read as our new one.
+  // Trigger (or retry) a redeploy that ships the newer Timber. Show "Building…" at once
+  // for feedback, but capture the pre-dispatch run as the poll baseline and dispatch
+  // *before* arming the poll — so a stale completed deploy can't be mistaken for our new
+  // one, and Reload only appears once the rebuild we started actually finishes.
   async function startUpdate(): Promise<void> {
+    setUpdateArmed(false);
     setUpdatePhase('updating');
     try {
       const latest = await session.client.getLatestWorkflowRun(
@@ -192,6 +201,7 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
       );
       setUpdateSince(latest?.createdAt);
       await session.client.dispatchWorkflow(DEPLOY_WORKFLOW, session.defaultBranch);
+      setUpdateArmed(true);
     } catch (err) {
       console.warn('[timber] editor update failed to dispatch', err);
       setUpdatePhase('failed');

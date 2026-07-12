@@ -38,7 +38,8 @@ export function UpdateBanner({
       {phase === 'updating' ? (
         <>
           <span className="update-banner__text">
-            Rebuilding the site with the latest Timber…
+            Rebuilding with the latest Timber — this takes about a minute. You can keep
+            editing; we’ll offer a reload when it’s ready.
           </span>
           <button type="button" className="update-banner__action" disabled>
             Building…
