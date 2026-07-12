@@ -17,5 +17,5 @@ editor — live in one place: **Timber's
 
 ---
 <sub>This template repo is generated automatically from
-[`starter/` in the Timber repo](https://github.com/TimAidley/Timber/tree/main/starter) —
+[`site-template/` in the Timber repo](https://github.com/TimAidley/Timber/tree/main/site-template) —
 edit it there, not here.</sub>

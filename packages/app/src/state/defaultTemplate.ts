@@ -1,7 +1,7 @@
 /**
  * A minimal Liquid template used purely to drive in-browser live preview in this
  * slice. The real "one default theme" (SPEC §13) is Phase 7 and will live in the
- * starter repo's `templates/`; here we only need enough to prove the preview path
+ * site-template's `templates/`; here we only need enough to prove the preview path
  * runs the SAME generator (`renderPage`) the CI build uses — preview ≡ build.
  *
  * Templates are dumb (SPEC/CLAUDE.md): `page` is the front matter (auto-escaped by

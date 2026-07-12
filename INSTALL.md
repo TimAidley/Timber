@@ -185,10 +185,10 @@ For development, or to run the editor on your own machine. Replace `<owner>` /
 **Prerequisites:** Node ≥ 20, pnpm 10 (`npm i -g pnpm@10`), git, a clone of the Timber
 repo.
 
-### A. Create the content repo from `starter/`
+### A. Create the content repo from `site-template/`
 ```sh
-cp -r /path/to/Timber/starter <site-repo> && cd <site-repo>
-git init -b main && git add -A && git commit -m "Seed site from Timber starter"
+cp -r /path/to/Timber/site-template <site-repo> && cd <site-repo>
+git init -b main && git add -A && git commit -m "Seed site from Timber site-template"
 git remote add origin https://github.com/<owner>/<site-repo>.git
 git push -u origin main
 ```

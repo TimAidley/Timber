@@ -1,8 +1,9 @@
 name: Sync site template
 
-# `starter/` is the single source of truth for the TimAidley/Timber-site-template repo.
-# On every push to main that touches starter/, mirror its contents into that repo
-# (direct push). The template repo is GENERATED — never hand-edit it; edit starter/ here.
+# `site-template/` is the single source of truth for the TimAidley/Timber-site-template
+# repo. On every push to main that touches site-template/, mirror its contents into that
+# repo (direct push). The template repo is GENERATED — never hand-edit it; edit
+# site-template/ here.
 #
 # Requires a repo secret TEMPLATE_SYNC_TOKEN: a fine-grained PAT scoped to
 # TimAidley/Timber-site-template with Contents: Read and write.
@@ -11,7 +12,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'starter/**'
+      - 'site-template/**'
       - '.github/workflows/sync-template.yml'
   workflow_dispatch: {}
 
@@ -32,7 +33,7 @@ jobs:
       - name: Check out Timber
         uses: actions/checkout@v4
 
-      - name: Mirror starter/ into the template repo
+      - name: Mirror site-template/ into the template repo
         env:
           TOKEN: ${{ secrets.TEMPLATE_SYNC_TOKEN }}
         run: |
@@ -45,9 +46,9 @@ jobs:
 
           git clone --depth 1 "https://x-access-token:${TOKEN}@github.com/${TEMPLATE_REPO}.git" out
 
-          # Mirror starter/ -> out/, deleting anything in out/ that starter/ no longer has
-          # (but never touch out/.git). starter/ is authoritative.
-          rsync -a --delete --exclude='.git' starter/ out/
+          # Mirror site-template/ -> out/, deleting anything in out/ that site-template/ no
+          # longer has (but never touch out/.git). site-template/ is authoritative.
+          rsync -a --delete --exclude='.git' site-template/ out/
 
           cd out
           git config user.name  'github-actions[bot]'
@@ -56,6 +57,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "Template already in sync — nothing to push."
           else
-            git commit -m "chore: sync from Timber starter@${GITHUB_SHA:0:12}"
+            git commit -m "chore: sync from Timber site-template@${GITHUB_SHA:0:12}"
             git push
           fi

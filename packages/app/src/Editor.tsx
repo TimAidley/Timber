@@ -48,7 +48,7 @@ import { canAccessAdvanced } from './github/access.js';
 import { newObject } from './content/newObject.js';
 import { useBackNavigationGuard } from './editor/backNavGuard.js';
 
-/** The deploy workflow's file name (the starter template ships deploy.yml). */
+/** The deploy workflow's file name (the site-template ships deploy.yml). */
 const DEPLOY_WORKFLOW = 'deploy.yml';
 
 interface EditState {
