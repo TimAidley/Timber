@@ -97,3 +97,37 @@ describe('Milkdown round-trip is idempotent (converges in one pass)', () => {
     });
   }
 });
+
+/**
+ * Image embedding turns on `remark-directive` in the editor's remark stack, which
+ * reinterprets `:` / `::` / `:::` document-wide. Left unchecked that would (a) crash
+ * the parser on any directive without a node (`parserMatchError`), and (b) churn
+ * ordinary colon-bearing prose. The `figureRemark` sanitiser neutralises every
+ * non-`figure` directive back to the exact text it was typed as, so all of the below
+ * must round-trip byte-for-byte. (The `:::figure` node itself is covered separately,
+ * once its schema exists.)
+ */
+const DIRECTIVE_CONTAINMENT: Record<string, string> = {
+  'bare body image': '![A tree at dawn](content/pages/home/images/tree.webp)\n',
+  'emoji shortcode stays text': 'Nice work :tada: everyone.\n',
+  'colon-word (TODO:fix)': 'TODO:fix this before shipping.\n',
+  'branch-like token': 'Checkout git:main to see it.\n',
+  'time of day': 'Standup is at 12:30 sharp.\n',
+  'aspect ratio': 'Crop to 16:9 for the banner.\n',
+  'stray leaf directive': '::note\n',
+  'stray container directive': [':::warning', 'Not a figure.', ':::', ''].join('\n'),
+};
+
+describe('directive containment keeps colon prose byte-stable', () => {
+  for (const [name, markdown] of Object.entries(DIRECTIVE_CONTAINMENT)) {
+    it(`preserves ${name} byte-for-byte`, async () => {
+      const out = await roundTrip(markdown);
+      expect(out).toBe(markdown);
+    });
+    it(`stabilizes ${name} (idempotent)`, async () => {
+      const once = await roundTrip(markdown);
+      const twice = await roundTrip(once);
+      expect(twice).toBe(once);
+    });
+  }
+});
