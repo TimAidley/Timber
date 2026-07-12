@@ -478,6 +478,10 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   // Whether the selected type renders as a page — visibility (Draft/Public) only
   // applies to those; a config singleton (page: false) has no public presence.
   const isPageType = schema ? schema.page !== false : false;
+  // Whether the selected type carries a Markdown body. A config singleton like
+  // `settings` sets `hasBody: false`; the generator strips its body on assemble, so
+  // showing the body editor would only invite edits that get silently discarded.
+  const hasBody = schema ? schema.hasBody !== false : false;
 
   // The selected page's change state — gates the header "Discard changes" button
   // (shown only when the page has pending edits, and never for a pending-delete page).
@@ -781,14 +785,16 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
           />
         </section>
 
-        <section className="editor-panel">
-          <h3>Body</h3>
-          <BodyEditor
-            docKey={bodySeed}
-            value={edit.body}
-            onChange={(body) => applyEdit({ ...edit, body })}
-          />
-        </section>
+        {hasBody ? (
+          <section className="editor-panel">
+            <h3>Body</h3>
+            <BodyEditor
+              docKey={bodySeed}
+              value={edit.body}
+              onChange={(body) => applyEdit({ ...edit, body })}
+            />
+          </section>
+        ) : null}
 
         {validation ? (
           <section
