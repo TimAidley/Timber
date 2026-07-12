@@ -17,7 +17,7 @@ Self-hosted, single-tenant, no database, no server-side app.
 ## What you get
 
 A public website at `https://<you>.github.io/<repo>/` plus an in-browser editor co-hosted at
-`/<repo>/admin/`. The editor signs in to GitHub (paste-a-PAT, or a GitHub App via a redirect
+`/<repo>/edit/`. The editor signs in to GitHub (paste-a-PAT, or a GitHub App via a redirect
 or device flow — see [INSTALL.md](INSTALL.md)), commits your edits, and a GitHub Action
 rebuilds and deploys the site.
 

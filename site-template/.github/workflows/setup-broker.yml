@@ -1,10 +1,10 @@
 name: Setup OAuth broker
 
 # Run this ONCE (Actions tab → "Setup OAuth broker" → Run workflow) to deploy the
-# Cloudflare Worker that lets the /admin/ editor sign you in with GitHub. It:
+# Cloudflare Worker that lets the /edit/ editor sign you in with GitHub. It:
 #   1. deploys the broker (packages/oauth-broker) from a pinned Timber checkout,
 #   2. records the deployed worker URL in .timber-broker-url (committed — it's public),
-#   3. kicks off a site deploy so the /admin/ editor goes live.
+#   3. kicks off a site deploy so the /edit/ editor goes live.
 #
 # Prerequisites (repo Settings → Secrets and variables → Actions):
 #   Secrets:   CLOUDFLARE_API_TOKEN   (Workers Scripts: Edit)
@@ -42,7 +42,7 @@ jobs:
           path: .timber
 
       # ALLOWED_ORIGINS is the exact origin of your editor site (the editor is served at
-      # https://<owner>.github.io/<repo>/admin/, whose origin is https://<owner>.github.io).
+      # https://<owner>.github.io/<repo>/edit/, whose origin is https://<owner>.github.io).
       # The Worker-side names are OAUTH_* (not GITHUB_*), which the broker reads directly;
       # the workflow env var can't use a GITHUB_ prefix (reserved by Actions) anyway.
       - name: Deploy the broker to Cloudflare
@@ -92,7 +92,7 @@ jobs:
           fi
 
       # A GITHUB_TOKEN push doesn't trigger other workflows, so kick the deploy
-      # explicitly to build + publish the /admin/ editor now.
+      # explicitly to build + publish the /edit/ editor now.
       - name: Trigger a site deploy
         env:
           GH_TOKEN: ${{ github.token }}

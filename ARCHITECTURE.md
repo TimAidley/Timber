@@ -48,14 +48,14 @@ preview and the Node CLI build — version-pinned together, so **preview ≡ pro
   │                                                                             │
   │  deploy.yml ──┬─ checkout TimAidley/Timber@main ──► generator + editor app   │
   │               ├─ build site (CLI)  ───────────────► _site/                   │
-  │               └─ build editor (app) ──────────────► _site/admin/             │
+  │               └─ build editor (app) ──────────────► _site/edit/             │
   │                                                                             │
   │  setup-broker.yml ── deploy Timber's oauth-broker ──► Cloudflare (one-time)  │
   └───────┬─────────────────────────┬──────────────────────────┬────────────────┘
           ▼                         ▼                          ▼
    GitHub Pages             Cloudflare Worker            a GitHub App
   (site at /, editor        (the broker / relay —        (sign-in; installed
-   at /<repo>/admin/)        holds the client secret,     on the site repo)
+   at /<repo>/edit/)        holds the client secret,     on the site repo)
                              or nothing for device flow)
 ```
 
@@ -97,7 +97,7 @@ window.__TIMBER_CONFIG__  (config.js, runtime)   >   VITE_TIMBER_*  (build vars)
   **`config.js`** served next to the app — no rebuild.
 
 The editor bundle uses a **relative base** (`./`), so the same build works at any
-`/<repo>/admin/` subpath without a build-time base var.
+`/<repo>/edit/` subpath without a build-time base var.
 
 ## The workflows
 
@@ -123,6 +123,7 @@ The editor bundle uses a **relative base** (`./`), so the same build works at an
 |---|---|---|
 | Variable | `GH_OAUTH_CLIENT_ID` | the App's client id (public) |
 | Variable | `TIMBER_OAUTH_FLOW` | `device` to use device flow; unset = redirect |
+| Variable | `TIMBER_EDITOR_PATH` | editor URL segment; unset = `edit` (→ `/<repo>/edit/`) |
 | Secret | `GH_OAUTH_CLIENT_SECRET` | redirect flow only — **omit for device flow** |
 | Secret | `CLOUDFLARE_API_TOKEN` | Workers Scripts: Edit |
 | Secret | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account id |

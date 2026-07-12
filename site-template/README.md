@@ -1,7 +1,7 @@
 # Your Timber site
 
 A [Timber](https://github.com/TimAidley/Timber) site: a git-backed static website with an
-in-browser editor at `/<repo>/admin/`.
+in-browser editor at `/<repo>/edit/`.
 
 - **`content/`** — your pages (each is a folder with an `index.md`); `content/settings/`
   holds site-wide settings.

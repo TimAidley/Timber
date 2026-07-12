@@ -19,7 +19,7 @@ function timberConfigScript(): Plugin {
 // Milkdown. No server-side anything — the output is a static single-page app.
 //
 // Base path defaults to **relative** (`./`) so the SAME built bundle works at any
-// subpath — the fork-and-go deploy co-hosts the editor at `/<repo>/admin/` on the
+// subpath — the fork-and-go deploy co-hosts the editor at `/<repo>/edit/` on the
 // site's GitHub Pages (SPEC §3) — with NO build-time base var. (This is a flat SPA
 // with no deep client-side routes, so relative asset URLs resolve correctly.)
 // `TIMBER_BASE` can still pin an absolute base if a particular deploy needs one.

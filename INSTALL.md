@@ -2,7 +2,7 @@
 
 This stands up a **hosted** site with no local tooling: a public website on GitHub Pages
 at `https://<you>.github.io/<repo>/`, plus an in-browser editor at
-`https://<you>.github.io/<repo>/admin/`. You create a repo from a template, choose how you
+`https://<you>.github.io/<repo>/edit/`. You create a repo from a template, choose how you
 sign in, and let a GitHub Action do the rest.
 
 > Want to run the editor on your own machine, build a site by hand, or hack on Timber
@@ -10,6 +10,11 @@ sign in, and let a GitHub Action do the rest.
 
 Throughout, `<you>` is your GitHub login (**lowercase** in URLs — that's how Pages serves
 them) and `<repo>` is the repo name you pick.
+
+> **Editor path.** The editor lives at `/edit/` by default. To use a different path (e.g.
+> a content page already occupies `/edit/`), set a repo **Variable** `TIMBER_EDITOR_PATH`
+> (Settings → Secrets and variables → Actions) to your chosen segment, and use *that* path
+> everywhere `/<repo>/edit/` appears below — including the GitHub App's callback URL.
 
 ---
 
@@ -64,7 +69,7 @@ That's all three methods share. Now follow **the one section below** for your ch
    tokens** → scope it to **`<repo>`** with **Contents: Read & write** (add **Actions: Read
    & write** so the editor can show deploy status and re-run failed deploys). Pick an
    expiry you're comfortable with.
-3. Open `https://<you>.github.io/<repo>/admin/`, paste the token, and start editing.
+3. Open `https://<you>.github.io/<repo>/edit/`, paste the token, and start editing.
 
 You're done. (The token lives in that browser's `localStorage`; you'll re-paste when it
 expires or on a new browser.)
@@ -97,7 +102,8 @@ Hold on to the **Account ID** and **API token** for 3b.3.
 > **Follow this if you chose redirect *or* device flow.**
 
 GitHub → Settings → Developer settings → **GitHub Apps** → **New GitHub App**:
-- **Callback URL:** `https://<you>.github.io/<repo>/admin/` — exactly, trailing slash.
+- **Callback URL:** `https://<you>.github.io/<repo>/edit/` — exactly, trailing slash (use
+  your `TIMBER_EDITOR_PATH` here if you changed it).
 - **Expire user authorization tokens:** **checked** (short-lived tokens; recommended).
 - **Webhook → Active:** **unchecked** (if the form demands a URL, put `https://example.com`).
 - **Where can this be installed?** **Only on this account.**
@@ -131,7 +137,7 @@ In your repo → **Settings → Secrets and variables → Actions**. Use these e
 
 **Actions → "Setup OAuth broker" → Run workflow.** It deploys the Cloudflare broker,
 records its URL, and triggers a site deploy. When **Build & deploy site** goes green, open
-`https://<you>.github.io/<repo>/admin/` and **Sign in with GitHub**:
+`https://<you>.github.io/<repo>/edit/` and **Sign in with GitHub**:
 
 > **Redirect flow:** you're bounced to GitHub, approve, and land back signed in.
 
@@ -139,7 +145,7 @@ records its URL, and triggers a site deploy. When **Build & deploy site** goes g
 > the code, approve, and it signs you in.
 
 One App + one broker can serve **several** of your sites — reuse them: add each new site's
-`…/admin/` callback URL to the App, install it on that repo, and the shared broker already
+`…/edit/` callback URL to the App, install it on that repo, and the shared broker already
 allows your `https://<you>.github.io` origin.
 
 ---
@@ -155,7 +161,7 @@ allows your `https://<you>.github.io` origin.
 - **Setup fails reading your workers.dev subdomain** → enable it (Cloudflare → Workers &
   Pages → Subdomain), then re-run "Setup OAuth broker."
 - **Sign-in `redirect_uri` mismatch** (redirect flow) → the App's callback must equal
-  `https://<you>.github.io/<repo>/admin/` exactly (trailing slash, lowercase host).
+  `https://<you>.github.io/<repo>/edit/` exactly (trailing slash, lowercase host).
 - **`origin_not_allowed` on sign-in** → the broker's allowed origin didn't match; it's
   derived as `https://<you>.github.io`. On a **custom domain**, set the broker's
   `ALLOWED_ORIGINS` to that origin (see `packages/oauth-broker/README.md`) and re-run Setup.

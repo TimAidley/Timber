@@ -7,14 +7,14 @@ name: Build & deploy site
 # only — the built HTML never enters git; it's uploaded as a Pages artifact and
 # deployed directly (no gh-pages branch). See SPEC §12.
 #
-# It also co-hosts the in-browser editor at /<repo>/admin/ on the same Pages site,
-# once you've run the "Setup OAuth broker" workflow (which records the broker URL in
-# .timber-broker-url). Until then, only the public site is published.
+# It also co-hosts the in-browser editor at /<repo>/edit/ (default; see TIMBER_EDITOR_PATH
+# below) on the same Pages site. The editor always ships; it uses paste-a-PAT until you
+# run "Setup OAuth broker" to enable "Sign in with GitHub".
 #
 # One-time setup in your content repo:
 #   1. Settings → Pages → Source: "GitHub Actions".
 #   2. Pin TIMBER_REF below to a Timber release tag so preview ≡ production.
-#   3. Run "Setup OAuth broker" to enable the /admin/ editor (see README).
+#   3. For "Sign in with GitHub" (vs paste-a-PAT), run "Setup OAuth broker" (see INSTALL.md).
 
 on:
   push:
@@ -72,15 +72,20 @@ jobs:
       - name: Build the site
         run: node .timber/packages/cli/dist/index.js build . _site
 
-      # Co-host the editor at /<repo>/admin/. It ALWAYS ships; its sign-in adapts to
-      # config: with a broker URL (committed by the "Setup OAuth broker" workflow) it
-      # shows "Sign in with GitHub" — redirect, or device flow when TIMBER_OAUTH_FLOW is
-      # 'device'; with no broker it falls back to paste-a-PAT, which needs no Cloudflare
-      # or GitHub App at all.
-      - name: Build the editor (/admin/)
+      # Co-host the editor at /<repo>/<editor-path>/ — default "edit", overridable with
+      # the TIMBER_EDITOR_PATH repo variable (e.g. if a content page already uses /edit/).
+      # It ALWAYS ships; its sign-in adapts to config: with a broker URL (committed by the
+      # "Setup OAuth broker" workflow) it shows "Sign in with GitHub" — redirect, or device
+      # flow when TIMBER_OAUTH_FLOW is 'device'; with no broker it falls back to paste-a-PAT,
+      # which needs no Cloudflare or GitHub App. NOTE: if you change the path AND use the
+      # redirect flow, register the matching callback URL on your GitHub App.
+      - name: Build the editor (/<repo>/edit/)
         run: |
           REPO='${{ github.event.repository.name }}'
-          export TIMBER_BASE="/$REPO/admin/"
+          EDITOR_PATH='${{ vars.TIMBER_EDITOR_PATH }}'
+          EDITOR_PATH="${EDITOR_PATH:-edit}"                              # default
+          EDITOR_PATH="${EDITOR_PATH#/}"; EDITOR_PATH="${EDITOR_PATH%/}"  # strip any slashes
+          export TIMBER_BASE="/$REPO/$EDITOR_PATH/"
           export VITE_TIMBER_OWNER='${{ github.repository_owner }}'
           export VITE_TIMBER_REPO="$REPO"
           export VITE_TIMBER_OAUTH_CLIENT_ID='${{ vars.GH_OAUTH_CLIENT_ID }}'
@@ -90,8 +95,8 @@ jobs:
           fi
           export VITE_TIMBER_OAUTH_FLOW='${{ vars.TIMBER_OAUTH_FLOW }}'
           ( cd .timber && pnpm --filter "@timber/app..." build )
-          mkdir -p _site/admin
-          cp -r .timber/packages/app/dist/. _site/admin/
+          mkdir -p "_site/$EDITOR_PATH"
+          cp -r .timber/packages/app/dist/. "_site/$EDITOR_PATH/"
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
