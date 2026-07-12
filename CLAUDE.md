@@ -6,6 +6,8 @@ A git-backed static CMS — a lightweight, friendly-to-edit alternative to WordP
 ## Read first — the spec is authoritative
 **`SPEC.md` in this repo is the authoritative design. Read it in full before planning or writing any code.** If anything in this file and `SPEC.md` ever conflict, `SPEC.md` wins. **When we change a decision, update `SPEC.md` in the same change** so it stays the single source of truth.
 
+For *how the pieces fit together* — repos, packages, the runtime/deploy dependency graph, auth modes, config resolution, the workflows, and the "change X → also update Y" map — see **`ARCHITECTURE.md`**. (SPEC = why; ARCHITECTURE = what talks to what; INSTALL = how to set a site up.)
+
 ## How to work in this repo
 - **Plan before building.** For any non-trivial piece, propose an approach and let me review it before writing code. Use plan mode for multi-step work.
 - **Build in phases, riskiest core first** (see build order). Do not scaffold the whole app at once.
