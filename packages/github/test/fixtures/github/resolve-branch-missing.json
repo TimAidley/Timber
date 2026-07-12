@@ -1,0 +1,16 @@
+[
+  {
+    "method": "GET",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/ref/heads%2FTimAidley_wip",
+    "status": 404,
+    "responseBody": { "message": "Not Found", "status": "404" }
+  },
+  {
+    "method": "GET",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/branches",
+    "status": 200,
+    "responseBody": [
+      { "name": "main", "commit": { "sha": "MAINSHA" }, "protected": false }
+    ]
+  }
+]

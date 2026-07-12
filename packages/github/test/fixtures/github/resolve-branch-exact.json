@@ -1,0 +1,11 @@
+[
+  {
+    "method": "GET",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/git/ref/heads%2FTimAidley_wip",
+    "status": 200,
+    "responseBody": {
+      "ref": "refs/heads/TimAidley_wip",
+      "object": { "sha": "EXACTSHA", "type": "commit" }
+    }
+  }
+]

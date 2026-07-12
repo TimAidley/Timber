@@ -103,13 +103,20 @@ export async function loadRepoSession(): Promise<RepoSession> {
   const client = new RepoClient({ owner: repoConfig.owner, repo: repoConfig.repo, getToken });
 
   const login = await client.getAuthenticatedLogin();
-  const wipBranch = `${login}_wip`;
   const defaultBranch = await client.getDefaultBranch();
 
   const baseSha = await client.getBranchSha(defaultBranch);
   if (!baseSha) throw new Error(`Default branch "${defaultBranch}" not found`);
 
-  const wipSha = await client.getBranchSha(wipBranch);
+  // Resolve the WIP branch tolerant of login casing: GitHub returns the login in its
+  // canonical case (`TimAidley`) but the branch may have been created lowercase
+  // (`timaidley_wip`), and a case-sensitive git ref lookup would miss it — loading `main`
+  // and, worse, forking a second `<canonical>_wip` on the next autosave. Bind the session
+  // to the branch's ACTUAL name so every commit reuses it; fall back to the canonical
+  // name for the not-yet-created case.
+  const wip = await client.resolveBranch(`${login}_wip`);
+  const wipBranch = wip?.name ?? `${login}_wip`;
+  const wipSha = wip?.sha;
   const loadedRef = wipSha ? wipBranch : defaultBranch;
 
   const { snapshot, tree } = await client.loadSnapshotWithTree(loadedRef);

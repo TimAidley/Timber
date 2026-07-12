@@ -159,6 +159,35 @@ describe('RepoClient (replayed from fixtures recorded against the real sandbox r
     expect(await makeClient().getAuthenticatedLogin()).toBe('octocat');
   });
 
+  it('resolveBranch() returns an exact match without listing branches', async () => {
+    const { served, isExhausted } = useCassette('resolve-branch-exact');
+
+    const resolved = await makeClient().resolveBranch('TimAidley_wip');
+
+    expect(resolved).toEqual({ name: 'TimAidley_wip', sha: 'EXACTSHA' });
+    // Exact hit on the first getRef — the /branches list is never fetched.
+    expect(served.some((r) => r.pathname.endsWith('/branches'))).toBe(false);
+    expect(isExhausted()).toBe(true);
+  });
+
+  it('resolveBranch() finds a differently-cased branch (TimAidley_wip → timaidley_wip)', async () => {
+    const { isExhausted } = useCassette('resolve-branch-case-insensitive');
+
+    // GitHub returns the canonical login casing, so we look up `TimAidley_wip`; the branch
+    // was created lowercase. resolveBranch must still find it and return its ACTUAL name.
+    const resolved = await makeClient().resolveBranch('TimAidley_wip');
+
+    expect(resolved).toEqual({ name: 'timaidley_wip', sha: 'WIPSHA' });
+    expect(isExhausted()).toBe(true);
+  });
+
+  it('resolveBranch() returns undefined when no branch matches even case-insensitively', async () => {
+    const { isExhausted } = useCassette('resolve-branch-missing');
+
+    expect(await makeClient().resolveBranch('TimAidley_wip')).toBeUndefined();
+    expect(isExhausted()).toBe(true);
+  });
+
   it('loadSnapshot() fetches only content/config text files into a path->utf8 map', async () => {
     const { isExhausted } = useCassette('load-snapshot');
 

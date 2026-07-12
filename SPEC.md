@@ -189,7 +189,7 @@ Not stored in git — **link/embed external** (YouTube/Vimeo/etc.). A `video` fi
 
 ### Two persistence layers, two jobs
 - **IndexedDB (local, continuous autosave):** every change, instantly, device-local. Survives crashes, tab close, and reopening in the *same* browser. Does **not** cross devices and can be evicted. This is the "don't lose the last few minutes" layer.
-- **Per-user WIP branch `<username>_wip` (durable, portable):** survives losing the machine, enables continuing on another device, and isolates each editor's in-progress work. This is the "my work is safe, portable, and mine" layer.
+- **Per-user WIP branch `<username>_wip` (durable, portable):** survives losing the machine, enables continuing on another device, and isolates each editor's in-progress work. This is the "my work is safe, portable, and mine" layer. The branch is matched **case-insensitively** — GitHub logins are case-insensitive, but git refs are not, so `GET /user` returning `TimAidley` must still resolve a `timaidley_wip` branch rather than fork a second one.
 
 The mental model: IndexedDB is a per-device draft of not-yet-committed changes; the **WIP branch is what follows you around.** Commit reasonably eagerly so the portable copy is rarely behind, and show sync state clearly.
 

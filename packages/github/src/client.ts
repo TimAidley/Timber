@@ -96,6 +96,30 @@ export class RepoClient {
     }
   }
 
+  /**
+   * Resolve a branch by name, tolerant of case. Git refs are case-sensitive, but the
+   * WIP branch name is seeded from the GitHub login (`<login>_wip`) and logins are
+   * case-insensitive: `GET /user` returns the canonical `TimAidley` while the branch may
+   * have been created as `timaidley_wip`. An exact-name lookup would miss it, and the
+   * caller would then fork a second, divergent WIP branch on the next commit. Returns the
+   * branch's ACTUAL stored name (exact match preferred, so the common correctly-cased
+   * case costs a single request) and tip SHA, or `undefined` when nothing matches even
+   * case-insensitively.
+   */
+  async resolveBranch(name: string): Promise<{ name: string; sha: string } | undefined> {
+    const exact = await this.getBranchSha(name);
+    if (exact) return { name, sha: exact };
+
+    const wanted = name.toLowerCase();
+    const branches = await this.octokit.paginate(this.octokit.rest.repos.listBranches, {
+      owner: this.owner,
+      repo: this.repo,
+      per_page: 100,
+    });
+    const match = branches.find((b) => b.name.toLowerCase() === wanted);
+    return match ? { name: match.name, sha: match.commit.sha } : undefined;
+  }
+
   /** Load a branch's full file tree into memory (paths + blob SHAs, not content). */
   async loadTree(ref?: string): Promise<RepoTree> {
     const branch = ref ?? (await this.getDefaultBranch());
