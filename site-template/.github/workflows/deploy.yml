@@ -88,6 +88,12 @@ jobs:
           export TIMBER_BASE="/$REPO/$EDITOR_PATH/"
           export VITE_TIMBER_OWNER='${{ github.repository_owner }}'
           export VITE_TIMBER_REPO="$REPO"
+          # Build provenance: which Timber this editor was built from, so it can notice
+          # when the branch it follows has moved on and offer a redeploy (SPEC §12).
+          export VITE_TIMBER_UPSTREAM_REPO='${{ env.TIMBER_REPO }}'
+          export VITE_TIMBER_UPSTREAM_REF='${{ env.TIMBER_REF }}'
+          VITE_TIMBER_BUILD_SHA="$(git -C .timber rev-parse HEAD)"
+          export VITE_TIMBER_BUILD_SHA
           export VITE_TIMBER_OAUTH_CLIENT_ID='${{ vars.GH_OAUTH_CLIENT_ID }}'
           if [ -f .timber-broker-url ]; then
             VITE_TIMBER_OAUTH_BROKER_URL="$(cat .timber-broker-url)"

@@ -8,6 +8,7 @@ import type {
   FileWrite,
   RepoClientOptions,
   RepoSnapshot,
+  RefComparison,
   RepoTree,
   TreeEntry,
   TreeOverlayEntry,
@@ -447,6 +448,21 @@ export class RepoClient {
       headBranch: run.head_branch ?? null,
       createdAt: run.created_at,
     };
+  }
+
+  /**
+   * How `head` stands relative to `base` — commits ahead/behind and a coarse status
+   * (`ahead`/`behind`/`identical`/`diverged`). One call resolves both refs (branch,
+   * tag, or SHA) and their ancestry. Powers the editor's out-of-date check: is the
+   * Timber commit the editor was built from behind the branch it follows? (SPEC §12).
+   */
+  async compareRefs(base: string, head: string): Promise<RefComparison> {
+    const { data } = await this.octokit.rest.repos.compareCommitsWithBasehead({
+      owner: this.owner,
+      repo: this.repo,
+      basehead: `${base}...${head}`,
+    });
+    return { status: data.status, aheadBy: data.ahead_by, behindBy: data.behind_by };
   }
 
   /**

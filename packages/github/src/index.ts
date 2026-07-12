@@ -15,6 +15,7 @@ export type {
   CommitTreeInput,
   FileWrite,
   MoveEntry,
+  RefComparison,
   RepoClientOptions,
   RepoSnapshot,
   RepoTree,

@@ -80,6 +80,20 @@ export interface TreeOverlayEntry {
   sha: string | null;
 }
 
+/**
+ * How one ref stands relative to another (GitHub's `compare` result). Powers the
+ * editor's "your build is out of date" check: compare the Timber commit the editor
+ * was built from against the tip of the Timber branch it follows (SPEC §12).
+ */
+export interface RefComparison {
+  /** `ahead` | `behind` | `identical` | `diverged`, relative to `base`. */
+  status: string;
+  /** Commits `head` has that `base` doesn't (how far the followed ref moved on). */
+  aheadBy: number;
+  /** Commits `base` has that `head` doesn't. */
+  behindBy: number;
+}
+
 /** The latest run of a workflow — drives the editor's deploy-status indicator (SPEC §12). */
 export interface WorkflowRun {
   /** queued | in_progress | completed. */

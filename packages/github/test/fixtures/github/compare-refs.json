@@ -1,0 +1,12 @@
+[
+  {
+    "method": "GET",
+    "url": "https://api.github.com/repos/TimAidley/Timber-test-sandbox/compare/BUILTSHA...main",
+    "status": 200,
+    "responseBody": {
+      "status": "ahead",
+      "ahead_by": 3,
+      "behind_by": 0
+    }
+  }
+]

@@ -154,6 +154,12 @@ Cross-cutting things and every file they touch:
 - **A new editor config value** → `config.ts` (`RepoConfig` + `resolveConfig`) +
   `site-template/.github/workflows/deploy.yml` (build var) + `public/config.js` template +
   the docs.
+- **Editor build provenance** (the out-of-date banner, SPEC §12) is baked as **build
+  vars** (`VITE_TIMBER_UPSTREAM_REPO` / `_UPSTREAM_REF` / `_BUILD_SHA`), *not* runtime
+  config — it describes the build, so it can't come from a site's `config.js`. Touch
+  points: `github/buildInfo.ts` (resolve) + `state/upstreamVersion.ts` +
+  `components/UpdateBanner.tsx` + `site-template/.github/workflows/deploy.yml` (the
+  editor-build step exports them) + `packages/app/.env.example`.
 - **The site scaffold** (theme, schemas, sample content, workflows) → edit **`site-template/`**
   only; the mirror regenerates the template repo. Never edit `Timber-site-template` directly.
 - **Setup instructions** → **`INSTALL.md`** only (canonical); the template's README is a stub.

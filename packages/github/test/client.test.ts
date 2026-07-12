@@ -312,6 +312,13 @@ describe('RepoClient (replayed from fixtures recorded against the real sandbox r
     ]);
   });
 
+  it('compareRefs() reports how far the followed ref is ahead of our build', async () => {
+    const { isExhausted } = useCassette('compare-refs');
+    const cmp = await makeClient().compareRefs('BUILTSHA', 'main');
+    expect(cmp).toEqual({ status: 'ahead', aheadBy: 3, behindBy: 0 });
+    expect(isExhausted()).toBe(true);
+  });
+
   it('treeShaOf() resolves a commit tree SHA (the squash source)', async () => {
     useCassette('tree-sha-of');
     expect(await makeClient().treeShaOf('WIPTIP')).toBe('WIPTREE');

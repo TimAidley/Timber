@@ -149,6 +149,48 @@ body {
   overflow: hidden;
 }
 
+/* Out-of-date editor notice: a full-width strip above the app banner offering a
+   one-click redeploy when the followed Timber branch has moved on (SPEC §12). */
+.update-banner {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem;
+  background: #fdf6e3;
+  border-bottom: 1px solid #e0c97f;
+  color: #6b5300;
+  font-size: 0.9rem;
+}
+
+.update-banner__icon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.update-banner__text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.update-banner__action {
+  flex: none;
+  margin: 0;
+  padding: 0.3rem 0.8rem;
+  width: auto;
+  border: 1px solid #b8860b;
+  border-radius: 4px;
+  background: #b8860b;
+  color: #fff;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.update-banner__action:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+
 /* Always-present top banner: brand + save status on the left, layout controls +
    Publish on the right (SPEC §8). */
 .app__banner {

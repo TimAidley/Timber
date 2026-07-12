@@ -7,12 +7,17 @@ import {
   type ContentTypeSchema,
 } from '@timber/content';
 import type { FrontMatter } from '@timber/generator';
+import { RepoClient } from '@timber/github';
 import type { RepoSession } from './state/repoSession.js';
 import { AssetStore } from './state/assets.js';
 import { useAutosave } from './state/autosave.js';
 import { LocalDraftStore } from './state/localDraft.js';
 import { reassembleDocument } from './content/document.js';
 import { repoConfig } from './github/config.js';
+import { buildInfo, canCheckForUpdate } from './github/buildInfo.js';
+import { getToken } from './github/auth.js';
+import { useUpstreamVersion } from './state/upstreamVersion.js';
+import { UpdateBanner, type UpdatePhase } from './components/UpdateBanner.js';
 import { SchemaForm } from './forms/SchemaForm.js';
 import { BodyEditor } from './editor/BodyEditor.js';
 import { Preview } from './preview/Preview.js';
@@ -131,6 +136,62 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
     publishPhase === 'building',
     deploySince,
   );
+
+  // --- Out-of-date editor check (SPEC §12) ------------------------------------------
+  // The editor bundle is built from a pinned Timber checkout; when the branch it follows
+  // moves on, this deployed copy is stale. A client bound to the *upstream* Timber repo
+  // (not the site repo) lets us compare the built-from SHA against that branch's tip.
+  const canCheck = canCheckForUpdate(buildInfo);
+  const upstreamClient = useMemo(
+    () =>
+      canCheck && buildInfo.upstream
+        ? new RepoClient({ ...buildInfo.upstream, getToken })
+        : undefined,
+    [canCheck],
+  );
+  const update = useUpstreamVersion(
+    upstreamClient,
+    buildInfo.ref,
+    buildInfo.sha,
+    canCheck,
+  );
+
+  // A triggered update reuses the deploy workflow + poll: dispatching deploy.yml rebuilds
+  // the site AND the editor from the latest Timber. `updatePhase` drives the banner; the
+  // poll (baselined on the pre-dispatch run) tells us when the rebuild has landed.
+  const [updatePhase, setUpdatePhase] = useState<UpdatePhase>('idle');
+  const [updateSince, setUpdateSince] = useState<string | undefined>(undefined);
+  const updateDeployState = useDeployPoll(
+    session.client,
+    DEPLOY_WORKFLOW,
+    session.defaultBranch,
+    updatePhase === 'updating',
+    updateSince,
+  );
+  useEffect(() => {
+    if (updatePhase !== 'updating') return;
+    // The freshly deployed bundle is live once the run completes, but this tab is still
+    // running the old code — surface a Reload rather than swapping under the user.
+    if (updateDeployState === 'published') setUpdatePhase('done');
+    else if (updateDeployState === 'failed') setUpdatePhase('failed');
+  }, [updateDeployState, updatePhase]);
+
+  // Trigger (or retry) a redeploy that ships the newer Timber. Baseline the poll on the
+  // current latest run so a stale completed deploy can't read as our new one.
+  async function startUpdate(): Promise<void> {
+    setUpdatePhase('updating');
+    try {
+      const latest = await session.client.getLatestWorkflowRun(
+        DEPLOY_WORKFLOW,
+        session.defaultBranch,
+      );
+      setUpdateSince(latest?.createdAt);
+      await session.client.dispatchWorkflow(DEPLOY_WORKFLOW, session.defaultBranch);
+    } catch (err) {
+      console.warn('[timber] editor update failed to dispatch', err);
+      setUpdatePhase('failed');
+    }
+  }
 
   // Objects committed to WIP but not yet on main ("Saved"). Refreshed on load and
   // after each successful autosave/publish. `editingPaths` (local-only) comes from the
@@ -836,8 +897,20 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
       <p className="app__preview-empty">Nothing to preview.</p>
     );
 
+  // The banner rides the whole time an update is offered or in flight; it only vanishes
+  // once dismissed by a reload (phase never leaves 'done' without one).
+  const showUpdateBanner = update.state === 'outdated' || updatePhase !== 'idle';
+
   return (
     <div className="app">
+      {showUpdateBanner ? (
+        <UpdateBanner
+          behindBy={update.behindBy}
+          phase={updatePhase}
+          onUpdate={() => void startUpdate()}
+          onReload={() => window.location.reload()}
+        />
+      ) : null}
       <header className="app__banner">
         <div className="app__banner-left">
           <button
