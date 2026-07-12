@@ -903,6 +903,61 @@ body {
   max-width: 100%;
 }
 
+/* Body-embedded images (SPEC §7 `:::figure`). These rules are shared by the live
+   preview AND the editor's figure NodeView — both emit
+   `class="fig fig--<layout> fig--<size>"` — so a figure looks the same while editing
+   and once built. The real site theme (Phase 7) will restyle these; this is the
+   baseline that makes wrap/centre/size legible. */
+.fig {
+  margin: 1rem 0;
+}
+
+.fig img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.fig figcaption {
+  margin-top: 0.35rem;
+  font-size: 0.8em;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.fig--center {
+  margin-inline: auto;
+  text-align: center;
+}
+
+.fig--wrap-left {
+  float: left;
+  margin: 0.3rem 1rem 0.6rem 0;
+}
+
+.fig--wrap-right {
+  float: right;
+  margin: 0.3rem 0 0.6rem 1rem;
+}
+
+/* Size buckets set the rendered width for wrap/centre layouts. `full-width` comes
+   last so it wins (equal specificity) — its size class is ignored, it's column-wide. */
+.fig--sm {
+  width: 12rem;
+}
+
+.fig--md {
+  width: 20rem;
+}
+
+.fig--lg {
+  width: 30rem;
+}
+
+.fig--full-width {
+  width: 100%;
+}
+
 /* Header change summary (Editing/Saved counts + inline save status). */
 .changes {
   display: flex;

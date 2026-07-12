@@ -2,10 +2,12 @@ import { unified } from 'unified';
 import remarkParse from 'remark-parse';
 import remarkGfm from 'remark-gfm';
 import remarkFrontmatter from 'remark-frontmatter';
+import remarkDirective from 'remark-directive';
 import remarkRehype from 'remark-rehype';
 import rehypeSanitize, { defaultSchema, type Options as SanitizeSchema } from 'rehype-sanitize';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeStringify from 'rehype-stringify';
+import { remarkFigure } from './figureDirective.js';
 
 // remark-rehype already drops raw HTML (no `allowDangerousHtml`), but it does NOT
 // filter URL *protocols*, so a `[x](javascript:…)` link or a `data:` image would
@@ -14,11 +16,17 @@ import rehypeStringify from 'rehype-stringify';
 // rehype-highlight so the trusted highlighter spans it emits aren't stripped; we
 // extend the default schema only to preserve the `language-*` class the highlighter
 // needs to detect a fenced block's language.
+// The `:::figure` directive (SPEC §7) renders to <figure>/<figcaption>/<img>. Allow
+// those tags, the computed `fig*` layout classes on <figure>, and the lazy-loading
+// hints on <img> — everything else stays locked to the safe default schema.
 const sanitizeSchema: SanitizeSchema = {
   ...defaultSchema,
+  tagNames: [...(defaultSchema.tagNames ?? []), 'figure', 'figcaption'],
   attributes: {
     ...defaultSchema.attributes,
     code: [...(defaultSchema.attributes?.code ?? []), ['className', /^language-./]],
+    figure: [...(defaultSchema.attributes?.figure ?? []), ['className', /^fig(--[a-z-]+)?$/]],
+    img: [...(defaultSchema.attributes?.img ?? []), 'loading', 'decoding'],
   },
 };
 
@@ -30,6 +38,8 @@ const processor = unified()
   .use(remarkParse)
   .use(remarkGfm)
   .use(remarkFrontmatter, ['yaml'])
+  .use(remarkDirective)
+  .use(remarkFigure)
   .use(remarkRehype)
   .use(rehypeSanitize, sanitizeSchema)
   .use(rehypeHighlight)
