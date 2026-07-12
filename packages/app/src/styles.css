@@ -764,6 +764,9 @@ body {
   padding: 0.75rem;
   min-height: 160px;
   outline: none;
+  /* Establish a block formatting context so a wrapped (floated) figure is contained
+     and the editable grows to fit it, instead of the image spilling past the box. */
+  display: flow-root;
 }
 
 .body-editor__source {
@@ -897,6 +900,8 @@ body {
 
 .preview {
   font-size: 0.9rem;
+  /* Contain wrapped (floated) figures so they don't spill past the preview box. */
+  display: flow-root;
 }
 
 .preview img {

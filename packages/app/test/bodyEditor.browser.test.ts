@@ -157,6 +157,15 @@ describe('BodyEditor toolbar + tabs (real browser)', () => {
     expect(padLeft).toBeGreaterThanOrEqual(6);
   });
 
+  it('contains floated figures (editable establishes a block formatting context)', async () => {
+    mount({ value: 'hi', onChange: () => {} });
+    const pm = await waitFor(() =>
+      document.querySelector<HTMLElement>('.body-editor .ProseMirror'),
+    );
+    // Without a BFC a wrapped (floated) figure spills below the editor box.
+    expect(getComputedStyle(pm).display).toBe('flow-root');
+  });
+
   it('exposes an Image button on the toolbar', async () => {
     mount({ value: 'hello', onChange: () => {} });
     await waitFor(() => (btn('Bold') ? true : null));
