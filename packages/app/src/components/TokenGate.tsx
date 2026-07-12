@@ -3,12 +3,25 @@ import { repoConfig } from '../github/config.js';
 
 /**
  * The paste-a-PAT sign-in (SPEC §9): connect by pasting a GitHub fine-grained token —
- * no broker, no Cloudflare, no App. This is one implementation behind the `getToken()`
- * seam; the OAuth redirect / device-flow sign-ins are the others. The "Create a token"
- * link opens GitHub's token page in a new tab (GitHub blocks being embedded in an
- * iframe), pre-narrowed by the on-screen steps to this repo + the needed permissions.
+ * no broker, no Cloudflare, no App. One implementation behind the `getToken()` seam
+ * (the OAuth redirect / device-flow sign-ins are the others).
+ *
+ * The "Create a token" link opens GitHub's token page in a new tab (GitHub blocks being
+ * embedded in an iframe) with the **name, resource owner, expiry, and permissions
+ * pre-filled** via URL query params (a GitHub feature since Aug 2025). The one field that
+ * can't be pre-filled is the specific-repository selection, so the on-screen steps cover it.
  */
-const NEW_TOKEN_URL = 'https://github.com/settings/personal-access-tokens/new';
+function newTokenUrl(): string {
+  const params = new URLSearchParams({
+    name: `Timber ${repoConfig.repo}`.slice(0, 40),
+    description: `Timber editor for ${repoConfig.owner}/${repoConfig.repo}`,
+    target_name: repoConfig.owner, // resource owner (the repo's owner)
+    expires_in: '90', // days; the user can change it on the form
+    contents: 'write', // write implies read — commit content
+    actions: 'write', // deploy-status reads + re-run failed deploys
+  });
+  return `https://github.com/settings/personal-access-tokens/new?${params.toString()}`;
+}
 
 export function TokenGate({ onSubmit }: { onSubmit: (token: string) => void }): React.JSX.Element {
   const [value, setValue] = useState('');
@@ -23,19 +36,18 @@ export function TokenGate({ onSubmit }: { onSubmit: (token: string) => void }): 
       </p>
       <ol className="token-gate__steps">
         <li>
-          <a href={NEW_TOKEN_URL} target="_blank" rel="noreferrer">
+          <a href={newTokenUrl()} target="_blank" rel="noreferrer">
             Create a token on GitHub ↗
           </a>{' '}
-          (opens a new tab).
+          — opens a new tab with the name, expiry, and <strong>Contents</strong> +{' '}
+          <strong>Actions</strong> permissions already filled in.
         </li>
         <li>
           Under <strong>Repository access</strong>, choose <em>Only select repositories</em>{' '}
-          and pick <code>{repo}</code>.
+          and pick <code>{repo}</code>. <em>(This is the one field GitHub can't pre-fill.)</em>
         </li>
         <li>
-          Under <strong>Permissions → Repository</strong>, set{' '}
-          <strong>Contents: Read and write</strong> (and <strong>Actions: Read and write</strong>{' '}
-          so the editor can show deploy status). Choose an expiry, then{' '}
+          Scroll down, check the pre-filled permissions, and click{' '}
           <strong>Generate token</strong>.
         </li>
         <li>Copy it and paste it below.</li>
