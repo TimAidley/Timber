@@ -19,12 +19,12 @@ import { Preview } from './preview/Preview.js';
 import { useRenderedPreview } from './preview/useRenderedPreview.js';
 import { usePreviewWindow } from './preview/usePreviewWindow.js';
 import {
-  ChangeBadge,
   ChangesSummary,
   PublishButton,
   VisibilityBadge,
   type PublishPhase,
 } from './components/ChangeBadges.js';
+import { ContentList } from './components/ContentList.js';
 import { PreviewControls } from './components/LayoutControls.js';
 import {
   useLayout,
@@ -932,43 +932,18 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
                       ＋ New
                     </button>
                   </div>
-                  <ul className="object-list">
-                    {objects.map((o) => (
-                      <li key={o.path}>
-                        <button
-                          type="button"
-                          className={[
-                            o.path === selectedPath ? 'is-active' : '',
-                            deletedPaths.has(o.path) ? 'is-deleting' : '',
-                          ]
-                            .filter(Boolean)
-                            .join(' ')}
-                          onClick={() => {
-                            setSelectedPath(o.path);
-                            if (layout.isMobile) layout.setSidebarOpen(false);
-                          }}
-                        >
-                          <span className="object-list__title">
-                            <ChangeBadge
-                              state={objectChangeState(
-                                o.path,
-                                autosave.editingPaths,
-                                savedPaths,
-                                deletedPaths,
-                              )}
-                            />
-                            {String(o.data.title ?? o.slug)}
-                          </span>
-                          <span className="object-list__type">
-                            {(model.schemas.get(o.type)?.page ?? true) ? (
-                              <VisibilityBadge isPublic={o.public} />
-                            ) : null}
-                            {o.type}
-                          </span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
+                  <ContentList
+                    objects={objects}
+                    schemas={model.schemas}
+                    selectedPath={selectedPath}
+                    editingPaths={autosave.editingPaths}
+                    savedPaths={savedPaths}
+                    deletedPaths={deletedPaths}
+                    onSelect={(path) => {
+                      setSelectedPath(path);
+                      if (layout.isMobile) layout.setSidebarOpen(false);
+                    }}
+                  />
                 </nav>
               ) : (
                 <nav>

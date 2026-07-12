@@ -10,6 +10,11 @@ import type { FrontMatter } from '@timber/generator';
  * Required fields are deliberately left blank: a new object is a **draft** until the
  * author fills them and validation passes (SPEC §5 draft-by-default; `public` is
  * absent, so it's private). Singletons aren't created here — there is exactly one.
+ *
+ * A `created` ISO timestamp is stamped into front matter so the content list can
+ * offer a "creation date" sort (there's no database to record it otherwise). It's an
+ * undeclared key the tolerant validator passes through, like `public`. Objects that
+ * predate this stamp simply have no `created` and fall back to name order when sorted.
  */
 export function newObject(
   type: string,
@@ -19,7 +24,11 @@ export function newObject(
 ): ContentObject {
   const id = crypto.randomUUID();
   const slug = uniqueSlug(slugify(title), takenSlugs);
-  const data: FrontMatter = { id, title: title.trim() || 'Untitled' };
+  const data: FrontMatter = {
+    id,
+    title: title.trim() || 'Untitled',
+    created: new Date().toISOString(),
+  };
   return {
     type,
     kind: schema.kind,

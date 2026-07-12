@@ -22,6 +22,12 @@ describe('newObject', () => {
     expect(obj.data.start).toBeUndefined();
   });
 
+  it('stamps a `created` ISO timestamp for creation-date sorting', () => {
+    const obj = newObject('events', 'Timed', events, new Set());
+    expect(typeof obj.data.created).toBe('string');
+    expect(Number.isNaN(Date.parse(obj.data.created as string))).toBe(false);
+  });
+
   it('avoids slug collisions within the type', () => {
     const obj = newObject('events', 'Fete', events, new Set(['fete']));
     expect(obj.slug).toBe('fete-2');

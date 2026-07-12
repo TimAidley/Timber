@@ -348,6 +348,104 @@ body {
   color: var(--muted);
 }
 
+.object-list__search {
+  margin-bottom: 0.6rem;
+}
+
+.object-list__search-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+.object-list__search-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.object-group {
+  margin-bottom: 0.9rem;
+}
+
+.object-group__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  margin-bottom: 0.25rem;
+  padding: 0 0.5rem;
+}
+
+.object-group__name {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.object-group__count {
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--border);
+  border-radius: 999px;
+  padding: 0 0.4rem;
+  font-size: 0.65rem;
+}
+
+.object-group__sort {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.object-group__sort-key {
+  font: inherit;
+  font-size: 0.7rem;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.05rem 0.2rem;
+  background: none;
+  cursor: pointer;
+  max-width: 6.5rem;
+}
+
+.object-group__sort-dir {
+  font-size: 0.65rem;
+  line-height: 1;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.2rem 0.3rem;
+  background: none;
+  cursor: pointer;
+}
+
+.object-group__sort-dir:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .editor-header {
   display: flex;
   align-items: flex-start;

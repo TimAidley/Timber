@@ -17,3 +17,6 @@ packages/cli/out/
 .env
 .env.local
 .idea
+
+# vitest browser failure screenshots
+packages/app/test/__screenshots__/
