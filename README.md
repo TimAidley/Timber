@@ -13,8 +13,8 @@ publish by committing to a GitHub repo. Self-hosted, single-tenant, no database,
 | Wordpress | Yes | Yes | No(?) | Built - in | No |
 | Hugo / Eleventy / Astro etc | No | No | Yes | depends | No | 
 
-***Tim**ber may require a very tiny authentication broker depending on how you set it up. The broker can
-be run for free on Cloudflare as a Cloudflare worker. 
+***Tim**ber may require a very tiny authentication broker depending on how you want to set up the login flow.
+The broker can be run for free on Cloudflare as a Cloudflare worker. 
 
 ## Documentation
 
