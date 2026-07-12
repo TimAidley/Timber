@@ -12,5 +12,5 @@ export {
 } from './schema.js';
 export { insertFigureCommand, type InsertFigurePayload } from './commands.js';
 export { figureView, type NodeViewFactory } from './view.js';
-export { AssetUrlProvider, useAssetUrl } from './assetUrl.js';
+export { AssetStoreProvider, useResolvedAssetUrl } from './assetUrl.js';
 export { FigureView } from './FigureView.js';

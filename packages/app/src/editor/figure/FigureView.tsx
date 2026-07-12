@@ -7,7 +7,7 @@ import {
   type FigureLayout,
   type FigureSize,
 } from './schema.js';
-import { useAssetUrl } from './assetUrl.js';
+import { useResolvedAssetUrl } from './assetUrl.js';
 
 const LAYOUT_LABEL: Record<FigureLayout, string> = {
   'full-width': 'Full width',
@@ -35,13 +35,12 @@ function asString(value: unknown): string {
  */
 export function FigureView(): React.JSX.Element {
   const { node, contentRef, setAttrs, selected } = useNodeViewContext();
-  const resolveUrl = useAssetUrl();
 
   const layout = normalizeLayout(node.attrs.layout);
   const size = normalizeSize(node.attrs.size);
   const src = asString(node.attrs.src);
   const alt = asString(node.attrs.alt);
-  const url = src ? resolveUrl(src) : '';
+  const url = useResolvedAssetUrl(src);
 
   const patch = (attrs: { layout?: FigureLayout; size?: FigureSize }): void => {
     setAttrs({ ...node.attrs, ...attrs });

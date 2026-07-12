@@ -25,7 +25,7 @@ import { remarkStringifyOptions } from './milkdown.js';
 import { preventBackspaceNav } from './backspaceFix.js';
 import { Toolbar } from './Toolbar.js';
 import {
-  AssetUrlProvider,
+  AssetStoreProvider,
   figureRemark,
   figureSchema,
   figureView,
@@ -229,9 +229,9 @@ function WysiwygToolbar({
  * is active), so it re-seeds from whatever the source textarea left behind. Robust,
  * and good enough for the de-risk slice; a smoother controlled bridge can come later.
  *
- * Wrapped in `AssetUrlProvider` (outermost, so adapter-rendered figure NodeViews can
- * resolve staged image URLs wherever they mount) and `ProsemirrorAdapterProvider`
- * (React NodeViews).
+ * Wrapped in `AssetStoreProvider` (outermost, so adapter-rendered figure NodeViews can
+ * resolve — and lazily re-fetch — image URLs wherever they mount) and
+ * `ProsemirrorAdapterProvider` (React NodeViews).
  */
 export function BodyEditor({
   value,
@@ -246,11 +246,6 @@ export function BodyEditor({
   const onSourceChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => onChange(e.target.value),
     [onChange],
-  );
-
-  const resolveUrl = useCallback(
-    (path: string): string => assetStore.urlFor(path) ?? path,
-    [assetStore],
   );
 
   return (
@@ -286,14 +281,14 @@ export function BodyEditor({
         aria-labelledby={mode === 'wysiwyg' ? 'body-editor-tab-wysiwyg' : 'body-editor-tab-source'}
       >
         {mode === 'wysiwyg' ? (
-          <AssetUrlProvider value={resolveUrl}>
+          <AssetStoreProvider value={assetStore}>
             <MilkdownProvider>
               <ProsemirrorAdapterProvider>
                 <WysiwygToolbar assetStore={assetStore} bundleDir={bundleDir} onStaged={onStaged} />
                 <Wysiwyg value={value} onChange={onChange} docKey={docKey} />
               </ProsemirrorAdapterProvider>
             </MilkdownProvider>
-          </AssetUrlProvider>
+          </AssetStoreProvider>
         ) : (
           <textarea
             className="body-editor__source"

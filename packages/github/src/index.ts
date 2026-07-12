@@ -5,7 +5,7 @@
  */
 export { RepoClient } from './client.js';
 export { fromEnv } from './token.js';
-export { base64ToUtf8, utf8ToBase64, bytesToBase64 } from './base64.js';
+export { base64ToUtf8, utf8ToBase64, bytesToBase64, base64ToBytes } from './base64.js';
 
 export type { GetToken } from './token.js';
 export type {

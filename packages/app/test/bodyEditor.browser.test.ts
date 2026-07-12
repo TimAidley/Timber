@@ -19,6 +19,7 @@ function mount(props: {
   value: string;
   onChange: (md: string) => void;
   docKey?: number;
+  assetStore?: AssetStore;
 }): void {
   host = document.createElement('div');
   document.body.appendChild(host);
@@ -26,7 +27,7 @@ function mount(props: {
   root.render(
     React.createElement(BodyEditor, {
       docKey: 0,
-      assetStore: new AssetStore(),
+      assetStore: props.assetStore ?? new AssetStore(),
       bundleDir: 'content/pages/home',
       ...props,
     }),
@@ -173,6 +174,8 @@ describe('BodyEditor toolbar + tabs (real browser)', () => {
   });
 
   it('renders a :::figure as a live NodeView with an image, caption and controls', async () => {
+    const store = new AssetStore();
+    store.stage('media/cat.webp', new Blob(['x'], { type: 'image/webp' }));
     const md = [
       ':::figure{layout="center" size="sm"}',
       '![A cat](media/cat.webp)',
@@ -181,18 +184,37 @@ describe('BodyEditor toolbar + tabs (real browser)', () => {
       ':::',
       '',
     ].join('\n');
-    mount({ value: md, onChange: () => {} });
+    mount({ value: md, onChange: () => {}, assetStore: store });
 
     const figure = await waitFor(() =>
       document.querySelector<HTMLElement>('.body-editor .figure-node'),
     );
     expect(figure.classList.contains('fig--center')).toBe(true);
     expect(figure.classList.contains('fig--sm')).toBe(true);
-    expect(figure.querySelector('img')?.getAttribute('alt')).toBe('A cat');
+    const img = await waitFor(() => figure.querySelector('img'));
+    expect(img.getAttribute('alt')).toBe('A cat');
     expect(figure.querySelector('figcaption')?.textContent).toContain('cat');
     // Layout + size controls are present.
     expect(figure.querySelector('button[title="Wrap right"]')).toBeTruthy();
     expect(figure.querySelector('button[title="Large"]')).toBeTruthy();
+  });
+
+  it('lazily re-fetches a committed image after reload (empty store + loader)', async () => {
+    // Simulates a reload: nothing staged in memory, but the loader can fetch the
+    // committed bytes from the branch — the NodeView should resolve to an <img>.
+    let asked: string | undefined;
+    const store = new AssetStore(async (path) => {
+      asked = path;
+      return new Blob(['bytes'], { type: 'image/webp' });
+    });
+    const md = ':::figure{layout="wrap-left"}\n![A dog](media/dog.webp)\n:::\n';
+    mount({ value: md, onChange: () => {}, assetStore: store });
+
+    const img = await waitFor(() =>
+      document.querySelector<HTMLImageElement>('.figure-node img'),
+    );
+    expect(asked).toBe('media/dog.webp');
+    expect(img.getAttribute('src')).toMatch(/^blob:/);
   });
 
   it('edits figure layout from the NodeView and re-serializes canonically', async () => {

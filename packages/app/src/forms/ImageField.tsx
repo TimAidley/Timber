@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { processImage } from '../media/processImage.js';
 import { bundleImagePath } from '../media/assetName.js';
 import type { ProcessedImage } from '../media/types.js';
@@ -62,7 +62,29 @@ export function ImageField({
   const [result, setResult] = useState<ProcessedImage | null>(null);
 
   const path = typeof value === 'string' ? value : '';
-  const previewUrl = path ? assetStore.urlFor(path) : undefined;
+  // Staged uploads resolve immediately; a committed image (after a reload, before
+  // publish) is lazily re-fetched from the branch so the thumbnail returns.
+  const [previewUrl, setPreviewUrl] = useState<string | undefined>(() =>
+    path ? assetStore.urlFor(path) : undefined,
+  );
+  useEffect(() => {
+    if (!path) {
+      setPreviewUrl(undefined);
+      return;
+    }
+    const staged = assetStore.urlFor(path);
+    if (staged) {
+      setPreviewUrl(staged);
+      return;
+    }
+    let active = true;
+    void assetStore.ensure(path).then((url) => {
+      if (active) setPreviewUrl(url);
+    });
+    return () => {
+      active = false;
+    };
+  }, [assetStore, path]);
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>): Promise<void> {
     const file = e.target.files?.[0];

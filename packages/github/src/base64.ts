@@ -14,6 +14,12 @@ export function utf8ToBase64(text: string): string {
   return bytesToBase64(new TextEncoder().encode(text));
 }
 
+/** Decode base64 blob content to raw bytes (e.g. a committed image, not text). */
+export function base64ToBytes(base64: string): Uint8Array<ArrayBuffer> {
+  const binary = atob(base64.replace(/\n/g, ''));
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+
 /** Encode raw bytes (e.g. a processed image) to base64 for a Git Data API blob. */
 export function bytesToBase64(bytes: Uint8Array): string {
   let binary = '';

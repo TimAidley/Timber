@@ -1,5 +1,5 @@
 import { Octokit } from '@octokit/rest';
-import { base64ToUtf8, bytesToBase64, utf8ToBase64 } from './base64.js';
+import { base64ToBytes, base64ToUtf8, bytesToBase64, utf8ToBase64 } from './base64.js';
 import type {
   ChangedPath,
   CommitFilesInput,
@@ -187,6 +187,16 @@ export class RepoClient {
       file_sha: sha,
     });
     return base64ToUtf8(data.content);
+  }
+
+  /** Read one blob's **raw bytes** by its SHA — for binary assets (committed images). */
+  async readBinaryBlob(sha: string): Promise<Uint8Array<ArrayBuffer>> {
+    const { data } = await this.octokit.rest.git.getBlob({
+      owner: this.owner,
+      repo: this.repo,
+      file_sha: sha,
+    });
+    return base64ToBytes(data.content);
   }
 
   /**

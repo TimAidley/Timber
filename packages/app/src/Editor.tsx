@@ -10,6 +10,7 @@ import type { FrontMatter } from '@timber/generator';
 import { RepoClient } from '@timber/github';
 import type { RepoSession } from './state/repoSession.js';
 import { AssetStore } from './state/assets.js';
+import { repoAssetLoader } from './state/assetLoader.js';
 import { useAutosave } from './state/autosave.js';
 import { LocalDraftStore } from './state/localDraft.js';
 import { reassembleDocument } from './content/document.js';
@@ -75,7 +76,7 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   // Stop a stray Backspace / Back from navigating away and losing unsaved edits.
   useBackNavigationGuard();
   const validator = useMemo(() => new Validator(model.schemas), [model]);
-  const assetStore = useMemo(() => new AssetStore(), []);
+  const assetStore = useMemo(() => new AssetStore(repoAssetLoader(session)), [session]);
   const autosave = useAutosave(session, assetStore);
 
   // The working object list — mutated by create/delete/rename (SPEC §5). The derived

@@ -34,3 +34,19 @@ export function baseNameFrom(name: string): string {
 export function bundleImagePath(bundleDir: string, fileName: string, mime: string): string {
   return `${bundleDir}/images/${baseNameFrom(fileName)}.${extForMime(mime, fileName)}`;
 }
+
+const MIME_BY_EXT: Record<string, string> = {
+  webp: 'image/webp',
+  svg: 'image/svg+xml',
+  gif: 'image/gif',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+};
+
+/** Best-effort image MIME from a path's extension — for typing a re-fetched Blob. */
+export function mimeForPath(path: string): string {
+  const dot = path.lastIndexOf('.');
+  const ext = dot >= 0 ? path.slice(dot + 1).toLowerCase() : '';
+  return MIME_BY_EXT[ext] ?? 'application/octet-stream';
+}

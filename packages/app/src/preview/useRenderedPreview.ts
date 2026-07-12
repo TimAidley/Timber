@@ -27,10 +27,17 @@ export function useRenderedPreview(
     let cancelled = false;
     const raw = reassembleDocument(data, body);
     renderPage({ markdown: raw, template: defaultTemplate })
-      .then((out) => {
+      .then(async (out) => {
         if (cancelled) return;
-        // Staged images aren't on a server yet (Phase 5 commits them), so rewrite
-        // their bundle paths to object URLs so the preview <img> resolves in-app.
+        // Images live in the repo, not on a server the preview can reach, so their
+        // bundle paths are rewritten to in-app object URLs. Ensure any committed image
+        // the page references is loaded first (a reload empties the in-memory store),
+        // then swap every staged/loaded asset path.
+        const referenced = [...out.matchAll(/(?:src|href)="([^"]+)"/g)]
+          .map((m) => m[1])
+          .filter((p): p is string => !!p && !/^(?:[a-z]+:|\/\/|#)/i.test(p));
+        await Promise.all([...new Set(referenced)].map((p) => assetStore.ensure(p)));
+        if (cancelled) return;
         let resolved = out;
         for (const asset of assetStore.all()) {
           resolved = resolved.split(asset.path).join(asset.url);
