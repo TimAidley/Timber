@@ -88,6 +88,9 @@ jobs:
           export VITE_TIMBER_OAUTH_CLIENT_ID='${{ vars.GH_OAUTH_CLIENT_ID }}'
           VITE_TIMBER_OAUTH_BROKER_URL="$(cat .timber-broker-url)"
           export VITE_TIMBER_OAUTH_BROKER_URL
+          # Sign-in flow: leave the TIMBER_OAUTH_FLOW repo variable unset for the default
+          # redirect flow, or set it to 'device' for the device flow (no client secret).
+          export VITE_TIMBER_OAUTH_FLOW='${{ vars.TIMBER_OAUTH_FLOW }}'
           ( cd .timber && pnpm --filter "@timber/app..." build )
           mkdir -p _site/admin
           cp -r .timber/packages/app/dist/. _site/admin/

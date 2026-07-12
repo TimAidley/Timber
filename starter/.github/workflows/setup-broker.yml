@@ -9,10 +9,12 @@ name: Setup OAuth broker
 # Prerequisites (repo Settings → Secrets and variables → Actions):
 #   Secrets:   CLOUDFLARE_API_TOKEN   (Workers Scripts: Edit)
 #              CLOUDFLARE_ACCOUNT_ID
-#              GH_OAUTH_CLIENT_SECRET (from your GitHub OAuth App)
-#   Variables: GH_OAUTH_CLIENT_ID     (from your GitHub OAuth App — public)
+#              GH_OAUTH_CLIENT_SECRET (from your GitHub App — or a classic OAuth App)
+#   Variables: GH_OAUTH_CLIENT_ID     (from your GitHub App — public)
 #
-# See README.md for the full runbook.
+# The secret/variable names use the GH_ prefix because GitHub Actions reserves the
+# GITHUB_ prefix. See README.md (and INSTALL.md in the Timber repo) for the full runbook,
+# including registering + installing the GitHub App.
 
 on:
   workflow_dispatch: {}
@@ -39,16 +41,10 @@ jobs:
           ref: ${{ env.TIMBER_REF }}
           path: .timber
 
-      # ALLOWED_ORIGIN is the exact origin of your editor site (the editor is served at
+      # ALLOWED_ORIGINS is the exact origin of your editor site (the editor is served at
       # https://<owner>.github.io/<repo>/admin/, whose origin is https://<owner>.github.io).
-      # GitHub Pages lowercases the owner, so lowercase it here to match the browser's
-      # Origin header (the broker also compares case-insensitively as a backstop).
-      - name: Compute the allowed origin
-        id: origin
-        run: |
-          owner_lc="$(printf '%s' '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
-          echo "value=https://${owner_lc}.github.io" >> "$GITHUB_OUTPUT"
-
+      # The Worker-side names are OAUTH_* (not GITHUB_*), which the broker reads directly;
+      # the workflow env var can't use a GITHUB_ prefix (reserved by Actions) anyway.
       - name: Deploy the broker to Cloudflare
         uses: cloudflare/wrangler-action@v3
         with:
@@ -56,13 +52,13 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: .timber/packages/oauth-broker
           secrets: |
-            GITHUB_CLIENT_SECRET
+            OAUTH_CLIENT_SECRET
           command: >-
             deploy
-            --var GITHUB_CLIENT_ID:${{ vars.GH_OAUTH_CLIENT_ID }}
-            --var ALLOWED_ORIGIN:${{ steps.origin.outputs.value }}
+            --var OAUTH_CLIENT_ID:${{ vars.GH_OAUTH_CLIENT_ID }}
+            --var ALLOWED_ORIGINS:https://${{ github.repository_owner }}.github.io
         env:
-          GITHUB_CLIENT_SECRET: ${{ secrets.GH_OAUTH_CLIENT_SECRET }}
+          OAUTH_CLIENT_SECRET: ${{ secrets.GH_OAUTH_CLIENT_SECRET }}
 
       # The worker's URL is https://<worker-name>.<account-subdomain>.workers.dev.
       # The worker name is fixed (wrangler.toml: timber-oauth-broker); look up the
