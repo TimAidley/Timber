@@ -1,4 +1,4 @@
-# Timber
+# **Tim**ber
 
 A **git-backed static CMS** — a lightweight, friendly-to-edit alternative to WordPress that
 produces a **static website** deployed to GitHub Pages. Site owners define their own content
