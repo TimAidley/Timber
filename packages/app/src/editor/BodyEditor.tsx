@@ -27,6 +27,7 @@ import { preventBackspaceNav } from './backspaceFix.js';
 import { Toolbar } from './Toolbar.js';
 import {
   AssetStoreProvider,
+  figureKeymap,
   figureRemark,
   figureSchema,
   figureView,
@@ -89,6 +90,7 @@ function Wysiwyg({ value, onChange, docKey }: WysiwygProps): React.JSX.Element {
         .use(preventBackspaceNav)
         .use(figureRemark)
         .use(figureSchema)
+        .use(figureKeymap)
         .use(insertFigureCommand)
         .use(figureView(nodeViewFactory)),
     // Re-seed only when the document identity changes (object switch / draft restore),

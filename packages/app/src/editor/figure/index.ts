@@ -11,6 +11,7 @@ export {
   type FigureSize,
 } from './schema.js';
 export { insertFigureCommand, type InsertFigurePayload } from './commands.js';
+export { figureKeymap, exitFigureBackward } from './keymap.js';
 export { figureView, type NodeViewFactory } from './view.js';
 export { AssetStoreProvider, useResolvedAssetUrl } from './assetUrl.js';
 export { FigureView } from './FigureView.js';
