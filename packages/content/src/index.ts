@@ -16,6 +16,7 @@ export { isPublic, canPublish, resolvePublic } from './visibility.js';
 export { FIELD_KINDS, isFieldKind, fieldToJsonSchema } from './fields.js';
 export { parseVideoUrl } from './video.js';
 export type { VideoRef } from './video.js';
+export { validateFigureBlocks } from './figures.js';
 export { siteContext, pageSeo, buildSitemap, buildRobots } from './seo.js';
 export type { SiteContext, PageSeo } from './seo.js';
 export { loadNavigation } from './navigation.js';

@@ -1,6 +1,7 @@
 import Ajv, { type ValidateFunction } from 'ajv';
 import addFormats from 'ajv-formats';
 import { fieldToJsonSchema } from './fields.js';
+import { validateFigureBlocks } from './figures.js';
 import { parseVideoUrl } from './video.js';
 import type {
   ContentModel,
@@ -95,6 +96,12 @@ export class Validator {
           message: `video URL "${value}" is not from an allowed provider`,
         });
       }
+    }
+
+    // 3. Body-level checks: embedded image figures (SPEC §7 — alt mandatory, bounded
+    //    layout/size). Same tolerant rule as the rest: this blocks *publish*, not save.
+    if (object.body) {
+      errors.push(...validateFigureBlocks(object.body));
     }
 
     return { valid: errors.length === 0, errors };
