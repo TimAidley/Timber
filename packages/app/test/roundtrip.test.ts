@@ -131,3 +131,76 @@ describe('directive containment keeps colon prose byte-stable', () => {
     });
   }
 });
+
+/**
+ * The `:::figure` image node itself (SPEC §7). Canonical form: attributes double-
+ * quoted, emitted only when non-default, in fixed order (`layout` then `size`); an
+ * all-default figure with a caption drops the braces (`:::figure`); and the trivial
+ * full-width/default-size/no-caption case is a **bare `![alt](src)`**, never a
+ * directive. Each fixture is already canonical, so it must round-trip byte-for-byte.
+ */
+const FIGURE_CANONICAL: Record<string, string> = {
+  'full-width with caption': [
+    ':::figure',
+    '![A tree at dawn](content/pages/home/images/tree.webp)',
+    '',
+    'Planted at _dawn_.',
+    ':::',
+    '',
+  ].join('\n'),
+  'wrap-right + non-default size + formatted caption': [
+    ':::figure{layout="wrap-right" size="lg"}',
+    '![A tree](content/x/images/t.webp)',
+    '',
+    'A caption with a [link](/gallery).',
+    ':::',
+    '',
+  ].join('\n'),
+  'single non-default attribute (size only)': [
+    ':::figure{size="sm"}',
+    '![A tree](content/x/images/t.webp)',
+    '',
+    'Small and centered later.',
+    ':::',
+    '',
+  ].join('\n'),
+  'centered, no caption': [
+    ':::figure{layout="center"}',
+    '![A tree](content/x/images/t.webp)',
+    ':::',
+    '',
+  ].join('\n'),
+};
+
+describe('figure directive round-trips byte-for-byte', () => {
+  for (const [name, markdown] of Object.entries(FIGURE_CANONICAL)) {
+    it(`preserves ${name}`, async () => {
+      const out = await roundTrip(markdown);
+      expect(out).toBe(markdown);
+    });
+  }
+});
+
+/**
+ * Non-canonical figures must converge: explicit default attributes are dropped, and a
+ * default-everything figure with no caption collapses back to a bare image. This is
+ * what keeps the editor from ever emitting a redundant directive.
+ */
+describe('figure directive normalizes to canonical form', () => {
+  it('drops an explicit default layout and collapses to a bare image', async () => {
+    const input = ':::figure{layout="full-width"}\n![A tree](img/t.webp)\n:::\n';
+    expect(await roundTrip(input)).toBe('![A tree](img/t.webp)\n');
+  });
+
+  it('drops explicit default size, keeping the non-default layout', async () => {
+    const input = ':::figure{layout="center" size="md"}\n![A tree](img/t.webp)\n:::\n';
+    expect(await roundTrip(input)).toBe(
+      ':::figure{layout="center"}\n![A tree](img/t.webp)\n:::\n',
+    );
+  });
+
+  it('keeps a default-layout figure that has a caption (as :::figure)', async () => {
+    const input = ':::figure\n![A tree](img/t.webp)\n\nHas a caption.\n:::\n';
+    expect(await roundTrip(input)).toBe(input);
+  });
+});

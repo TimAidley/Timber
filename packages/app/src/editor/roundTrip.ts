@@ -3,6 +3,7 @@ import { commonmark } from '@milkdown/kit/preset/commonmark';
 import { gfm } from '@milkdown/kit/preset/gfm';
 import { remarkStringifyOptions } from './milkdown.js';
 import { figureRemark } from './figure/remark.js';
+import { figureSchema } from './figure/schema.js';
 
 /**
  * Parse Markdown into Milkdown's document model and serialize it straight back,
@@ -28,6 +29,7 @@ export async function roundTrip(markdown: string): Promise<string> {
     .use(commonmark)
     .use(gfm)
     .use(figureRemark)
+    .use(figureSchema)
     .create();
 
   try {
