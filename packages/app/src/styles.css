@@ -1308,6 +1308,126 @@ body {
   background: #fff;
 }
 
+/* Schema YAML cheat sheet under the advanced editor (SPEC §8). */
+.cheat-sheet {
+  margin-top: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fafafa;
+}
+
+.cheat-sheet > summary {
+  padding: 0.5rem 0.8rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.cheat-sheet__body {
+  padding: 0 0.8rem 0.8rem;
+}
+
+.cheat-sheet__body h4 {
+  margin: 0.8rem 0 0.4rem;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+
+.cheat-sheet__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.cheat-sheet__table th,
+.cheat-sheet__table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 0.25rem 0.5rem 0.25rem 0;
+  border-bottom: 1px solid var(--border);
+  font-weight: normal;
+}
+
+.cheat-sheet__table thead th {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+
+.cheat-sheet__opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.cheat-sheet code {
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 4px;
+  padding: 0.05rem 0.3rem;
+  font-size: 0.9em;
+}
+
+.cheat-sheet__example {
+  margin: 0.3rem 0 0;
+  padding: 0.6rem 0.8rem;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid var(--border);
+  overflow-x: auto;
+  font-size: 0.8rem;
+}
+
+.cheat-sheet__example code {
+  background: none;
+  padding: 0;
+}
+
+/* New-content-type dialog (SPEC §8). */
+.new-type__hint,
+.new-type__error {
+  margin: 0.35rem 0 0;
+  font-size: 0.8rem;
+}
+
+.new-type__hint {
+  color: var(--muted);
+}
+
+.new-type__error {
+  color: #7d2820;
+}
+
+.new-type__group {
+  margin: 0.9rem 0 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.5rem 0.8rem 0.7rem;
+}
+
+.new-type__group legend {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  padding: 0 0.3rem;
+}
+
+.new-type__group label {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+  font-size: 0.9rem;
+}
+
+.new-type__group input {
+  flex: none;
+}
+
 .modal {
   position: fixed;
   inset: 0;

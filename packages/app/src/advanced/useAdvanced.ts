@@ -3,8 +3,13 @@ import type { RepoSession } from '../state/repoSession.js';
 import type { Autosave } from '../state/autosave.js';
 import { LocalDraftStore } from '../state/localDraft.js';
 import { repoConfig } from '../github/config.js';
-import { loadAdvancedFiles, type AdvancedFile } from './loadAdvancedFiles.js';
+import {
+  loadAdvancedFiles,
+  type AdvancedFile,
+  type AdvancedKind,
+} from './loadAdvancedFiles.js';
 import { validateAdvancedFile, type AdvancedValidation } from './validate.js';
+import { buildSchemaYaml, schemaPathFor, type NewTypeOptions } from './schemaTemplate.js';
 
 export interface Advanced {
   files: AdvancedFile[] | null;
@@ -15,7 +20,12 @@ export interface Advanced {
   value: string;
   validation: AdvancedValidation | undefined;
   onEdit: (next: string) => void;
+  /** Create a new content type's schema file and open it for editing (SPEC §8). */
+  createType: (opts: NewTypeOptions) => void;
 }
+
+/** Sort key for the file list: templates → schemas → config, then by path. */
+const KIND_ORDER: Record<AdvancedKind, number> = { template: 0, schema: 1, config: 2 };
 
 /**
  * State for the advanced/admin area (SPEC §8): load `templates/*.liquid` + `config/**`
@@ -96,6 +106,31 @@ export function useAdvanced(
     }
   }
 
+  /**
+   * Author a new content type (SPEC §8): generate a starter `config/schemas/<name>.yml`
+   * from the dialog's options, add it to the file list, select it, and commit it like
+   * any other advanced edit. The generated schema is always valid, so it flows straight
+   * into the shared WIP commit; the new type becomes available for content on reload
+   * (same as every schema/config change). A duplicate path is a no-op guard — the dialog
+   * already blocks existing names.
+   */
+  function createType(opts: NewTypeOptions): void {
+    const path = schemaPathFor(opts.name);
+    const content = buildSchemaYaml(opts);
+    const file: AdvancedFile = { path, kind: 'schema', content };
+    setFiles((prev) => {
+      const base = prev ?? [];
+      if (base.some((f) => f.path === path)) return base;
+      return [...base, file].sort(
+        (a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || a.path.localeCompare(b.path),
+      );
+    });
+    setText((prev) => new Map(prev).set(path, content));
+    setSelectedPath(path);
+    void draftStore.current?.put(repoKey, path, {}, content);
+    if (validateAdvancedFile(file).valid) autosave.markFileDirty(path, content);
+  }
+
   return {
     files,
     loadError,
@@ -105,5 +140,6 @@ export function useAdvanced(
     value,
     validation,
     onEdit,
+    createType,
   };
 }

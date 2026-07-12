@@ -49,6 +49,9 @@ import { parseFrontMatter } from '@timber/generator';
 import { useAdvanced } from './advanced/useAdvanced.js';
 import { AdvancedPreview } from './advanced/AdvancedPreview.js';
 import { CodeEditor } from './advanced/CodeEditor.js';
+import { CheatSheet } from './advanced/CheatSheet.js';
+import { NewTypeDialog } from './components/NewTypeDialog.js';
+import { schemaNameFromPath } from './advanced/schemaTemplate.js';
 import { canAccessAdvanced } from './github/access.js';
 import { newObject } from './content/newObject.js';
 import { useBackNavigationGuard } from './editor/backNavGuard.js';
@@ -94,6 +97,7 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
     [model, objects],
   );
   const [showNew, setShowNew] = useState(false);
+  const [showNewType, setShowNewType] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ContentObject | null>(null);
   const [discardTarget, setDiscardTarget] = useState<ContentObject | null>(null);
   const [discarding, setDiscarding] = useState(false);
@@ -742,6 +746,7 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
                 ✓ Valid — saved to your branch
               </div>
             )}
+            {advanced.selected.kind === 'schema' ? <CheatSheet /> : null}
           </section>
         </>
       ) : (
@@ -1022,6 +1027,14 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
                 <nav>
                   <div className="object-list__head">
                     <span>Templates &amp; config</span>
+                    <button
+                      type="button"
+                      className="object-list__new"
+                      disabled={!advanced.files}
+                      onClick={() => setShowNewType(true)}
+                    >
+                      ＋ New type
+                    </button>
                   </div>
                   {advanced.loadError ? (
                     <p className="object-list__empty">Couldn’t load files.</p>
@@ -1091,6 +1104,24 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
           model={workingModel}
           onClose={() => setShowNew(false)}
           onCreate={createObject}
+        />
+      ) : null}
+
+      {showNewType ? (
+        <NewTypeDialog
+          existingNames={
+            new Set([
+              ...model.schemas.keys(),
+              ...(advanced.files ?? [])
+                .map((f) => schemaNameFromPath(f.path))
+                .filter((n): n is string => n !== undefined),
+            ])
+          }
+          onClose={() => setShowNewType(false)}
+          onCreate={(opts) => {
+            advanced.createType(opts);
+            setShowNewType(false);
+          }}
         />
       ) : null}
 
