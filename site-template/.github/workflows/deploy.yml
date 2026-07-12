@@ -72,24 +72,22 @@ jobs:
       - name: Build the site
         run: node .timber/packages/cli/dist/index.js build . _site
 
-      # Co-host the editor at /<repo>/admin/ — only once the broker is configured.
-      # The Setup workflow commits .timber-broker-url; without it we ship the site
-      # alone (so the site works before you wire up OAuth).
+      # Co-host the editor at /<repo>/admin/. It ALWAYS ships; its sign-in adapts to
+      # config: with a broker URL (committed by the "Setup OAuth broker" workflow) it
+      # shows "Sign in with GitHub" — redirect, or device flow when TIMBER_OAUTH_FLOW is
+      # 'device'; with no broker it falls back to paste-a-PAT, which needs no Cloudflare
+      # or GitHub App at all.
       - name: Build the editor (/admin/)
         run: |
-          if [ ! -f .timber-broker-url ]; then
-            echo "No .timber-broker-url yet — run the 'Setup OAuth broker' workflow to enable /admin/. Shipping the site only."
-            exit 0
-          fi
           REPO='${{ github.event.repository.name }}'
           export TIMBER_BASE="/$REPO/admin/"
           export VITE_TIMBER_OWNER='${{ github.repository_owner }}'
           export VITE_TIMBER_REPO="$REPO"
           export VITE_TIMBER_OAUTH_CLIENT_ID='${{ vars.GH_OAUTH_CLIENT_ID }}'
-          VITE_TIMBER_OAUTH_BROKER_URL="$(cat .timber-broker-url)"
-          export VITE_TIMBER_OAUTH_BROKER_URL
-          # Sign-in flow: leave the TIMBER_OAUTH_FLOW repo variable unset for the default
-          # redirect flow, or set it to 'device' for the device flow (no client secret).
+          if [ -f .timber-broker-url ]; then
+            VITE_TIMBER_OAUTH_BROKER_URL="$(cat .timber-broker-url)"
+            export VITE_TIMBER_OAUTH_BROKER_URL
+          fi
           export VITE_TIMBER_OAUTH_FLOW='${{ vars.TIMBER_OAUTH_FLOW }}'
           ( cd .timber && pnpm --filter "@timber/app..." build )
           mkdir -p _site/admin
