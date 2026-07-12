@@ -1,9 +1,20 @@
 # **Tim**ber
 
-A **git-backed static CMS** — a lightweight, friendly-to-edit alternative to WordPress that
-produces a **static website** deployed to GitHub Pages. Site owners define their own content
-types, edit content in an in-browser editor, and publish by committing to a GitHub repo.
-Self-hosted, single-tenant, no database, no server-side app.
+**Tim**ber is a **git-backed static CMS** — a lightweight, friendly-to-edit alternative to other static site
+generators that produces a **static website** deployed to GitHub Pages, but is still **editable in 
+a browser**. Site owners define their own content types, edit content in an in-browser editor, and
+publish by committing to a GitHub repo. Self-hosted, single-tenant, no database, no server-side app.
+
+## Simple comparisons
+
+| System | Needs a server | Easy editing | Text-based markdown editing | User Authentication | Vibe coded |
+|--------|----------------|--------------|-----------------------------|------------|-------|
+| **Tim**ber | No* | Yes | Yes | via GitHub | Yes |
+| Wordpress | Yes | Yes | No(?) | Built - in | No |
+| Hugo / Eleventy / Astro etc | No | No | Yes | depends | No | 
+
+***Tim**ber may require a very tiny authentication broker depending on how you set it up. The broker can
+be run for free on Cloudflare as a Cloudflare worker. 
 
 ## Documentation
 
