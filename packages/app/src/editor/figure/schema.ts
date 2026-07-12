@@ -54,7 +54,10 @@ export const figureSchema = $nodeSchema(FIGURE_DIRECTIVE, () => ({
   group: 'block',
   content: 'inline*',
   defining: true,
-  isolating: true,
+  // NOT isolating: the caption is the node's editable content, so the caret must be
+  // able to cross the figure boundary (arrow up/left back into the text above it).
+  // Isolating blocks that crossing; the cursor plugin (gap cursor) supplies the
+  // before/after-block positions when the figure is first/last or adjacent to a block.
   atom: false,
   attrs: {
     layout: { default: DEFAULT_LAYOUT },

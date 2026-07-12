@@ -3,6 +3,7 @@ import { Editor, rootCtx, defaultValueCtx, remarkStringifyOptionsCtx } from '@mi
 import { commonmark } from '@milkdown/kit/preset/commonmark';
 import { gfm } from '@milkdown/kit/preset/gfm';
 import { listener, listenerCtx } from '@milkdown/kit/plugin/listener';
+import { cursor } from '@milkdown/kit/plugin/cursor';
 import { Milkdown, MilkdownProvider, useEditor, useInstance } from '@milkdown/react';
 import { ProsemirrorAdapterProvider, useNodeViewFactory } from '@prosemirror-adapter/react';
 import { callCommand } from '@milkdown/kit/utils';
@@ -84,6 +85,7 @@ function Wysiwyg({ value, onChange, docKey }: WysiwygProps): React.JSX.Element {
         .use(commonmark)
         .use(gfm)
         .use(listener)
+        .use(cursor)
         .use(preventBackspaceNav)
         .use(figureRemark)
         .use(figureSchema)
