@@ -14,6 +14,11 @@ interface NewTypeDialogProps {
   onCreate: (opts: NewTypeOptions) => void;
 }
 
+/** Reload the editor so a just-created type is picked up by the content model. */
+function reloadEditor(): void {
+  window.location.reload();
+}
+
 /**
  * "New content type" dialog (SPEC §8 advanced area). Collects a name plus the few
  * settings that shape a type — collection vs singleton, whether it renders as a page,
@@ -32,6 +37,9 @@ export function NewTypeDialog({
   const initial = defaultsForKind('collection');
   const [page, setPage] = useState(initial.page);
   const [hasBody, setHasBody] = useState(initial.hasBody);
+  // Once created, swap the form for a confirmation that nudges the reload needed to
+  // start adding content of the new type (the content model is built at load time).
+  const [created, setCreated] = useState<string | null>(null);
 
   // Picking a kind re-seeds the flags with that kind's defaults; the author can still
   // override either afterwards. This is the "prefill appropriate defaults" behaviour.
@@ -49,7 +57,42 @@ export function NewTypeDialog({
 
   function submit(): void {
     if (nameError) return;
-    onCreate({ name: name.trim(), kind, page, hasBody });
+    const created = name.trim();
+    onCreate({ name: created, kind, page, hasBody });
+    setCreated(created);
+  }
+
+  if (created !== null) {
+    return (
+      <div className="modal" role="dialog" aria-label="Content type created">
+        <div className="modal__panel">
+          <header className="modal__header">
+            <h2>Type “{created}” created</h2>
+            <button type="button" onClick={onClose} aria-label="Close">
+              ✕
+            </button>
+          </header>
+
+          <p className="new-type__hint">
+            Saved to your branch as <code>config/schemas/{created}.yml</code>, and open in
+            the editor to add fields.
+          </p>
+          <p className="new-type__hint">
+            <strong>Reload the editor</strong> to start adding content of this type — the
+            content model is built when the editor loads.
+          </p>
+
+          <div className="modal__actions">
+            <button type="button" onClick={onClose}>
+              Keep editing the schema
+            </button>
+            <button type="button" className="is-primary" onClick={reloadEditor}>
+              Reload editor
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (

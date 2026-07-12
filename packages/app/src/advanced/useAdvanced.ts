@@ -3,13 +3,10 @@ import type { RepoSession } from '../state/repoSession.js';
 import type { Autosave } from '../state/autosave.js';
 import { LocalDraftStore } from '../state/localDraft.js';
 import { repoConfig } from '../github/config.js';
-import {
-  loadAdvancedFiles,
-  type AdvancedFile,
-  type AdvancedKind,
-} from './loadAdvancedFiles.js';
+import { loadAdvancedFiles, type AdvancedFile } from './loadAdvancedFiles.js';
 import { validateAdvancedFile, type AdvancedValidation } from './validate.js';
 import { buildSchemaYaml, schemaPathFor, type NewTypeOptions } from './schemaTemplate.js';
+import { reconcileAdvancedDrafts, KIND_ORDER } from './reconcileDrafts.js';
 
 export interface Advanced {
   files: AdvancedFile[] | null;
@@ -23,9 +20,6 @@ export interface Advanced {
   /** Create a new content type's schema file and open it for editing (SPEC §8). */
   createType: (opts: NewTypeOptions) => void;
 }
-
-/** Sort key for the file list: templates → schemas → config, then by path. */
-const KIND_ORDER: Record<AdvancedKind, number> = { template: 0, schema: 1, config: 2 };
 
 /**
  * State for the advanced/admin area (SPEC §8): load `templates/*.liquid` + `config/**`
@@ -60,23 +54,16 @@ export function useAdvanced(
     void (async () => {
       try {
         const store = await LocalDraftStore.open();
-        const files = await loadAdvancedFiles(session.client, session.loadedRef);
+        const loadedFiles = await loadAdvancedFiles(session.client, session.loadedRef);
         if (cancelled) return;
         draftStore.current = store;
-        const working = new Map(files.map((f) => [f.path, f.content]));
-        for (const draft of await store.allForRepo(repoKey)) {
-          if (working.has(draft.path) && draft.body !== working.get(draft.path)) {
-            working.set(draft.path, draft.body);
-            // A restored draft may be an as-yet-uncommitted valid edit; re-queue it.
-            const file = files.find((f) => f.path === draft.path)!;
-            if (validateAdvancedFile({ ...file, content: draft.body }).valid) {
-              autosave.markFileDirty(draft.path, draft.body);
-            }
-          }
-        }
+        const drafts = await store.allForRepo(repoKey);
+        const { files, text, requeue } = reconcileAdvancedDrafts(loadedFiles, drafts);
+        // Re-queue any uncommitted valid drafts (in-progress edits + resurrected files).
+        for (const { path, content } of requeue) autosave.markFileDirty(path, content);
         if (cancelled) return;
         setFiles(files);
-        setText(working);
+        setText(text);
         setSelectedPath((prev) => prev || files[0]?.path || '');
       } catch (e) {
         if (!cancelled) setLoadError(e instanceof Error ? e.message : String(e));
@@ -113,6 +100,11 @@ export function useAdvanced(
    * into the shared WIP commit; the new type becomes available for content on reload
    * (same as every schema/config change). A duplicate path is a no-op guard — the dialog
    * already blocks existing names.
+   *
+   * We flush the commit immediately (`saveNow`) rather than waiting out the autosave
+   * debounce, so the schema reaches the branch promptly — the type is then usable after
+   * the next reload with the smallest possible window. (If a reload still beats the
+   * commit, the draft-recovery above re-surfaces the file, so nothing is lost.)
    */
   function createType(opts: NewTypeOptions): void {
     const path = schemaPathFor(opts.name);
@@ -128,7 +120,10 @@ export function useAdvanced(
     setText((prev) => new Map(prev).set(path, content));
     setSelectedPath(path);
     void draftStore.current?.put(repoKey, path, {}, content);
-    if (validateAdvancedFile(file).valid) autosave.markFileDirty(path, content);
+    if (validateAdvancedFile(file).valid) {
+      autosave.markFileDirty(path, content);
+      autosave.saveNow();
+    }
   }
 
   return {

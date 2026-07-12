@@ -1118,10 +1118,7 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
             ])
           }
           onClose={() => setShowNewType(false)}
-          onCreate={(opts) => {
-            advanced.createType(opts);
-            setShowNewType(false);
-          }}
+          onCreate={(opts) => advanced.createType(opts)}
         />
       ) : null}
 
