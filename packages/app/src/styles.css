@@ -52,6 +52,17 @@ body {
   font-size: 0.9rem;
 }
 
+.token-gate__steps {
+  margin: 0 0 1.1rem;
+  padding-left: 1.3rem;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.token-gate__steps li {
+  margin-bottom: 0.35rem;
+}
+
 .signin-btn {
   font-size: 1rem;
   padding: 0.55rem 1.1rem;
