@@ -201,6 +201,24 @@ export class Autosaver {
     if (!anyDirty) this.deps.onState('idle');
   }
 
+  /**
+   * Drop a single raw file's pending edit without committing (SPEC §8 revert). The
+   * advanced-area counterpart to {@link forgetBundle}: when reverting a template/config
+   * file that was only edited **locally** (never saved to WIP), forget the queued edit
+   * so the next flush doesn't re-commit what we just reverted.
+   */
+  forgetFile(path: string): void {
+    this.dirtyFiles.delete(path);
+    this.dirtyDeletions.delete(path);
+    const anyDirty =
+      this.dirtyObjects.size ||
+      this.dirtyFiles.size ||
+      this.dirtyAssets.size ||
+      this.dirtyDeletions.size ||
+      this.dirtyMoves.size;
+    if (!anyDirty) this.deps.onState('idle');
+  }
+
   getDirtyObject(path: string): DirtyObject | undefined {
     return this.dirtyObjects.get(path);
   }
@@ -329,6 +347,7 @@ export interface Autosave {
   markObjectRenamed: (oldPath: string, newPath: string, data: FrontMatter, body: string, moves: MoveEntry[]) => void;
   markObjectRestored: (path: string, data: FrontMatter, body: string, moves: MoveEntry[]) => void;
   forgetBundle: (bundleDir: string) => void;
+  forgetFile: (path: string) => void;
   getDirtyObject: (path: string) => DirtyObject | undefined;
   getDirtyFile: (path: string) => string | undefined;
   saveNow: () => void;
@@ -383,6 +402,7 @@ export function useAutosave(session: RepoSession, assetStore: AssetStore): Autos
       saver.markObjectRenamed(oldPath, newPath, data, body, moves),
     markObjectRestored: (path, data, body, moves) => saver.markObjectRestored(path, data, body, moves),
     forgetBundle: (bundleDir) => saver.forgetBundle(bundleDir),
+    forgetFile: (path) => saver.forgetFile(path),
     getDirtyObject: (path) => saver.getDirtyObject(path),
     getDirtyFile: (path) => saver.getDirtyFile(path),
     saveNow: () => void saver.saveNow(),

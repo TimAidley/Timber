@@ -19,6 +19,16 @@ export interface Advanced {
   onEdit: (next: string) => void;
   /** Create a new content type's schema file and open it for editing (SPEC §8). */
   createType: (opts: NewTypeOptions) => void;
+  /**
+   * Revert a template/config file to its published version (SPEC §8), the advanced-area
+   * counterpart to a page's Discard. A file added on WIP (e.g. a new type) is removed
+   * entirely. Resolves once the branch (and local state) are reconciled.
+   */
+  revert: (path: string) => Promise<void>;
+}
+
+function isNotFound(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && 'status' in err && (err as { status: unknown }).status === 404;
 }
 
 /**
@@ -126,6 +136,66 @@ export function useAdvanced(
     }
   }
 
+  /**
+   * Revert one advanced file to its published (default-branch) version. Mirrors the
+   * content Discard flow (Editor.discardChanges): drop pending local state, then — only
+   * if the file is actually committed on WIP — commit the reset through the shared
+   * autosaver (so the header counts refresh via the normal saved-state signal). A file
+   * that's brand-new on WIP has no published version and is removed outright.
+   */
+  async function revert(path: string): Promise<void> {
+    const file = files?.find((f) => f.path === path);
+    if (!file) return;
+
+    let published: string | null;
+    try {
+      published = await session.client.readFile(path, session.defaultBranch);
+    } catch (err) {
+      if (isNotFound(err)) published = null;
+      else throw err;
+    }
+
+    // Is the file committed on WIP (needs a branch commit to reset), or only edited
+    // locally (drop the pending edit and we're done)?
+    let onWip = false;
+    try {
+      const changed = await session.client.compareChangedPaths(session.defaultBranch, session.wipBranch);
+      onWip = changed.some((c) => c.path === path);
+    } catch {
+      onWip = false; // no WIP branch yet → nothing committed
+    }
+
+    if (published === null) {
+      // Added on WIP (e.g. a just-created type) → remove it entirely.
+      if (onWip) {
+        autosave.markPathsDeleted([path]);
+        autosave.saveNow();
+      } else {
+        autosave.forgetFile(path);
+      }
+      void draftStore.current?.delete(repoKey, path);
+      setFiles((prev) => (prev ?? []).filter((f) => f.path !== path));
+      setText((prev) => {
+        const next = new Map(prev);
+        next.delete(path);
+        return next;
+      });
+      setSelectedPath((prev) => (prev === path ? (files?.find((f) => f.path !== path)?.path ?? '') : prev));
+      return;
+    }
+
+    // Reset to the published version. Committing the (known-valid) published text back
+    // to WIP yields main's blob, so the path drops out of the main…WIP diff.
+    if (onWip) {
+      autosave.markFileDirty(path, published);
+      autosave.saveNow();
+    } else {
+      autosave.forgetFile(path);
+    }
+    void draftStore.current?.delete(repoKey, path);
+    setText((prev) => new Map(prev).set(path, published));
+  }
+
   return {
     files,
     loadError,
@@ -136,5 +206,6 @@ export function useAdvanced(
     validation,
     onEdit,
     createType,
+    revert,
   };
 }

@@ -1209,6 +1209,127 @@ body {
   display: block;
 }
 
+/* -----------------------------------------------------------------------------
+   Diff view (unified line diff — body/advanced Diff tabs, publish, changes panel)
+   ----------------------------------------------------------------------------- */
+.diff-view {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.diff-view--status {
+  padding: 0.85rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.diff-view--error {
+  color: var(--danger);
+}
+
+.diff-view__summary {
+  display: flex;
+  gap: 0.6rem;
+  padding: 0.4rem 0.7rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.diff-view__stat--add {
+  color: var(--success);
+}
+
+.diff-view__stat--del {
+  color: var(--danger);
+}
+
+.diff-view__body {
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  line-height: 1.55;
+}
+
+.diff-row {
+  display: flex;
+  align-items: baseline;
+  padding: 0 0.5rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.diff-row__sign {
+  flex: 0 0 1ch;
+  user-select: none;
+  color: var(--text-faint);
+}
+
+.diff-row__text {
+  flex: 1 1 auto;
+}
+
+.diff-row--add {
+  background: var(--success-soft);
+}
+
+.diff-row--add .diff-row__sign {
+  color: var(--success);
+}
+
+.diff-row--del {
+  background: var(--danger-soft);
+}
+
+.diff-row--del .diff-row__sign {
+  color: var(--danger);
+}
+
+.diff-row--context {
+  color: var(--text-muted);
+}
+
+.diff-row--fold {
+  padding: 0.15rem 0.5rem 0.15rem 1.5ch;
+  background: var(--surface-sunken);
+  color: var(--text-faint);
+  font-size: 0.72rem;
+  border-block: 1px solid var(--border);
+}
+
+/* The Diff tab's action bar (revert). Mirrors the toolbar's raised strip. */
+.body-editor__diffbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.5rem;
+}
+
+.body-editor__revert {
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--danger);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background var(--ease), border-color var(--ease);
+}
+
+.body-editor__revert:hover:not(:disabled) {
+  background: var(--danger-soft);
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+}
+
+.body-editor__revert:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .validation {
   border-radius: var(--radius);
   padding: 0.65rem 0.85rem;
@@ -1501,6 +1622,184 @@ body {
 .changes__save:hover {
   border-color: var(--accent);
   color: var(--accent);
+}
+
+/* The "N changes" summary as a toggle button for the changes panel. */
+.changes-anchor {
+  position: relative;
+  display: flex;
+}
+
+.changes--button {
+  font: inherit;
+  font-size: 0.75rem;
+  border: 1px solid transparent;
+  background: none;
+  cursor: pointer;
+  padding: 0.15rem 0.4rem;
+  border-radius: var(--radius-sm);
+  transition: background var(--ease), border-color var(--ease);
+}
+
+.changes--button:hover,
+.changes--button.is-open {
+  background: var(--surface-sunken);
+  border-color: var(--border);
+}
+
+.changes__caret {
+  color: var(--text-faint);
+  font-size: 0.7em;
+}
+
+/* The header changes dropdown — a floating summary of every pending item + diffs. */
+.changes-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 40;
+  width: min(560px, 90vw);
+  max-height: min(70vh, 560px);
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-pop);
+}
+
+.changes-panel__head {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.6rem 0.8rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.changes-panel__close {
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.9rem;
+  line-height: 1;
+  padding: 0.2rem;
+}
+
+.changes-panel__empty {
+  padding: 0.9rem;
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.changes-panel__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.changes-panel__item {
+  border-bottom: 1px solid var(--border);
+  padding: 0.5rem 0.8rem;
+}
+
+.changes-panel__item:last-child {
+  border-bottom: none;
+}
+
+.changes-panel__row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.changes-panel__toggle {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  color: var(--text);
+  padding: 0;
+}
+
+.changes-panel__glyph--editing {
+  color: var(--warning);
+}
+
+.changes-panel__glyph--saved {
+  color: var(--accent);
+}
+
+.changes-panel__glyph--deleting {
+  color: var(--danger);
+}
+
+.changes-panel__title {
+  font-weight: 550;
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.changes-panel__tag {
+  flex: 0 0 auto;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+  background: var(--surface-sunken);
+  border-radius: var(--radius-full);
+  padding: 0.05rem 0.45rem;
+}
+
+.changes-panel__chevron {
+  color: var(--text-faint);
+  font-size: 0.7rem;
+  margin-left: auto;
+}
+
+.changes-panel__open {
+  flex: 0 0 auto;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.changes-panel__open:hover {
+  border-color: var(--accent);
+}
+
+.changes-panel__path {
+  display: block;
+  margin-top: 0.2rem;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.changes-panel__diff {
+  margin-top: 0.5rem;
 }
 
 /* Per-item lifecycle badge (glyph + colour + label; never colour alone). */
@@ -1885,6 +2184,26 @@ body {
   opacity: 0.85;
 }
 
+/* Inline "revert to published?" confirmation on the advanced Diff tab. */
+.advanced__revert-confirm {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.advanced__revert-confirm button {
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
 .advanced__preview {
   border-left: 1px solid var(--border);
   padding: 1rem;
@@ -2150,19 +2469,57 @@ body {
   padding: 0;
   margin: 0.6rem 0;
   font-size: 0.82rem;
-  max-height: 200px;
+  max-height: 340px;
   overflow-y: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius);
 }
 
-.publish__diff li {
-  padding: 0.3rem 0.6rem;
+.publish__diff-item {
   border-bottom: 1px solid var(--border);
 }
 
-.publish__diff li:last-child {
+.publish__diff-item:last-child {
   border-bottom: none;
+}
+
+.publish__diff-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.35rem 0.6rem;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 0.82rem;
+  text-align: left;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.publish__diff-toggle:hover {
+  background: var(--surface-sunken);
+}
+
+.publish__diff-path {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+}
+
+.publish__diff-chevron {
+  flex: 0 0 auto;
+  color: var(--text-faint);
+  font-size: 0.7rem;
+}
+
+.publish__diff-body {
+  padding: 0 0.6rem 0.55rem;
 }
 
 .publish__status {

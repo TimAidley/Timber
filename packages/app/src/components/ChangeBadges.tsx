@@ -45,13 +45,18 @@ interface ChangesSummaryProps {
   deleting: number;
   syncState: SyncState;
   onSaveNow: () => void;
+  /** Toggle the changes panel (the counts become a button when there's anything to show). */
+  onToggle?: (() => void) | undefined;
+  /** Whether the changes panel is currently open (drives aria-expanded + the caret). */
+  expanded?: boolean | undefined;
 }
 
 /**
  * The header's aggregate change indicator. Normally shows the counts
  * ("✎ Editing 1 · ☁ Saved 4"); while a coalesced commit is in flight it becomes the
  * live save-status (Saving… / Save failed — retrying), absorbing the old standalone
- * sync indicator so there's one thing in this slot, not two.
+ * sync indicator so there's one thing in this slot, not two. When `onToggle` is given
+ * and there are changes, the counts are a button that opens the changes panel.
  */
 export function ChangesSummary({
   editing,
@@ -59,6 +64,8 @@ export function ChangesSummary({
   deleting,
   syncState,
   onSaveNow,
+  onToggle,
+  expanded,
 }: ChangesSummaryProps): React.JSX.Element {
   if (syncState === 'saving') {
     return (
@@ -98,9 +105,31 @@ export function ChangesSummary({
     );
   if (segments.length === 0) return <div className="changes changes--clean">No unpublished changes</div>;
 
+  const inner = segments.flatMap((seg, i) =>
+    i === 0 ? [seg] : [<span key={`sep${i}`} className="changes__sep"> · </span>, seg],
+  );
+  const label = `${editing} editing, ${saved} saved, ${deleting} deleting`;
+
+  if (onToggle) {
+    return (
+      <button
+        type="button"
+        className={`changes changes--button${expanded ? ' is-open' : ''}`}
+        aria-label={`${label}. Show changed items.`}
+        aria-expanded={expanded ?? false}
+        onClick={onToggle}
+      >
+        {inner}
+        <span className="changes__caret" aria-hidden="true">
+          ▾
+        </span>
+      </button>
+    );
+  }
+
   return (
-    <div className="changes" aria-label={`${editing} editing, ${saved} saved, ${deleting} deleting`}>
-      {segments.flatMap((seg, i) => (i === 0 ? [seg] : [<span key={`sep${i}`} className="changes__sep"> · </span>, seg]))}
+    <div className="changes" aria-label={label}>
+      {inner}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Editor, rootCtx, defaultValueCtx, remarkStringifyOptionsCtx } from '@milkdown/kit/core';
 import { commonmark } from '@milkdown/kit/preset/commonmark';
 import { gfm } from '@milkdown/kit/preset/gfm';
@@ -37,6 +37,7 @@ import {
 import { processImage } from '../media/processImage.js';
 import { bundleImagePath } from '../media/assetName.js';
 import type { AssetStore } from '../state/assets.js';
+import { DiffView } from '../diff/DiffView.js';
 
 interface WysiwygProps {
   /** Current Markdown body (canonical form). */
@@ -60,6 +61,18 @@ interface BodyEditorProps extends WysiwygProps {
   bundleDir: string;
   /** Notified with a staged asset's repo path so autosave commits its bytes. */
   onStaged?: ((path: string) => void) | undefined;
+  /**
+   * The current working `index.md` (front matter + body) for the **Diff** tab. When
+   * this and {@link getPublishedText} are both supplied, a third "Diff" tab appears
+   * showing the whole page's unpublished changes against the published version. Omit
+   * (e.g. the demo/tests) to hide the tab. It's the full document — not just the body —
+   * so front-matter/field edits show too (SPEC §8).
+   */
+  diffWorkingText?: string;
+  /** Fetch the published `index.md` (default branch), or null if the page is brand-new. */
+  getPublishedText?: () => Promise<string | null>;
+  /** Revert the whole page to its published version (shown on the Diff tab when there are changes). */
+  onRevert?: (() => void) | undefined;
 }
 
 /**
@@ -253,13 +266,52 @@ export function BodyEditor({
   assetStore,
   bundleDir,
   onStaged,
+  diffWorkingText,
+  getPublishedText,
+  onRevert,
 }: BodyEditorProps): React.JSX.Element {
-  const [mode, setMode] = useState<'wysiwyg' | 'source'>('wysiwyg');
+  const [mode, setMode] = useState<'wysiwyg' | 'source' | 'diff'>('wysiwyg');
+  const showDiffTab = diffWorkingText !== undefined && getPublishedText !== undefined;
 
   const onSourceChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => onChange(e.target.value),
     [onChange],
   );
+
+  // The published `index.md` for the Diff tab, fetched lazily the first time that tab
+  // is opened and re-fetched when the document changes (docKey bumps on object switch).
+  // Keyed by docKey so a stale base from the previously selected object is never shown.
+  const [base, setBase] = useState<{ seed: number; text: string | null } | null>(null);
+  const [baseLoading, setBaseLoading] = useState(false);
+  const [baseError, setBaseError] = useState<string | null>(null);
+  useEffect(() => {
+    if (mode !== 'diff' || !getPublishedText) return;
+    if (base?.seed === docKey) return; // already have this document's base
+    let cancelled = false;
+    setBaseLoading(true);
+    setBaseError(null);
+    getPublishedText()
+      .then((text) => {
+        if (!cancelled) setBase({ seed: docKey, text });
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setBaseError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (!cancelled) setBaseLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, docKey, getPublishedText, base]);
+
+  // If the document switches while the Diff tab is open, drop back to the editor so we
+  // never flash the previous page's diff against the new page's text.
+  useEffect(() => {
+    // React only to a document change (docKey), not to a mode toggle — the functional
+    // update reads the latest mode without needing it in the dependency list.
+    setMode((m) => (m === 'diff' ? 'wysiwyg' : m));
+  }, [docKey]);
 
   return (
     <div className="body-editor">
@@ -286,12 +338,32 @@ export function BodyEditor({
         >
           Markdown
         </button>
+        {showDiffTab ? (
+          <button
+            type="button"
+            role="tab"
+            id="body-editor-tab-diff"
+            aria-selected={mode === 'diff'}
+            aria-controls="body-editor-panel"
+            className={`body-editor__tab${mode === 'diff' ? ' is-active' : ''}`}
+            onClick={() => setMode('diff')}
+            title="Unpublished changes to this page (front matter + body)"
+          >
+            Diff
+          </button>
+        ) : null}
       </div>
 
       <div
         id="body-editor-panel"
         role="tabpanel"
-        aria-labelledby={mode === 'wysiwyg' ? 'body-editor-tab-wysiwyg' : 'body-editor-tab-source'}
+        aria-labelledby={
+          mode === 'wysiwyg'
+            ? 'body-editor-tab-wysiwyg'
+            : mode === 'diff'
+              ? 'body-editor-tab-diff'
+              : 'body-editor-tab-source'
+        }
       >
         {mode === 'wysiwyg' ? (
           <AssetStoreProvider value={assetStore}>
@@ -302,6 +374,28 @@ export function BodyEditor({
               </ProsemirrorAdapterProvider>
             </MilkdownProvider>
           </AssetStoreProvider>
+        ) : mode === 'diff' ? (
+          <>
+            {onRevert ? (
+              <div className="body-editor__diffbar">
+                <button
+                  type="button"
+                  className="body-editor__revert"
+                  onClick={onRevert}
+                  title="Discard this page's unpublished changes — revert it to the published version."
+                >
+                  Revert page
+                </button>
+              </div>
+            ) : null}
+            <DiffView
+              base={base?.seed === docKey ? base.text : null}
+              working={diffWorkingText ?? ''}
+              loading={baseLoading || base?.seed !== docKey}
+              error={baseError}
+              emptyLabel="No unpublished changes to this page."
+            />
+          </>
         ) : (
           <textarea
             className="body-editor__source"

@@ -40,6 +40,8 @@ import {
   type PreviewMode,
 } from './state/layout.js';
 import { PublishDialog } from './components/PublishDialog.js';
+import { ChangesPanel, type ChangeEntry } from './components/ChangesPanel.js';
+import { kindOf } from './advanced/loadAdvancedFiles.js';
 import { objectChangeState, summarizeChanges } from './state/changes.js';
 import { useDeployPoll } from './state/useDeployPoll.js';
 import { NewObjectDialog } from './components/NewObjectDialog.js';
@@ -50,8 +52,7 @@ import { planBundleReset } from './state/discard.js';
 import { parseFrontMatter } from '@timber/generator';
 import { useAdvanced } from './advanced/useAdvanced.js';
 import { AdvancedPreview } from './advanced/AdvancedPreview.js';
-import { CodeEditor } from './advanced/CodeEditor.js';
-import { CheatSheet } from './advanced/CheatSheet.js';
+import { AdvancedEditorPanel } from './advanced/AdvancedEditorPanel.js';
 import { NewTypeDialog } from './components/NewTypeDialog.js';
 import { Wordmark } from './components/Wordmark.js';
 import { schemaNameFromPath } from './advanced/schemaTemplate.js';
@@ -130,6 +131,8 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   // Publish dialog + the conflict base SHA, which advances each time we publish.
   const [showPublish, setShowPublish] = useState(false);
   const [baseSha, setBaseSha] = useState(session.baseSha);
+  // Header changes panel (the "N changes" dropdown).
+  const [showChanges, setShowChanges] = useState(false);
 
   // The Publish button's morph state (idle → publishing → building → done/failed) and,
   // for the deploy poll, the created-time of the newest run seen *before* we publish —
@@ -217,6 +220,10 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   // Index.md paths that are `added` on WIP (brand-new, not yet on main) — lets the
   // discard dialog say "remove it" vs "revert to published".
   const [addedIndexPaths, setAddedIndexPaths] = useState<ReadonlySet<string>>(new Set());
+  // Bumped on every saved-state refresh so the changes-panel / publish diffs refetch the
+  // WIP blobs after a commit advances the branch tip (paths alone can't detect a same-path
+  // content change).
+  const [saveSeq, setSaveSeq] = useState(0);
   const refreshSaved = useCallback(async () => {
     try {
       const changed = await session.client.compareChangedPaths(
@@ -235,6 +242,8 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
       // WIP branch may not exist yet (nothing saved) — nothing published-pending.
       setSavedPaths(new Set());
       setAddedIndexPaths(new Set());
+    } finally {
+      setSaveSeq((s) => s + 1);
     }
   }, [session]);
   useEffect(() => {
@@ -569,6 +578,23 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
       : 'clean';
   const canDiscard = selectedState === 'editing' || selectedState === 'saved';
 
+  // The published (default-branch) `index.md` for the selected page, powering the body
+  // editor's Diff tab. A 404 means the page is brand-new (not yet on main) → null, which
+  // the diff renders as all-additions. Memoised per path so the tab's lazy fetch is
+  // stable (it isn't re-issued on every keystroke).
+  const selectedPathForDiff = selected?.path;
+  const getPublishedText = useCallback(async (): Promise<string | null> => {
+    if (!selectedPathForDiff) return null;
+    try {
+      return await session.client.readFile(selectedPathForDiff, session.defaultBranch);
+    } catch (err) {
+      if (err && typeof err === 'object' && 'status' in err && (err as { status: unknown }).status === 404) {
+        return null;
+      }
+      throw err;
+    }
+  }, [selectedPathForDiff, session]);
+
   // Drive the Publish button's morph from the deploy poll while a build is running.
   useEffect(() => {
     if (publishPhase !== 'building') return;
@@ -636,6 +662,52 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
 
   // ---- Layout: banner + drawer sidebar + split/tab/off preview (SPEC §8) ----------
   const layout = useLayout();
+
+  // The changed-item list for the header changes panel: every non-clean content object,
+  // then every non-content changed path (templates/config, and any stray asset). A
+  // content bundle's colocated assets roll up into their object rather than listing
+  // separately. Each content/advanced row can jump to its item (where its Diff tab and
+  // Revert live); the diff itself is fetched lazily when a row is expanded.
+  const changeEntries: ChangeEntry[] = useMemo(() => {
+    const entries: ChangeEntry[] = [];
+    const bundlePrefixes: string[] = [];
+    for (const o of objects) {
+      const state = objectChangeState(o.path, autosave.editingPaths, savedPaths, deletedPaths);
+      if (state === 'clean') continue;
+      bundlePrefixes.push(o.path.replace(/\/index\.md$/, '') + '/');
+      entries.push({
+        path: o.path,
+        title: String(o.data.title ?? o.slug),
+        kind: 'content',
+        state,
+        onOpen: () => {
+          setView('content');
+          setSelectedPath(o.path);
+          if (layout.isMobile) layout.setSidebarOpen(false);
+        },
+      });
+    }
+    for (const path of savedPaths) {
+      if (bundlePrefixes.some((p) => path.startsWith(p))) continue; // rolled into its object
+      const k = kindOf(path);
+      entries.push({
+        path,
+        title: path.split('/').pop() ?? path,
+        kind: k ?? 'asset',
+        state: 'saved',
+        onOpen:
+          k && advancedAllowed
+            ? () => {
+                setAdvancedSeen(true);
+                setView('advanced');
+                advanced.setSelectedPath(path);
+                if (layout.isMobile) layout.setSidebarOpen(false);
+              }
+            : undefined,
+      });
+    }
+    return entries;
+  }, [objects, autosave.editingPaths, savedPaths, deletedPaths, advanced, advancedAllowed, layout]);
   function openView(next: 'content' | 'advanced'): void {
     if (next === 'advanced') setAdvancedSeen(true);
     setView(next);
@@ -738,36 +810,14 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
               <code>{advanced.selected.path}</code>
             </div>
           </header>
-          <section className="editor-panel">
-            <CodeEditor
-              value={advanced.value}
-              kind={advanced.selected.kind}
-              onChange={advanced.onEdit}
-            />
-            {advanced.validation && !advanced.validation.valid ? (
-              <div
-                className="advanced__validation advanced__validation--bad"
-                role="alert"
-              >
-                <strong>
-                  Not saved to your branch — fix before it can be committed:
-                </strong>
-                <ul>
-                  {advanced.validation.errors.map((e, i) => (
-                    <li key={i}>{e}</li>
-                  ))}
-                </ul>
-                <p className="advanced__hint">
-                  Your draft is kept locally so nothing is lost.
-                </p>
-              </div>
-            ) : (
-              <div className="advanced__validation advanced__validation--ok">
-                ✓ Valid — saved to your branch
-              </div>
-            )}
-            {advanced.selected.kind === 'schema' ? <CheatSheet /> : null}
-          </section>
+          <AdvancedEditorPanel
+            session={session}
+            file={advanced.selected}
+            value={advanced.value}
+            validation={advanced.validation}
+            onChange={advanced.onEdit}
+            onRevert={advanced.revert}
+          />
         </>
       ) : (
         <p>No editable file selected.</p>
@@ -881,6 +931,9 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
               assetStore={assetStore}
               bundleDir={selected.path.replace(/\/index\.md$/, '')}
               onStaged={autosave.markAssetDirty}
+              diffWorkingText={reassembleDocument(edit.data, edit.body)}
+              getPublishedText={getPublishedText}
+              onRevert={canDiscard ? () => setDiscardTarget(selected) : undefined}
             />
           </section>
         ) : null}
@@ -955,13 +1008,38 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
             <Wordmark />
           </h1>
           <code className="app__repo app__repo--banner">{session.loadedRef}</code>
-          <ChangesSummary
-            editing={counts.editing}
-            saved={counts.saved}
-            deleting={counts.deleting}
-            syncState={autosave.syncState}
-            onSaveNow={autosave.saveNow}
-          />
+          <div className="changes-anchor">
+            <ChangesSummary
+              editing={counts.editing}
+              saved={counts.saved}
+              deleting={counts.deleting}
+              syncState={autosave.syncState}
+              onSaveNow={autosave.saveNow}
+              onToggle={
+                hasChanges
+                  ? () => {
+                      setShowChanges((open) => {
+                        // Flush pending edits to WIP on open so the panel diffs reflect
+                        // everything (uncommitted edits otherwise wouldn't show).
+                        if (!open) autosave.saveNow();
+                        return !open;
+                      });
+                    }
+                  : undefined
+              }
+              expanded={showChanges}
+            />
+            {showChanges ? (
+              <ChangesPanel
+                entries={changeEntries}
+                client={session.client}
+                baseRef={session.defaultBranch}
+                headRef={session.wipBranch}
+                bustKey={String(saveSeq)}
+                onClose={() => setShowChanges(false)}
+              />
+            ) : null}
+          </div>
         </div>
         <div className="app__banner-right">
           <PreviewControls

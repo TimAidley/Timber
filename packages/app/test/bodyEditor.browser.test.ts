@@ -20,6 +20,9 @@ function mount(props: {
   onChange: (md: string) => void;
   docKey?: number;
   assetStore?: AssetStore;
+  diffWorkingText?: string;
+  getPublishedText?: () => Promise<string | null>;
+  onRevert?: () => void;
 }): void {
   host = document.createElement('div');
   document.body.appendChild(host);
@@ -151,6 +154,64 @@ describe('BodyEditor toolbar + tabs (real browser)', () => {
     press('Redo');
     await waitFor(() => (latest.trim() === '# hello' ? true : null));
     expect(latest.trim()).toBe('# hello');
+  });
+
+  it('shows a Diff tab (only when diff props are supplied) with the page changes + Revert', async () => {
+    let reverted = false;
+    // Without diff props, the tab is absent (keeps the generic editor generic).
+    mount({ value: 'hello', onChange: () => {} });
+    await waitFor(() => (btn('Bold') ? true : null));
+    expect([...document.querySelectorAll('.body-editor__tab')].some((t) => t.textContent === 'Diff')).toBe(false);
+    root?.unmount();
+    host?.remove();
+
+    mount({
+      value: 'New body',
+      onChange: () => {},
+      diffWorkingText: '---\ntitle: New\n---\n\nNew body',
+      getPublishedText: () => Promise.resolve('---\ntitle: Old\n---\n\nOld body'),
+      onRevert: () => {
+        reverted = true;
+      },
+    });
+
+    const diffTab = await waitFor(() =>
+      [...document.querySelectorAll<HTMLButtonElement>('.body-editor__tab')].find((t) => t.textContent === 'Diff'),
+    );
+    diffTab.click();
+
+    // The published base is fetched, then the unified diff renders both sides.
+    const del = await waitFor(() =>
+      [...document.querySelectorAll('.diff-row--del')].find((r) => r.textContent?.includes('title: Old')),
+    );
+    expect(del).toBeTruthy();
+    const add = [...document.querySelectorAll('.diff-row--add')].find((r) => r.textContent?.includes('title: New'));
+    expect(add).toBeTruthy();
+
+    // Revert is wired to the supplied handler.
+    const revertBtn = document.querySelector<HTMLButtonElement>('.body-editor__revert');
+    expect(revertBtn).toBeTruthy();
+    revertBtn!.click();
+    expect(reverted).toBe(true);
+  });
+
+  it('reports no changes on the Diff tab when the page matches the published version', async () => {
+    const same = '---\ntitle: Same\n---\n\nSame body';
+    mount({
+      value: 'Same body',
+      onChange: () => {},
+      diffWorkingText: same,
+      getPublishedText: () => Promise.resolve(same),
+    });
+    const diffTab = await waitFor(() =>
+      [...document.querySelectorAll<HTMLButtonElement>('.body-editor__tab')].find((t) => t.textContent === 'Diff'),
+    );
+    diffTab.click();
+    await waitFor(() => {
+      const status = document.querySelector('.diff-view--status');
+      return status?.textContent?.includes('No unpublished changes') ? true : null;
+    });
+    expect(document.querySelector('.diff-row--add')).toBeNull();
   });
 
   it('switches to the Markdown tab, showing the raw source in a textarea', async () => {

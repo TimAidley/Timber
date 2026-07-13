@@ -7,9 +7,12 @@ import {
   type PublishContext,
   type PublishPlan,
 } from '../state/publish.js';
+import { PathDiff } from '../diff/PathDiff.js';
+import type { RefTextClient } from '../diff/useRefText.js';
 
 interface PublishDialogProps {
-  client: PublishClient;
+  /** RepoClient satisfies both structurally (planning + per-file diffs). */
+  client: PublishClient & RefTextClient;
   ctx: PublishContext;
   onClose: () => void;
   /** Called with the new default-branch SHA after a successful publish. */
@@ -28,6 +31,15 @@ export function PublishDialog({ client, ctx, onClose, onPublished }: PublishDial
   const [publishing, setPublishing] = useState(false);
   const [publishedSha, setPublishedSha] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Which changed paths are expanded to show their diff.
+  const [openDiffs, setOpenDiffs] = useState<ReadonlySet<string>>(new Set());
+  const toggleDiff = (path: string): void =>
+    setOpenDiffs((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
 
   useEffect(() => {
     // Plan once; don't re-plan after a successful publish (baseSha changes then,
@@ -95,11 +107,39 @@ export function PublishDialog({ client, ctx, onClose, onPublished }: PublishDial
               {plan.strategy === 'rebase' ? ' · will rebase onto the latest main' : ''}
             </p>
             <ul className="publish__diff">
-              {plan.changed.map((c) => (
-                <li key={c.path}>
-                  <span className={`publish__status publish__status--${c.status}`}>{c.status}</span> {c.path}
-                </li>
-              ))}
+              {plan.changed.map((c) => {
+                const open = openDiffs.has(c.path);
+                const isText = !/\.(png|jpe?g|gif|webp|svg|avif|ico|woff2?|ttf|otf)$/i.test(c.path);
+                return (
+                  <li key={c.path} className="publish__diff-item">
+                    <button
+                      type="button"
+                      className="publish__diff-toggle"
+                      aria-expanded={open}
+                      onClick={() => toggleDiff(c.path)}
+                      title={isText ? (open ? 'Hide diff' : 'Show diff') : 'Binary asset'}
+                    >
+                      <span className={`publish__status publish__status--${c.status}`}>{c.status}</span>
+                      <span className="publish__diff-path">{c.path}</span>
+                      {isText ? (
+                        <span className="publish__diff-chevron" aria-hidden="true">
+                          {open ? '▾' : '▸'}
+                        </span>
+                      ) : null}
+                    </button>
+                    {open && isText ? (
+                      <div className="publish__diff-body">
+                        <PathDiff
+                          client={client}
+                          path={c.path}
+                          baseRef={ctx.defaultBranch}
+                          headRef={ctx.wipBranch}
+                        />
+                      </div>
+                    ) : null}
+                  </li>
+                );
+              })}
             </ul>
             <label className="publish__message">
               Commit message
