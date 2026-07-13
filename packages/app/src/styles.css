@@ -7,6 +7,25 @@
    a token swap (prefers-color-scheme), so no markup or component logic changes.
    ============================================================================= */
 
+/* Self-hosted variable fonts (vendored under ./fonts, OFL-1.1 — see the LICENSE
+   files there). One woff2 per family carries the whole weight axis, so no extra
+   requests per weight, and nothing is fetched from a CDN at runtime. */
+@font-face {
+  font-family: 'Hanken Grotesk';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('./fonts/hanken-grotesk-latin-wght-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url('./fonts/jetbrains-mono-latin-wght-normal.woff2') format('woff2');
+}
+
 :root {
   /* Surfaces — from the app canvas up to raised/overlay chrome. */
   --bg: #f5f6f8;
@@ -56,8 +75,11 @@
   --ring: 0 0 0 3px rgba(52, 87, 213, 0.32);
 
   --font-sans:
-    system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    'Hanken Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica,
+    Arial, sans-serif;
+  --font-mono:
+    'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas,
+    monospace;
 
   --ease: 0.16s cubic-bezier(0.4, 0, 0.2, 1);
 
