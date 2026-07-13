@@ -38,6 +38,17 @@
   src: url('./fonts/source-serif-4-latin-wght-normal.woff2') format('woff2');
 }
 
+/* Logo face for the Timber wordmark only. Subset to the glyphs "Timber" (~7 KB),
+   keeping the opsz/wght/SOFT/WONK axes so optical sizing and the soft/wonk
+   character survive. Never use this for body or UI text. */
+@font-face {
+  font-family: 'Fraunces Timber';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('./fonts/fraunces-timber.woff2') format('woff2');
+}
+
 :root {
   /* Surfaces — from the app canvas up to raised/overlay chrome. */
   --bg: #f5f6f8;
@@ -492,6 +503,25 @@ body {
   letter-spacing: -0.01em;
   margin: 0;
   white-space: nowrap;
+}
+
+/* The Timber wordmark (shared <Wordmark/>). Fraunces with the "Tim" — Tim's own
+   name — emphasised by weight AND tone: full-ink heavy "Tim", muted lighter "ber".
+   optical-sizing:auto keeps the light "ber" sturdy when small (banner) and lets the
+   display character show when large (sign-in). Used everywhere "Timber" appears. */
+.wordmark {
+  font-family: 'Fraunces Timber', Georgia, 'Times New Roman', serif;
+  font-optical-sizing: auto;
+  font-weight: 440;
+  letter-spacing: -0.005em;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.wordmark__tim {
+  font-weight: 800;
+  color: var(--text);
+  font-variation-settings: 'SOFT' 12, 'WONK' 1;
 }
 
 /* Work area: side-by-side (resizable), tabbed, or editor-only. */

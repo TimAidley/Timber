@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { repoConfig } from '../github/config.js';
+import { Wordmark } from './Wordmark.js';
 
 /**
  * The paste-a-PAT sign-in (SPEC §9): connect by pasting a GitHub fine-grained token —
@@ -29,7 +30,7 @@ export function TokenGate({ onSubmit }: { onSubmit: (token: string) => void }): 
 
   return (
     <div className="token-gate">
-      <h1>Timber</h1>
+      <h1><Wordmark /></h1>
       <p>
         Editing <code>{repo}</code>. Sign in by pasting a GitHub{' '}
         <strong>fine-grained personal access token</strong>:

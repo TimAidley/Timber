@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { repoConfig } from '../github/config.js';
 import { startDeviceLogin, pollForToken, type DeviceLogin } from '../github/deviceFlow.js';
+import { Wordmark } from './Wordmark.js';
 
 type Phase = 'idle' | 'starting' | 'waiting' | 'error';
 
@@ -41,7 +42,7 @@ export function DeviceSignIn({ onAuthed }: { onAuthed: () => void }): React.JSX.
 
   return (
     <div className="token-gate">
-      <h1>Timber</h1>
+      <h1><Wordmark /></h1>
       <p>
         Editing <code>{repoConfig.owner}/{repoConfig.repo}</code>. Sign in with GitHub to edit
         this site.

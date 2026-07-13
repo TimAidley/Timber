@@ -52,6 +52,7 @@ import { AdvancedPreview } from './advanced/AdvancedPreview.js';
 import { CodeEditor } from './advanced/CodeEditor.js';
 import { CheatSheet } from './advanced/CheatSheet.js';
 import { NewTypeDialog } from './components/NewTypeDialog.js';
+import { Wordmark } from './components/Wordmark.js';
 import { schemaNameFromPath } from './advanced/schemaTemplate.js';
 import { canAccessAdvanced } from './github/access.js';
 import { newObject } from './content/newObject.js';
@@ -942,7 +943,9 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
           >
             ☰
           </button>
-          <h1 className="app__brand">Timber</h1>
+          <h1 className="app__brand">
+            <Wordmark />
+          </h1>
           <code className="app__repo app__repo--banner">{session.loadedRef}</code>
           <ChangesSummary
             editing={counts.editing}

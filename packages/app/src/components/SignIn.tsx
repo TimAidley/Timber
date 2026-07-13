@@ -1,4 +1,5 @@
 import { repoConfig } from '../github/config.js';
+import { Wordmark } from './Wordmark.js';
 
 /**
  * The production sign-in gate (SPEC §9): "Sign in with GitHub" kicks off the OAuth
@@ -14,7 +15,7 @@ export function SignIn({
 }): React.JSX.Element {
   return (
     <div className="token-gate">
-      <h1>Timber</h1>
+      <h1><Wordmark /></h1>
       <p>
         Editing <code>{repoConfig.owner}/{repoConfig.repo}</code>. Sign in with GitHub to edit
         this site.
