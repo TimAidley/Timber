@@ -98,7 +98,14 @@ export function FigureView(): React.JSX.Element {
         </div>
       )}
 
-      <figcaption ref={contentRef} data-placeholder="Add a caption…" />
+      {/* The caption is this node's editable content. ProseMirror fills an empty
+          text block with a trailing <br>, so `:empty` can't drive the placeholder —
+          flag emptiness explicitly from the node instead. */}
+      <figcaption
+        ref={contentRef}
+        data-placeholder="Add a caption…"
+        data-empty={node.content.size === 0 ? 'true' : undefined}
+      />
     </figure>
   );
 }

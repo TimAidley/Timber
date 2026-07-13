@@ -1030,10 +1030,24 @@ body {
   text-align: center;
 }
 
-.figure-node figcaption:empty::before {
+/* Make the caption field discoverable: it's the editable region below the image, so
+   show a placeholder + a faint box while it's empty. Driven by `data-empty` (set from
+   the node) because ProseMirror keeps a trailing <br> in the block, defeating `:empty`. */
+.figure-node figcaption {
+  min-height: 1.4em;
+}
+
+.figure-node figcaption[data-empty]::before {
   content: attr(data-placeholder);
   color: var(--muted);
   font-style: italic;
+  cursor: text;
+}
+
+.figure-node figcaption[data-empty] {
+  outline: 1px dashed var(--border);
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 
 /* Header change summary (Editing/Saved counts + inline save status). */

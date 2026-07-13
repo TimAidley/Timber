@@ -199,6 +199,36 @@ describe('BodyEditor toolbar + tabs (real browser)', () => {
     expect(figure.querySelector('button[title="Large"]')).toBeTruthy();
   });
 
+  it('labels an empty caption with a placeholder so it is discoverable', async () => {
+    const store = new AssetStore();
+    store.stage('media/x.webp', new Blob(['x'], { type: 'image/webp' }));
+    mount({
+      value: ':::figure{layout="center"}\n![Alt](media/x.webp)\n:::\n',
+      onChange: () => {},
+      assetStore: store,
+    });
+    const cap = await waitFor(() =>
+      document.querySelector<HTMLElement>('.figure-node figcaption'),
+    );
+    expect(cap.getAttribute('data-empty')).toBe('true');
+    expect(cap.getAttribute('data-placeholder')).toBe('Add a caption…');
+  });
+
+  it('does not flag a populated caption as empty', async () => {
+    const store = new AssetStore();
+    store.stage('media/x.webp', new Blob(['x'], { type: 'image/webp' }));
+    mount({
+      value: ':::figure\n![Alt](media/x.webp)\n\nReal caption.\n:::\n',
+      onChange: () => {},
+      assetStore: store,
+    });
+    const cap = await waitFor(() => {
+      const c = document.querySelector<HTMLElement>('.figure-node figcaption');
+      return c?.textContent?.includes('Real caption') ? c : null;
+    });
+    expect(cap.hasAttribute('data-empty')).toBe(false);
+  });
+
   it('lazily re-fetches a committed image after reload (empty store + loader)', async () => {
     // Simulates a reload: nothing staged in memory, but the loader can fetch the
     // committed bytes from the branch — the NodeView should resolve to an <img>.
