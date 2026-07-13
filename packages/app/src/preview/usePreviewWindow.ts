@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { sanitizePreviewHtml } from './sanitizePreview.js';
+// Bundled reading face (fingerprinted URL). Same font the preview pane and the
+// default site theme use, so a popped-out preview reads like the built page.
+import serifUrl from '../fonts/source-serif-4-latin-wght-normal.woff2';
 
 function escapeHtml(s: string): string {
   return s.replace(/[&<>]/g, (c) => (c === '&' ? '&amp;' : c === '<' ? '&lt;' : '&gt;'));
@@ -11,8 +14,11 @@ function wrapDoc(inner: string): string {
     '<!doctype html><html lang="en"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1">' +
     '<title>Timber preview</title>' +
-    '<style>body{margin:0;padding:2rem;font-family:system-ui,-apple-system,sans-serif;' +
-    'line-height:1.5;max-width:820px}img{max-width:100%}</style></head><body>' +
+    '<style>' +
+    "@font-face{font-family:'Source Serif 4';font-weight:200 900;font-display:swap;" +
+    `src:url(${serifUrl}) format('woff2')}` +
+    "body{margin:0;padding:2rem;font-family:'Source Serif 4',Georgia,serif;" +
+    'line-height:1.65;max-width:820px}img{max-width:100%}</style></head><body>' +
     inner +
     '</body></html>'
   );

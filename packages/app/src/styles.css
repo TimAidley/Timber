@@ -26,6 +26,18 @@
   src: url('./fonts/jetbrains-mono-latin-wght-normal.woff2') format('woff2');
 }
 
+/* Reading face for content surfaces (body editor + live preview). This mirrors the
+   default site theme's body font so what you write and preview looks like the built
+   page, not the editor chrome. Phase 7's per-site theme will supersede this in the
+   preview; until then it is the default theme's typography. */
+@font-face {
+  font-family: 'Source Serif 4';
+  font-style: normal;
+  font-weight: 200 900;
+  font-display: swap;
+  src: url('./fonts/source-serif-4-latin-wght-normal.woff2') format('woff2');
+}
+
 :root {
   /* Surfaces — from the app canvas up to raised/overlay chrome. */
   --bg: #f5f6f8;
@@ -80,6 +92,8 @@
   --font-mono:
     'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas,
     monospace;
+  /* Content/reading surfaces — matches the default site theme (SPEC §13). */
+  --font-reading: 'Source Serif 4', Georgia, 'Times New Roman', serif;
 
   --ease: 0.16s cubic-bezier(0.4, 0, 0.2, 1);
 
@@ -1077,6 +1091,9 @@ body {
   /* Establish a block formatting context so a wrapped (floated) figure is contained
      and the editable grows to fit it, instead of the image spilling past the box. */
   display: flow-root;
+  /* Author prose in the site's reading face — the WYSIWYG surface should look like
+     the built page, not the editor chrome. The Markdown source view stays mono. */
+  font-family: var(--font-reading);
 }
 
 .body-editor__source {
@@ -1224,9 +1241,14 @@ body {
 /* -----------------------------------------------------------------------------
    Preview + rendered figures
    ----------------------------------------------------------------------------- */
+/* The preview shows the built page, so it renders on the site theme's reading face
+   rather than inheriting the editor's UI font. (Phase 7 will feed the edited site's
+   own theme.css in here; this is the default theme's typography until then.) */
 .preview {
   font-size: 0.9rem;
-  line-height: 1.6;
+  line-height: 1.65;
+  font-family: var(--font-reading);
+  color: var(--text);
   /* Contain wrapped (floated) figures so they don't spill past the preview box. */
   display: flow-root;
 }
