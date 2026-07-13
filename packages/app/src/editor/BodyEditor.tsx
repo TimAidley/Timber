@@ -4,6 +4,7 @@ import { commonmark } from '@milkdown/kit/preset/commonmark';
 import { gfm } from '@milkdown/kit/preset/gfm';
 import { listener, listenerCtx } from '@milkdown/kit/plugin/listener';
 import { cursor } from '@milkdown/kit/plugin/cursor';
+import { history, undoCommand, redoCommand } from '@milkdown/kit/plugin/history';
 import { Milkdown, MilkdownProvider, useEditor, useInstance } from '@milkdown/react';
 import { ProsemirrorAdapterProvider, useNodeViewFactory } from '@prosemirror-adapter/react';
 import { callCommand } from '@milkdown/kit/utils';
@@ -87,6 +88,10 @@ function Wysiwyg({ value, onChange, docKey }: WysiwygProps): React.JSX.Element {
         .use(gfm)
         .use(listener)
         .use(cursor)
+        // Undo/redo history (keymap: Ctrl/Cmd+Z, Ctrl+Y, Ctrl/Cmd+Shift+Z) plus the
+        // toolbar Undo/Redo buttons, which are the only way to undo on mobile where
+        // there is no keyboard shortcut.
+        .use(history)
         .use(preventBackspaceNav)
         .use(figureRemark)
         .use(figureSchema)
@@ -174,6 +179,10 @@ function WysiwygToolbar({
       <Toolbar
         disabled={loading}
         groups={[
+          [
+            { label: 'Undo', shortcut: 'Ctrl+Z', icon: 'undo', onClick: () => run(undoCommand.key) },
+            { label: 'Redo', shortcut: 'Ctrl+Y', icon: 'redo', onClick: () => run(redoCommand.key) },
+          ],
           [
             { label: 'Bold', shortcut: 'Ctrl+B', icon: 'bold', onClick: () => run(toggleStrongCommand.key) },
             { label: 'Italic', shortcut: 'Ctrl+I', icon: 'italic', onClick: () => run(toggleEmphasisCommand.key) },

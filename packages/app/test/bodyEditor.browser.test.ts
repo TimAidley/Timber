@@ -131,6 +131,28 @@ describe('BodyEditor toolbar + tabs (real browser)', () => {
     expect(latest).toContain('---');
   });
 
+  it('undoes and redoes a toolbar edit via the Undo/Redo buttons', async () => {
+    let latest = 'hello';
+    mount({ value: 'hello', onChange: (md) => (latest = md) });
+    await waitFor(() => (btn('Undo') && !btn('Undo')!.disabled ? true : null));
+    expect(btn('Redo')).toBeTruthy();
+
+    // Make a change we can undo (wrap the whole paragraph in a heading).
+    focusEditorAtEnd();
+    press('Heading 1');
+    await waitFor(() => (latest.trim() === '# hello' ? true : null));
+
+    // Undo returns to the original markdown; redo re-applies the heading. These are
+    // the buttons a mobile user relies on, where there is no Ctrl+Z.
+    press('Undo');
+    await waitFor(() => (latest.trim() === 'hello' ? true : null));
+    expect(latest.trim()).toBe('hello');
+
+    press('Redo');
+    await waitFor(() => (latest.trim() === '# hello' ? true : null));
+    expect(latest.trim()).toBe('# hello');
+  });
+
   it('switches to the Markdown tab, showing the raw source in a textarea', async () => {
     mount({ value: '# Title\n\nBody text', onChange: () => {} });
     await waitFor(() => (btn('Bold') ? true : null));

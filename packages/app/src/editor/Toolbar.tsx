@@ -6,6 +6,8 @@ import type React from 'react';
  * (SPEC's browser-native, zero-native-dependency principle) and inherits `currentColor`.
  */
 export type IconName =
+  | 'undo'
+  | 'redo'
   | 'bold'
   | 'italic'
   | 'strikethrough'
@@ -99,6 +101,18 @@ function Icon({ name }: { name: IconName }): React.JSX.Element {
 
 /** SVG geometry per icon. Text-glyph icons (H1/H2/H3, ¶) use a `<text>` node. */
 const ICON_PATHS: Record<IconName, React.JSX.Element> = {
+  undo: (
+    <>
+      <path d="M9 7l-5 5 5 5" />
+      <path d="M4 12h11a4 4 0 0 1 0 8h-5" />
+    </>
+  ),
+  redo: (
+    <>
+      <path d="M15 7l5 5-5 5" />
+      <path d="M20 12H9a4 4 0 0 0 0 8h5" />
+    </>
+  ),
   bold: (
     <path d="M7 5h6a3.5 3.5 0 0 1 0 7H7zm0 7h7a3.5 3.5 0 0 1 0 7H7z" />
   ),
