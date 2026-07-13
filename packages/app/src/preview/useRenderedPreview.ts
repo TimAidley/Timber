@@ -1,21 +1,26 @@
 import { useEffect, useState } from 'react';
-import { renderPage, type FrontMatter } from '@timber/generator';
-import { reassembleDocument } from '../content/document.js';
-import { defaultTemplate } from '../state/defaultTemplate.js';
+import type { FrontMatter } from '@timber/generator';
+import type { ContentModel, ContentObject, ContentTypeSchema } from '@timber/content';
+import { renderSitePage } from './renderSitePage.js';
 import type { AssetStore } from '../state/assets.js';
+import type { SiteTheme } from './siteTheme.js';
 
 /**
- * Render the current front matter + body through the generator's `renderPage` — the
- * exact function CI runs, so what you see is what the build produces (SPEC §6, §12).
- * Extracted from the preview pane so the *same* rendered HTML can also feed a
- * popped-out preview window without rendering twice.
+ * Render the currently edited page through the site's own template + theme, yielding a
+ * full HTML document for the preview frame (SPEC §6/§13). Runs the same `renderPage` the
+ * CI build runs (via {@link renderSitePage}), so what you see is what the build produces.
+ * The same document also feeds the popped-out preview window without rendering twice.
  *
- * `enabled` gates the (async) render: when no preview surface is visible or popped
- * out, skip the work entirely.
+ * Gated by `enabled` (skip when no preview surface is visible) and by the theme having
+ * loaded and an object being selected; otherwise it holds the last render.
  */
 export function useRenderedPreview(
+  model: ContentModel,
+  object: ContentObject | undefined,
+  schema: ContentTypeSchema | undefined,
   data: FrontMatter,
   body: string,
+  theme: SiteTheme | null,
   assetStore: AssetStore,
   enabled = true,
 ): { html: string; error: string | null } {
@@ -23,26 +28,12 @@ export function useRenderedPreview(
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || !theme || !object || !schema) return;
     let cancelled = false;
-    const raw = reassembleDocument(data, body);
-    renderPage({ markdown: raw, template: defaultTemplate })
-      .then(async (out) => {
+    renderSitePage({ model, object, schema, data, body, theme, assetStore })
+      .then((out) => {
         if (cancelled) return;
-        // Images live in the repo, not on a server the preview can reach, so their
-        // bundle paths are rewritten to in-app object URLs. Ensure any committed image
-        // the page references is loaded first (a reload empties the in-memory store),
-        // then swap every staged/loaded asset path.
-        const referenced = [...out.matchAll(/(?:src|href)="([^"]+)"/g)]
-          .map((m) => m[1])
-          .filter((p): p is string => !!p && !/^(?:[a-z]+:|\/\/|#)/i.test(p));
-        await Promise.all([...new Set(referenced)].map((p) => assetStore.ensure(p)));
-        if (cancelled) return;
-        let resolved = out;
-        for (const asset of assetStore.all()) {
-          resolved = resolved.split(asset.path).join(asset.url);
-        }
-        setHtml(resolved);
+        setHtml(out);
         setError(null);
       })
       .catch((e: unknown) => {
@@ -51,7 +42,7 @@ export function useRenderedPreview(
     return () => {
       cancelled = true;
     };
-  }, [data, body, assetStore, enabled]);
+  }, [model, object, schema, data, body, theme, assetStore, enabled]);
 
   return { html, error };
 }

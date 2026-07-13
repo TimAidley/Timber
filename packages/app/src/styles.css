@@ -579,6 +579,19 @@ body {
   color: var(--text-muted);
 }
 
+/* The live page preview: a sandboxed iframe hosting the site's own template + theme,
+   so it fills the pane like a mini browser. */
+.preview-frame {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: #fff;
+  box-shadow: var(--shadow-xs);
+  display: block;
+}
+
 /* Below the breakpoint: sidebar becomes an overlay drawer, split is unavailable. */
 @media (max-width: 900px) {
   .app__sidebar {

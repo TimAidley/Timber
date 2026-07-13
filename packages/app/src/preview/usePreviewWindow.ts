@@ -1,25 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { sanitizePreviewHtml } from './sanitizePreview.js';
-// Bundled reading face (fingerprinted URL). Same font the preview pane and the
-// default site theme use, so a popped-out preview reads like the built page.
-import serifUrl from '../fonts/source-serif-4-latin-wght-normal.woff2';
+import { sanitizePreviewDocument } from './sanitizePreview.js';
 
 function escapeHtml(s: string): string {
   return s.replace(/[&<>]/g, (c) => (c === '&' ? '&amp;' : c === '<' ? '&lt;' : '&gt;'));
 }
 
-/** Wrap the rendered body fragment in a minimal standalone document for the window. */
-function wrapDoc(inner: string): string {
+/** A minimal standalone document for the render-error case (no themed page to show). */
+function errorDoc(message: string): string {
   return (
     '<!doctype html><html lang="en"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1">' +
-    '<title>Timber preview</title>' +
-    '<style>' +
-    "@font-face{font-family:'Source Serif 4';font-weight:200 900;font-display:swap;" +
-    `src:url(${serifUrl}) format('woff2')}` +
-    "body{margin:0;padding:2rem;font-family:'Source Serif 4',Georgia,serif;" +
-    'line-height:1.65;max-width:820px}img{max-width:100%}</style></head><body>' +
-    inner +
+    '<title>Timber preview</title></head><body>' +
+    `<pre style="color:#c0392b;white-space:pre-wrap;font-family:system-ui;padding:2rem">${escapeHtml(message)}</pre>` +
     '</body></html>'
   );
 }
@@ -56,13 +48,12 @@ export function usePreviewWindow(
     if (!isOpen || !w || w.closed) return;
     // The popup is opened with `window.open('')` — a SAME-ORIGIN document with a live
     // `opener` handle back to this token-holding app, and `document.write` parses a
-    // full document so any injected `<script>` would EXECUTE. Sanitize the rendered
-    // (author-supplied) HTML before writing so it can't reach `opener`/the token.
-    const body = error
-      ? `<pre style="color:#c0392b;white-space:pre-wrap">${escapeHtml(error)}</pre>`
-      : sanitizePreviewHtml(html);
+    // full document so any `<script>` in the rendered page would EXECUTE. Sanitize the
+    // whole document (scripts/handlers stripped, theme `<style>` kept) before writing so
+    // it can't reach `opener`/the token — the pop-out's analogue of the pane's sandbox.
+    const doc = error ? errorDoc(error) : sanitizePreviewDocument(html);
     w.document.open();
-    w.document.write(wrapDoc(body));
+    w.document.write(doc);
     w.document.close();
   }, [html, error, isOpen]);
 

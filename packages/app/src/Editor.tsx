@@ -23,6 +23,7 @@ import { SchemaForm } from './forms/SchemaForm.js';
 import { BodyEditor } from './editor/BodyEditor.js';
 import { Preview } from './preview/Preview.js';
 import { useRenderedPreview } from './preview/useRenderedPreview.js';
+import { useSiteTheme } from './preview/useSiteTheme.js';
 import { usePreviewWindow } from './preview/usePreviewWindow.js';
 import {
   ChangesSummary,
@@ -654,11 +655,18 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   // render's value) to keep hook order stable — a one-render lag on first open is fine.
   const previewWindowOpenRef = useRef(false);
   const previewLive = view === 'content' && !!selected && !selectedDeleted;
+  const previewEnabled = previewLive && (showPreviewPane || previewWindowOpenRef.current);
+  // The edited site's own templates + theme, so preview ≡ the built page (SPEC §6/§13).
+  const siteTheme = useSiteTheme(session, previewEnabled);
   const { html: previewHtml, error: previewError } = useRenderedPreview(
+    workingModel,
+    selected,
+    schema,
     edit.data,
     edit.body,
+    siteTheme,
     assetStore,
-    previewLive && (showPreviewPane || previewWindowOpenRef.current),
+    previewEnabled,
   );
   const previewWin = usePreviewWindow(previewHtml, previewError);
   previewWindowOpenRef.current = previewWin.isOpen;

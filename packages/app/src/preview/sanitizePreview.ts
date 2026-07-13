@@ -20,3 +20,19 @@ const PREVIEW_URI_REGEXP =
 export function sanitizePreviewHtml(html: string): string {
   return DOMPurify.sanitize(html, { ALLOWED_URI_REGEXP: PREVIEW_URI_REGEXP });
 }
+
+/**
+ * Sanitize a *whole* rendered page document (with `<html>/<head>/<style>`) for the
+ * popped-out preview window. Unlike the in-pane preview — which is an un-scripted
+ * sandboxed iframe — the pop-out is a real same-origin window with a live `opener`
+ * handle back to this token-holding app, so any `<script>` in the rendered page would
+ * run with access to the token. `WHOLE_DOCUMENT` keeps the theme's `<style>`/`<head>`
+ * intact while stripping every script and inline handler; `blob:` object URLs (images,
+ * fonts) survive via the shared allowlist.
+ */
+export function sanitizePreviewDocument(html: string): string {
+  return DOMPurify.sanitize(html, {
+    WHOLE_DOCUMENT: true,
+    ALLOWED_URI_REGEXP: PREVIEW_URI_REGEXP,
+  });
+}
