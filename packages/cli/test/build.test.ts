@@ -4,7 +4,14 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { renderPage } from '@timber/generator';
-import { assembleContent, loadSchemas, pageSeo, siteContext } from '@timber/content';
+import {
+  assembleCollections,
+  assembleContent,
+  loadSchemas,
+  pageSeo,
+  siteContext,
+  urlFor,
+} from '@timber/content';
 import { buildSite, BuildError } from '../src/build.node.js';
 import { buildSnapshotFromDir } from '../src/snapshot.node.js';
 
@@ -39,6 +46,15 @@ describe('buildSite', () => {
     const fete = await readFile(join(out, 'events/fete/index.html'), 'utf8');
     expect(fete).toContain('class="events"'); // used events.liquid, not default
     expect(fete).toContain('2026-08-15');
+  });
+
+  it('exposes per-type collections to templates for listing loops (SPEC §6)', async () => {
+    await buildSite(siteFixture, out);
+
+    // pages.liquid loops `collections.events`; the public event renders with its
+    // resolved URL and date field — proving collections reach templates in the build.
+    const hello = await readFile(join(out, 'pages/hello/index.html'), 'utf8');
+    expect(hello).toContain('<li><a href="/events/fete/">Summer Fete</a> 2026-08-15</li>');
   });
 
   it('omits drafts from the build', async () => {
@@ -130,12 +146,16 @@ describe('buildSite', () => {
     const model = assembleContent(snapshot, schemas);
     const settings = model.objects.find((o) => schemas.get(o.type)?.page === false);
     const site = siteContext(settings);
+    const homepageId = typeof site.homepage === 'string' ? site.homepage : undefined;
+    const collections = assembleCollections(model, (o, s) =>
+      homepageId && o.id === homepageId ? '/' : urlFor(o, s),
+    );
     const hello = model.objects.find((o) => o.path === 'content/pages/hello/index.md')!;
     const seo = pageSeo(hello, schemas.get('pages')!, site);
 
     const markdown = await readFile(join(siteFixture, 'content/pages/hello/index.md'), 'utf8');
     const template = await readFile(join(siteFixture, 'templates/pages.liquid'), 'utf8');
-    const preview = await renderPage({ markdown, template, site, seo });
+    const preview = await renderPage({ markdown, template, site, collections, seo });
 
     expect(built).toBe(preview);
   });

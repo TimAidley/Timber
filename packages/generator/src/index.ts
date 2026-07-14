@@ -15,5 +15,6 @@ export type {
   ParsedDocument,
   RenderPageInput,
   SiteContext,
+  CollectionsContext,
 } from './types.js';
 export type { FileSource, OutputSink } from './io.js';

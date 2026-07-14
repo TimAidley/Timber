@@ -1,5 +1,6 @@
 import { renderPage, type FrontMatter } from '@timber/generator';
 import {
+  assembleCollections,
   siteContext,
   pageSeo,
   loadNavigation,
@@ -68,6 +69,10 @@ export async function renderSitePage(input: RenderSitePageInput): Promise<string
     return target && targetSchema ? effectiveUrl(target, targetSchema) : undefined;
   });
 
+  // Per-type collections for listing loops (SPEC §6), assembled exactly as the CLI build
+  // does — same `effectiveUrl`, same @timber/content helper — so preview ≡ build.
+  const collections = assembleCollections(model, effectiveUrl);
+
   // Preview the *live* edits: SEO (title/description) and URL reflect the current form.
   const liveObject: ContentObject = { ...object, data };
   const seo = pageSeo(liveObject, schema, site);
@@ -76,6 +81,7 @@ export async function renderSitePage(input: RenderSitePageInput): Promise<string
     markdown: reassembleDocument(data, body),
     template,
     site,
+    collections,
     seo,
   });
 

@@ -3,6 +3,7 @@ import { dirname, join, relative, sep } from 'node:path';
 import { renderPage } from '@timber/generator';
 import {
   aliasUrls,
+  assembleCollections,
   assembleContent,
   loadSchemas,
   loadNavigation,
@@ -118,6 +119,11 @@ export async function buildSite(repoDir: string, outDir: string): Promise<BuildR
     return target && schema ? effectiveUrl(target, schema) : undefined;
   });
 
+  // Per-type collections for listing loops (SPEC §6): every page can `{% for x in
+  // collections.<type> %}`. Uses the same `effectiveUrl` as page routing so listing
+  // links match the pages they point at (homepage-at-root included).
+  const collections = assembleCollections(model, effectiveUrl);
+
   let pages = 0;
   let drafts = 0;
   let assets = 0;
@@ -147,7 +153,7 @@ export async function buildSite(repoDir: string, outDir: string): Promise<BuildR
       const baseUrl = typeof site.baseUrl === 'string' ? site.baseUrl : '';
       seo.canonical = baseUrl ? `${baseUrl}/` : '/';
     }
-    const html = await renderPage({ markdown, template, site, seo });
+    const html = await renderPage({ markdown, template, site, collections, seo });
 
     const dir = urlToDir(url);
     await mkdir(join(outDir, dir), { recursive: true });

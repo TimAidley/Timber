@@ -12,9 +12,10 @@ import type { RenderPageInput } from './types.js';
  * different environments supply the strings; the rendering is the same code.
  *
  * Template context:
- *   - `page`    — parsed front-matter data
- *   - `content` — the rendered body HTML (emitted raw; see liquid.ts)
- *   - `site`    — optional site-wide context
+ *   - `page`        — parsed front-matter data
+ *   - `content`     — the rendered body HTML (emitted raw; see liquid.ts)
+ *   - `site`        — optional site-wide context
+ *   - `collections` — optional per-type collections (for listing loops)
  */
 export async function renderPage(input: RenderPageInput): Promise<string> {
   const { data, body } = parseFrontMatter(input.markdown);
@@ -26,6 +27,7 @@ export async function renderPage(input: RenderPageInput): Promise<string> {
     // emits it raw while every other output is auto-escaped (see liquid.ts).
     content: new SafeHtml(content),
     site: input.site ?? {},
+    collections: input.collections ?? {},
     seo: input.seo ?? {},
   });
 

@@ -20,6 +20,14 @@ export interface ParsedDocument {
 /** Site-wide context exposed to templates as `{{ site }}`. */
 export type SiteContext = Record<string, unknown>;
 
+/**
+ * Collections context exposed to templates as `{{ collections }}` — collection-type
+ * name → its entries (each entry a plain data record). The generator core stays
+ * environment-agnostic, so this is deliberately loose; `@timber/content` assembles
+ * the concrete shape (see its `Collections`/`CollectionEntry`).
+ */
+export type CollectionsContext = Record<string, Array<Record<string, unknown>>>;
+
 /** Input to {@link renderPage}. */
 export interface RenderPageInput {
   /** Raw `index.md` contents (YAML front matter + Markdown body). */
@@ -28,6 +36,8 @@ export interface RenderPageInput {
   template: string;
   /** Optional site-wide context exposed as `{{ site }}`. */
   site?: SiteContext;
+  /** Optional per-type collections exposed as `{{ collections }}` (SPEC §6). */
+  collections?: CollectionsContext;
   /** Optional per-page derived data (e.g. SEO) exposed as `{{ seo }}` (SPEC §13). */
   seo?: Record<string, unknown>;
 }
