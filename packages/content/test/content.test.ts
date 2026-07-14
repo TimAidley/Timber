@@ -8,8 +8,10 @@ import {
   detectDanglingReferences,
   loadSchemas,
   parseVideoUrl,
+  resolvePublic,
   urlFor,
   Validator,
+  withPublic,
   type ContentModel,
   type ContentObject,
   type RepoSnapshot,
@@ -93,6 +95,34 @@ describe('assembleContent', () => {
     expect(objectAt('content/events/summer-fete/index.md').data.customNote).toContain(
       'tolerant',
     );
+  });
+});
+
+describe('withPublic', () => {
+  it('writes public: true when going public', () => {
+    expect(withPublic({ title: 'X' }, true)).toEqual({ title: 'X', public: true });
+  });
+
+  it('removes the key when going draft (never persists public: false)', () => {
+    expect(withPublic({ title: 'X', public: true }, false)).toEqual({ title: 'X' });
+    // Idempotent on an already-draft object.
+    expect(withPublic({ title: 'X' }, false)).toEqual({ title: 'X' });
+  });
+
+  it('does not mutate the input front matter', () => {
+    const data = { title: 'X' };
+    withPublic(data, true);
+    expect(data).toEqual({ title: 'X' });
+  });
+
+  it('keeps the derived flag and front matter in lockstep (the editor toggle invariant)', () => {
+    // The editor mirrors withPublic() onto both the edit buffer and the working object,
+    // deriving the object's `public` flag via resolvePublic — so a page toggled Public
+    // can never read back as Draft (regression: the toggle used to flip only the flag).
+    const toPublic = withPublic({ title: 'X' }, true);
+    expect(resolvePublic(toPublic)).toBe(true);
+    const backToDraft = withPublic(toPublic, false);
+    expect(resolvePublic(backToDraft)).toBe(false);
   });
 });
 

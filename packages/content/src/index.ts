@@ -14,7 +14,7 @@ export { assembleCollections } from './collections.js';
 export type { Collections, CollectionEntry } from './collections.js';
 export { slugify, uniqueSlug } from './identity.js';
 export { redirectStubHtml, aliasUrls } from './redirects.js';
-export { isPublic, canPublish, resolvePublic } from './visibility.js';
+export { isPublic, canPublish, resolvePublic, withPublic } from './visibility.js';
 export { FIELD_KINDS, isFieldKind, fieldToJsonSchema } from './fields.js';
 export { parseVideoUrl } from './video.js';
 export type { VideoRef } from './video.js';

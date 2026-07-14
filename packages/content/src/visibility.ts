@@ -16,6 +16,20 @@ export function isPublic(object: ContentObject): boolean {
 }
 
 /**
+ * Return a copy of `data` with its visibility set to `next`. Going **public** writes
+ * `public: true`; going **draft** removes the key entirely, because draft is the
+ * absent-flag default (SPEC §5) — we never persist `public: false`. This is the single
+ * writer behind the editor's Draft/Public toggle, so the front matter, the derived
+ * `public` flag (via {@link resolvePublic}), and the committed `index.md` can't disagree.
+ */
+export function withPublic(data: FrontMatter, next: boolean): FrontMatter {
+  const out = { ...data };
+  if (next) out.public = true;
+  else delete out.public;
+  return out;
+}
+
+/**
  * Whether an object is *allowed* to be public: it must validate. This is the SPEC
  * §5 rule — "invalid content can always be saved as a draft, but a page cannot be
  * made public until it validates." The generator enforces this at build (Phase 6);

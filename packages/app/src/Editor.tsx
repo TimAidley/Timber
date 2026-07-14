@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   canPublish,
+  resolvePublic,
+  withPublic,
   Validator,
   type ContentModel,
   type ContentObject,
@@ -652,14 +654,20 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   }
 
   // Toggle the selected object's Draft/Public flag (SPEC §5). Writes `public` to front
-  // matter (an undeclared key the tolerant validator passes through) and mirrors it
-  // onto the working object so the sidebar badge + publish validity gate update live.
+  // matter (an undeclared key the tolerant validator passes through) and mirrors the
+  // SAME front matter onto the working object — its derived `public` flag included — so
+  // the sidebar badge + publish validity gate update live. Both sides must move together:
+  // if only the object's flag flipped, a reseed after autosave (which reads the object's
+  // now-stale front matter) would silently revert the page to Draft.
   function toggleVisibility(): void {
     if (!selected) return;
     const next = !(edit.data.public === true);
-    updateField('public', next ? true : undefined);
+    const data = withPublic(edit.data, next);
+    applyEdit({ ...edit, data });
     setObjects((prev) =>
-      prev.map((o) => (o.path === selected.path ? { ...o, public: next } : o)),
+      prev.map((o) =>
+        o.path === selected.path ? { ...o, data, public: resolvePublic(data) } : o,
+      ),
     );
   }
 
