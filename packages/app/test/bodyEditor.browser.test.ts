@@ -312,6 +312,23 @@ describe('BodyEditor toolbar + tabs (real browser)', () => {
     expect(cap.hasAttribute('data-empty')).toBe(false);
   });
 
+  it('selects the whole figure when the image is clicked', async () => {
+    const store = new AssetStore();
+    store.stage('media/x.webp', new Blob(['x'], { type: 'image/webp' }));
+    mount({
+      value: ':::figure{layout="center"}\n![Alt](media/x.webp)\n:::\n',
+      onChange: () => {},
+      assetStore: store,
+    });
+    const img = await waitFor(() => document.querySelector<HTMLImageElement>('.figure-node img'));
+    img.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    // NodeSelection → the adapter marks the figure selected → is-selected class.
+    await waitFor(() =>
+      document.querySelector('.figure-node.is-selected') ? true : null,
+    );
+    expect(document.querySelector('.figure-node.is-selected')).toBeTruthy();
+  });
+
   it('lazily re-fetches a committed image after reload (empty store + loader)', async () => {
     // Simulates a reload: nothing staged in memory, but the loader can fetch the
     // committed bytes from the branch — the NodeView should resolve to an <img>.

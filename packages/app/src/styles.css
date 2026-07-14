@@ -1490,6 +1490,11 @@ body {
   border-radius: 2px;
 }
 
+/* The image is clickable to select the whole figure (then Delete to remove it). */
+.figure-node img {
+  cursor: pointer;
+}
+
 .figure-node__bar {
   position: absolute;
   top: 0;

@@ -1,4 +1,5 @@
 import { useNodeViewContext } from '@prosemirror-adapter/react';
+import { NodeSelection } from '@milkdown/kit/prose/state';
 import {
   FIGURE_LAYOUTS,
   FIGURE_SIZES,
@@ -34,7 +35,7 @@ function asString(value: unknown): string {
  * resolver from context.
  */
 export function FigureView(): React.JSX.Element {
-  const { node, contentRef, setAttrs, selected } = useNodeViewContext();
+  const { node, contentRef, setAttrs, selected, getPos, view } = useNodeViewContext();
 
   const layout = normalizeLayout(node.attrs.layout);
   const size = normalizeSize(node.attrs.size);
@@ -44,6 +45,16 @@ export function FigureView(): React.JSX.Element {
 
   const patch = (attrs: { layout?: FigureLayout; size?: FigureSize }): void => {
     setAttrs({ ...node.attrs, ...attrs });
+  };
+
+  // Clicking the image selects the whole figure (a NodeSelection), so it can be
+  // deleted with Backspace/Delete or dragged — the caption stays separately editable.
+  const selectFigure = (e: React.MouseEvent): void => {
+    const pos = getPos();
+    if (pos == null) return;
+    e.preventDefault();
+    view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, pos)));
+    view.focus();
   };
 
   return (
@@ -91,9 +102,15 @@ export function FigureView(): React.JSX.Element {
       </div>
 
       {url ? (
-        <img src={url} alt={alt} draggable={false} />
+        <img
+          src={url}
+          alt={alt}
+          draggable={false}
+          onMouseDown={selectFigure}
+          title="Click to select · Delete to remove"
+        />
       ) : (
-        <div className="figure-node__missing" contentEditable={false}>
+        <div className="figure-node__missing" contentEditable={false} onMouseDown={selectFigure}>
           Image not available in the editor
         </div>
       )}
