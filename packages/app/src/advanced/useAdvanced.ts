@@ -6,6 +6,7 @@ import { repoConfig } from '../github/config.js';
 import { loadAdvancedFiles, type AdvancedFile } from './loadAdvancedFiles.js';
 import { validateAdvancedFile, type AdvancedValidation } from './validate.js';
 import { buildSchemaYaml, schemaPathFor, type NewTypeOptions } from './schemaTemplate.js';
+import { buildStarterFile, newFilePath, type NewFileOptions } from './newFile.js';
 import { reconcileAdvancedDrafts, KIND_ORDER } from './reconcileDrafts.js';
 
 export interface Advanced {
@@ -19,6 +20,8 @@ export interface Advanced {
   onEdit: (next: string) => void;
   /** Create a new content type's schema file and open it for editing (SPEC §8). */
   createType: (opts: NewTypeOptions) => void;
+  /** Create a new template (`.liquid`) or config (`.yml`) file and open it (SPEC §8). */
+  createFile: (opts: NewFileOptions) => void;
   /**
    * Revert a template/config file to its published version (SPEC §8), the advanced-area
    * counterpart to a page's Discard. A file added on WIP (e.g. a new type) is removed
@@ -28,7 +31,12 @@ export interface Advanced {
 }
 
 function isNotFound(err: unknown): boolean {
-  return typeof err === 'object' && err !== null && 'status' in err && (err as { status: unknown }).status === 404;
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    'status' in err &&
+    (err as { status: unknown }).status === 404
+  );
 }
 
 /**
@@ -105,21 +113,46 @@ export function useAdvanced(
 
   /**
    * Author a new content type (SPEC §8): generate a starter `config/schemas/<name>.yml`
-   * from the dialog's options, add it to the file list, select it, and commit it like
-   * any other advanced edit. The generated schema is always valid, so it flows straight
-   * into the shared WIP commit; the new type becomes available for content on reload
-   * (same as every schema/config change). A duplicate path is a no-op guard — the dialog
-   * already blocks existing names.
-   *
-   * We flush the commit immediately (`saveNow`) rather than waiting out the autosave
-   * debounce, so the schema reaches the branch promptly — the type is then usable after
-   * the next reload with the smallest possible window. (If a reload still beats the
-   * commit, the draft-recovery above re-surfaces the file, so nothing is lost.)
+   * from the dialog's options and commit it like any other advanced file (see `addFile`).
+   * Because the content model is built at load time, the new type becomes available for
+   * authoring on the next reload — the dialog nudges that, the same as every schema change.
    */
   function createType(opts: NewTypeOptions): void {
-    const path = schemaPathFor(opts.name);
-    const content = buildSchemaYaml(opts);
-    const file: AdvancedFile = { path, kind: 'schema', content };
+    addFile({
+      path: schemaPathFor(opts.name),
+      kind: 'schema',
+      content: buildSchemaYaml(opts),
+    });
+  }
+
+  /**
+   * Author a new **template** or **config** file (SPEC §8). The advanced area edits the
+   * site's `templates/*.liquid` and `config/*.yml` directly, but "New type" only covered
+   * schemas — a site owner customizing the theme also needs to *add* a template (e.g.
+   * `templates/events.liquid` to style one content type) or a plain config file. Same
+   * flow as `createType`: generate valid starter content, add it to the list, select it,
+   * and commit it through the shared WIP autosaver. Unlike a schema, a template/config
+   * file changes nothing in the content model, so no editor reload is needed — it takes
+   * effect in the live preview and the next build straight away.
+   */
+  function createFile(opts: NewFileOptions): void {
+    addFile({
+      path: newFilePath(opts),
+      kind: opts.kind,
+      content: buildStarterFile(opts),
+    });
+  }
+
+  /**
+   * Shared create path for every new advanced file (schema/template/config): add the
+   * file to the list (sorted, a duplicate path a no-op guard — dialogs already block
+   * existing names), select it, persist a local draft, and — flushing immediately so it
+   * reaches the branch promptly — commit it through the shared WIP autosaver. The
+   * generated starter is always valid, so it flows straight into the coalesced commit;
+   * if a reload beats the commit, draft-recovery re-surfaces the file, so nothing is lost.
+   */
+  function addFile(file: AdvancedFile): void {
+    const { path, content } = file;
     setFiles((prev) => {
       const base = prev ?? [];
       if (base.some((f) => f.path === path)) return base;
@@ -159,7 +192,10 @@ export function useAdvanced(
     // locally (drop the pending edit and we're done)?
     let onWip = false;
     try {
-      const changed = await session.client.compareChangedPaths(session.defaultBranch, session.wipBranch);
+      const changed = await session.client.compareChangedPaths(
+        session.defaultBranch,
+        session.wipBranch,
+      );
       onWip = changed.some((c) => c.path === path);
     } catch {
       onWip = false; // no WIP branch yet → nothing committed
@@ -180,7 +216,9 @@ export function useAdvanced(
         next.delete(path);
         return next;
       });
-      setSelectedPath((prev) => (prev === path ? (files?.find((f) => f.path !== path)?.path ?? '') : prev));
+      setSelectedPath((prev) =>
+        prev === path ? (files?.find((f) => f.path !== path)?.path ?? '') : prev,
+      );
       return;
     }
 
@@ -206,6 +244,7 @@ export function useAdvanced(
     validation,
     onEdit,
     createType,
+    createFile,
     revert,
   };
 }

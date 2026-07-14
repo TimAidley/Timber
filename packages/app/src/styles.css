@@ -872,6 +872,11 @@ body {
   color: var(--text-muted);
 }
 
+.object-list__actions {
+  display: flex;
+  gap: 0.35rem;
+}
+
 .object-list__new {
   border: 1px solid var(--accent);
   background: var(--surface);

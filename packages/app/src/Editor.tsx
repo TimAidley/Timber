@@ -54,6 +54,7 @@ import { useAdvanced } from './advanced/useAdvanced.js';
 import { AdvancedPreview } from './advanced/AdvancedPreview.js';
 import { AdvancedEditorPanel } from './advanced/AdvancedEditorPanel.js';
 import { NewTypeDialog } from './components/NewTypeDialog.js';
+import { NewFileDialog } from './components/NewFileDialog.js';
 import { Wordmark } from './components/Wordmark.js';
 import { schemaNameFromPath } from './advanced/schemaTemplate.js';
 import { canAccessAdvanced } from './github/access.js';
@@ -102,6 +103,7 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   );
   const [showNew, setShowNew] = useState(false);
   const [showNewType, setShowNewType] = useState(false);
+  const [showNewFile, setShowNewFile] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ContentObject | null>(null);
   const [discardTarget, setDiscardTarget] = useState<ContentObject | null>(null);
   const [discarding, setDiscarding] = useState(false);
@@ -588,7 +590,12 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
     try {
       return await session.client.readFile(selectedPathForDiff, session.defaultBranch);
     } catch (err) {
-      if (err && typeof err === 'object' && 'status' in err && (err as { status: unknown }).status === 404) {
+      if (
+        err &&
+        typeof err === 'object' &&
+        'status' in err &&
+        (err as { status: unknown }).status === 404
+      ) {
         return null;
       }
       throw err;
@@ -672,7 +679,12 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
     const entries: ChangeEntry[] = [];
     const bundlePrefixes: string[] = [];
     for (const o of objects) {
-      const state = objectChangeState(o.path, autosave.editingPaths, savedPaths, deletedPaths);
+      const state = objectChangeState(
+        o.path,
+        autosave.editingPaths,
+        savedPaths,
+        deletedPaths,
+      );
       if (state === 'clean') continue;
       bundlePrefixes.push(o.path.replace(/\/index\.md$/, '') + '/');
       entries.push({
@@ -707,7 +719,15 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
       });
     }
     return entries;
-  }, [objects, autosave.editingPaths, savedPaths, deletedPaths, advanced, advancedAllowed, layout]);
+  }, [
+    objects,
+    autosave.editingPaths,
+    savedPaths,
+    deletedPaths,
+    advanced,
+    advancedAllowed,
+    layout,
+  ]);
   function openView(next: 'content' | 'advanced'): void {
     if (next === 'advanced') setAdvancedSeen(true);
     setView(next);
@@ -1130,14 +1150,24 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
                 <nav>
                   <div className="object-list__head">
                     <span>Templates &amp; config</span>
-                    <button
-                      type="button"
-                      className="object-list__new"
-                      disabled={!advanced.files}
-                      onClick={() => setShowNewType(true)}
-                    >
-                      ＋ New type
-                    </button>
+                    <div className="object-list__actions">
+                      <button
+                        type="button"
+                        className="object-list__new"
+                        disabled={!advanced.files}
+                        onClick={() => setShowNewFile(true)}
+                      >
+                        ＋ New file
+                      </button>
+                      <button
+                        type="button"
+                        className="object-list__new"
+                        disabled={!advanced.files}
+                        onClick={() => setShowNewType(true)}
+                      >
+                        ＋ New type
+                      </button>
+                    </div>
                   </div>
                   {advanced.loadError ? (
                     <p className="object-list__empty">Couldn’t load files.</p>
@@ -1222,6 +1252,14 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
           }
           onClose={() => setShowNewType(false)}
           onCreate={(opts) => advanced.createType(opts)}
+        />
+      ) : null}
+
+      {showNewFile ? (
+        <NewFileDialog
+          existingPaths={new Set((advanced.files ?? []).map((f) => f.path))}
+          onClose={() => setShowNewFile(false)}
+          onCreate={(opts) => advanced.createFile(opts)}
         />
       ) : null}
 
