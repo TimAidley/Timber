@@ -35,6 +35,16 @@ export function bundleImagePath(bundleDir: string, fileName: string, mime: strin
   return `${bundleDir}/images/${baseNameFrom(fileName)}.${extForMime(mime, fileName)}`;
 }
 
+/**
+ * The repo-relative path a **site-wide** asset (font/logo/favicon) is staged/committed to
+ * under `/assets` (SPEC §13). Unlike a bundle image, a site asset is shared by the theme,
+ * so it lives in the central `assets/` folder with a slug-safe name + explicit extension
+ * (from the processed MIME for images, or the original extension for a passthrough binary).
+ */
+export function siteAssetPath(fileName: string, ext: string): string {
+  return `assets/${baseNameFrom(fileName)}.${ext}`;
+}
+
 const MIME_BY_EXT: Record<string, string> = {
   webp: 'image/webp',
   svg: 'image/svg+xml',
