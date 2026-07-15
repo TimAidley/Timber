@@ -6,6 +6,8 @@
  * current phase and wires the button.
  */
 
+import { Spinner } from './Spinner.js';
+
 /** Where a triggered update is in its lifecycle. */
 export type UpdatePhase = 'idle' | 'updating' | 'done' | 'failed';
 
@@ -41,7 +43,8 @@ export function UpdateBanner({
             Rebuilding with the latest Timber — this takes about a minute. You can keep
             editing; we’ll offer a reload when it’s ready.
           </span>
-          <button type="button" className="update-banner__action" disabled>
+          <button type="button" className="update-banner__action" disabled aria-busy="true">
+            <Spinner />
             Building…
           </button>
         </>

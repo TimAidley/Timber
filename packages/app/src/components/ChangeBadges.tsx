@@ -1,5 +1,6 @@
 import type { SyncState } from '../state/autosave.js';
 import type { ChangeState } from '../state/changes.js';
+import { Spinner } from './Spinner.js';
 
 /**
  * The change-lifecycle vocabulary, surfaced with a distinct **glyph + colour + text
@@ -171,7 +172,7 @@ export function PublishButton({ phase, hasChanges, onPublish }: PublishButtonPro
       aria-busy={busy}
       onClick={onPublish}
     >
-      {busy ? <span className="publish-btn__spinner" aria-hidden="true" /> : null}
+      {busy ? <Spinner /> : null}
       {PUBLISH_LABEL[phase]}
     </button>
   );

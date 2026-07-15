@@ -380,6 +380,10 @@ body {
 
 .update-banner__action {
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
   margin: 0;
   padding: 0.35rem 0.85rem;
   width: auto;
@@ -1907,16 +1911,21 @@ body {
   border-color: var(--danger);
 }
 
-.publish-btn__spinner {
+/* Shared "building" spinner — used by every control that reflects a running deploy
+   (the Publish button's build phase and the out-of-date banner's update phase), so the
+   affordance is identical wherever "Building…" shows. Both sit on filled, light-text
+   backgrounds, so the white ring reads on either. */
+.btn-spinner {
+  flex: none;
   width: 12px;
   height: 12px;
   border: 2px solid rgba(255, 255, 255, 0.45);
   border-top-color: #fff;
   border-radius: var(--radius-full);
-  animation: publish-spin 0.7s linear infinite;
+  animation: btn-spin 0.7s linear infinite;
 }
 
-@keyframes publish-spin {
+@keyframes btn-spin {
   to {
     transform: rotate(360deg);
   }
