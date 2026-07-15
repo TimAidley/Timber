@@ -31,7 +31,9 @@ export interface BuildResult {
 /** Thrown when the site can't be built — a broken site must never deploy (SPEC §12). */
 export class BuildError extends Error {
   constructor(readonly problems: string[]) {
-    super(`Build failed with ${problems.length} problem(s):\n  - ${problems.join('\n  - ')}`);
+    super(
+      `Build failed with ${problems.length} problem(s):\n  - ${problems.join('\n  - ')}`,
+    );
     this.name = 'BuildError';
   }
 }
@@ -81,23 +83,37 @@ export async function buildSite(repoDir: string, outDir: string): Promise<BuildR
     if (!isPublic(object)) continue;
     const result = validator.validateObject(object, model);
     if (!canPublish(result)) {
-      const detail = result.errors.map((e) => `${e.field ? `${e.field}: ` : ''}${e.message}`).join('; ');
+      const detail = result.errors
+        .map((e) => `${e.field ? `${e.field}: ` : ''}${e.message}`)
+        .join('; ');
       problems.push(`invalid public object ${object.path}: ${detail}`);
     }
   }
   if (problems.length > 0) throw new BuildError(problems);
 
-  const templateCache = new Map<string, string>();
-  async function resolveTemplate(type: string): Promise<string> {
-    if (templateCache.has(type)) return templateCache.get(type)!;
-    for (const name of [`${type}.liquid`, 'default.liquid']) {
-      const source = await readFile(join(repoDir, 'templates', name), 'utf8').catch(() => null);
-      if (source !== null) {
-        templateCache.set(type, source);
-        return source;
-      }
+  // Load every template once, keyed by **bare name** (no `.liquid`), so a page template
+  // can `{% layout %}` / `{% render %}` any other template (SPEC §6 layout inheritance +
+  // snippets). Nested files keep their subpath (`partials/card.liquid` → `partials/card`),
+  // matching how LiquidJS resolves `{% render 'partials/card' %}`. This same map is handed
+  // to every `renderPage` so the browser preview (which loads the same set) stays ≡ build.
+  const templates: Record<string, string> = {};
+  for (const rel of await walkFiles(join(repoDir, 'templates'))) {
+    if (!rel.endsWith('.liquid')) continue;
+    templates[rel.slice(0, -'.liquid'.length)] = await readFile(
+      join(repoDir, 'templates', rel),
+      'utf8',
+    );
+  }
+
+  /** The entry (child) template for a type: `templates/<type>.liquid` → `default.liquid`. */
+  function resolveTemplate(type: string): string {
+    const source = templates[type] ?? templates['default'];
+    if (source === undefined) {
+      throw new BuildError([
+        `no template for type "${type}" (templates/${type}.liquid or templates/default.liquid)`,
+      ]);
     }
-    throw new BuildError([`no template for type "${type}" (templates/${type}.liquid or templates/default.liquid)`]);
+    return source;
   }
 
   // Site-wide context from the global-settings singleton (SPEC §13): the config
@@ -145,7 +161,7 @@ export async function buildSite(repoDir: string, outDir: string): Promise<BuildR
       continue;
     }
 
-    const template = await resolveTemplate(object.type);
+    const template = resolveTemplate(object.type);
     const markdown = await readFile(join(repoDir, object.path), 'utf8');
     const url = effectiveUrl(object, schema);
     const seo = pageSeo(object, schema, site);
@@ -153,7 +169,14 @@ export async function buildSite(repoDir: string, outDir: string): Promise<BuildR
       const baseUrl = typeof site.baseUrl === 'string' ? site.baseUrl : '';
       seo.canonical = baseUrl ? `${baseUrl}/` : '/';
     }
-    const html = await renderPage({ markdown, template, site, collections, seo });
+    const html = await renderPage({
+      markdown,
+      template,
+      templates,
+      site,
+      collections,
+      seo,
+    });
 
     const dir = urlToDir(url);
     await mkdir(join(outDir, dir), { recursive: true });

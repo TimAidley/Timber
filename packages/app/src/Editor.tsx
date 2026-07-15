@@ -8,7 +8,7 @@ import {
   type ContentObject,
   type ContentTypeSchema,
 } from '@timber/content';
-import type { FrontMatter } from '@timber/generator';
+import type { FrontMatter, TemplateMap } from '@timber/generator';
 import { RepoClient } from '@timber/github';
 import type { RepoSession } from './state/repoSession.js';
 import { AssetStore } from './state/assets.js';
@@ -998,6 +998,22 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
       <p>No object selected.</p>
     );
 
+  // The site's templates (bare-name keyed) for the advanced preview, so a template that
+  // `{% layout %}`s or `{% render %}`s another resolves it while being edited (SPEC §6).
+  // The selected file uses its live (uncommitted) text; the rest use their loaded content.
+  const advancedTemplates = useMemo<TemplateMap>(() => {
+    const map: TemplateMap = {};
+    const bareName = (path: string): string =>
+      path.replace(/^templates\//, '').replace(/\.liquid$/, '');
+    for (const f of advanced.files ?? []) {
+      if (f.kind === 'template') map[bareName(f.path)] = f.content;
+    }
+    if (advanced.selected?.kind === 'template') {
+      map[bareName(advanced.selected.path)] = advanced.value;
+    }
+    return map;
+  }, [advanced.files, advanced.selected, advanced.value]);
+
   const previewContent =
     view === 'advanced' ? (
       advanced.selected ? (
@@ -1005,6 +1021,7 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
           session={session}
           kind={advanced.selected.kind}
           template={advanced.value}
+          templates={advancedTemplates}
           valid={advanced.validation?.valid ?? false}
         />
       ) : null

@@ -1,4 +1,5 @@
 import { Liquid } from 'liquidjs';
+import type { TemplateMap } from './types.js';
 
 /**
  * Marker for pre-sanitized, trusted HTML (the rendered Markdown body) that must NOT
@@ -50,13 +51,20 @@ function outputEscape(value: unknown): string {
  * unless a value is explicitly trusted HTML. This is a security default that does
  * NOT change how existing themes are written: `{{ content }}` still renders the body
  * as HTML because `content` is passed as {@link SafeHtml}.
+ *
+ * Pass `templates` (a bare-name → source map) to enable **layout inheritance** and
+ * **`{% render %}` snippets** (SPEC §6): LiquidJS resolves `{% layout %}`/`{% render %}`/
+ * `{% include %}` against this in-memory map — no filesystem, so the same engine works
+ * in the browser and Node (preview ≡ build). Omit it for a single self-contained template.
  */
-export function createEngine(): Liquid {
+export function createEngine(templates?: TemplateMap): Liquid {
   return new Liquid({
     jsTruthy: true,
     outputEscape,
+    // `templates` makes LiquidJS resolve partials/layouts from the map instead of `fs`.
+    ...(templates ? { templates } : {}),
   });
 }
 
-/** A shared default engine instance for the common render path. */
+/** A shared default engine instance for the common (no-partials) render path. */
 export const engine = createEngine();

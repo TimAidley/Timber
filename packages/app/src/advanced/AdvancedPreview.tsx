@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { renderPage, type FrontMatter } from '@timber/generator';
+import { renderPage, type FrontMatter, type TemplateMap } from '@timber/generator';
 import {
   siteContext,
   pageSeo,
@@ -39,11 +39,15 @@ export function AdvancedPreview({
   session,
   kind,
   template,
+  templates,
   valid,
 }: {
   session: RepoSession;
   kind: AdvancedKind;
   template: string;
+  /** The site's other templates (bare-name keyed), so a `{% layout %}`ing template can
+   *  resolve its base while it's being edited (SPEC §6). */
+  templates?: TemplateMap | undefined;
   valid: boolean;
 }): React.JSX.Element {
   if (kind === 'style') return <StylePreview css={template} />;
@@ -54,7 +58,14 @@ export function AdvancedPreview({
       </p>
     );
   }
-  return <TemplatePreview session={session} template={template} valid={valid} />;
+  return (
+    <TemplatePreview
+      session={session}
+      template={template}
+      templates={templates}
+      valid={valid}
+    />
+  );
 }
 
 /**
@@ -99,10 +110,12 @@ function StylePreview({ css }: { css: string }): React.JSX.Element {
 function TemplatePreview({
   session,
   template,
+  templates,
   valid,
 }: {
   session: RepoSession;
   template: string;
+  templates?: TemplateMap | undefined;
   valid: boolean;
 }): React.JSX.Element {
   const [html, setHtml] = useState('');
@@ -112,7 +125,13 @@ function TemplatePreview({
   useEffect(() => {
     if (!valid || !ctx) return;
     let cancelled = false;
-    renderPage({ markdown: ctx.markdown, template, site: ctx.site, seo: ctx.seo })
+    renderPage({
+      markdown: ctx.markdown,
+      template,
+      templates,
+      site: ctx.site,
+      seo: ctx.seo,
+    })
       .then((out) => {
         if (!cancelled) {
           setHtml(out);
@@ -125,7 +144,7 @@ function TemplatePreview({
     return () => {
       cancelled = true;
     };
-  }, [template, valid, ctx]);
+  }, [template, templates, valid, ctx]);
 
   if (!ctx)
     return <p className="app__preview-empty">No content object to preview against.</p>;

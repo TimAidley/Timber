@@ -57,10 +57,12 @@ export function validateFileName(
  * Generate **starter content** for a new file so it's immediately valid (it flows
  * straight into the shared WIP commit) and shows the author what to edit.
  *
- * - `template` → a minimal but complete Liquid page. A template named after a content
- *   type (e.g. `events`) renders that type's pages **instead of** `default.liquid`
- *   (see the CLI's `resolveTemplate`), so the header comment points that out and names
- *   the render context the generator exposes.
+ * - `template` → a page that **extends `default.liquid`** via `{% layout %}` and fills
+ *   only the `main` block, so the shared `<head>`/header/footer stay written once (SPEC
+ *   §6 layout inheritance). A template named after a content type (e.g. `events`) renders
+ *   that type's pages **instead of** `default.liquid` (see the CLI's `resolveTemplate`),
+ *   so the header comment points that out and names the render context the generator
+ *   exposes. (An author who wants a fully standalone page can replace this with plain HTML.)
  * - `style` → a commented CSS stub. It's copied verbatim to the built site, but a
  *   template only picks it up if you `<link>` it (unlike `assets/theme.css`, which the
  *   default templates already link), so the header says so.
@@ -80,24 +82,19 @@ export function buildStarterFile(opts: NewFileOptions): string {
     return [
       `{% comment %}`,
       `  “${opts.name}” template. Named after a content type (events, people…), this`,
-      `  renders that type’s pages instead of templates/default.liquid. Context available:`,
+      `  renders that type’s pages instead of templates/default.liquid.`,
+      ``,
+      `  It extends default.liquid and overrides only the “main” block, so the shared`,
+      `  <head>, header and footer stay defined once in default.liquid. Context here:`,
       `  page (this object’s fields), content (its rendered body), site, seo, collections.`,
       `{% endcomment %}`,
-      `<!doctype html>`,
-      `<html lang="en">`,
-      `  <head>`,
-      `    <meta charset="utf-8" />`,
-      `    <meta name="viewport" content="width=device-width, initial-scale=1" />`,
-      `    <title>{{ seo.title }}</title>`,
-      `    <link rel="stylesheet" href="{{ site.basePath }}/assets/theme.css" />`,
-      `  </head>`,
-      `  <body>`,
-      `    <main>`,
-      `      <h1>{{ page.title }}</h1>`,
-      `      {{ content }}`,
-      `    </main>`,
-      `  </body>`,
-      `</html>`,
+      `{% layout 'default' %}`,
+      `{% block main %}`,
+      `<article class="page">`,
+      `  <h1>{{ page.title }}</h1>`,
+      `  {{ content }}`,
+      `</article>`,
+      `{% endblock %}`,
       ``,
     ].join('\n');
   }

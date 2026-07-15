@@ -14,6 +14,7 @@ import {
 import { reassembleDocument } from '../content/document.js';
 import type { AssetStore } from '../state/assets.js';
 import type { SiteTheme } from './siteTheme.js';
+import { bareNameTemplates } from './templateMap.js';
 
 /** Content/site asset references the preview should resolve to loadable object URLs. */
 const ASSET_REF_RE = /(?:src|href)="([^"]+\.(?:webp|png|jpe?g|gif|svg|avif))"/gi;
@@ -53,6 +54,11 @@ export async function renderSitePage(input: RenderSitePageInput): Promise<string
     );
   }
 
+  // The rest of the site's templates, keyed by bare name, so the entry template can
+  // `{% layout %}` / `{% render %}` them (SPEC §6). `theme.templates` is keyed by
+  // filename (`default.liquid`); strip `.liquid` to match how LiquidJS resolves names.
+  const templates = bareNameTemplates(theme.templates);
+
   // Site-wide context from the settings singleton (the `page: false` type), exactly as
   // the build derives it — including homepage-at-root and manual navigation (SPEC §13).
   const settings = model.objects.find((o) => model.schemas.get(o.type)?.page === false);
@@ -80,6 +86,7 @@ export async function renderSitePage(input: RenderSitePageInput): Promise<string
   let html = await renderPage({
     markdown: reassembleDocument(data, body),
     template,
+    templates,
     site,
     collections,
     seo,

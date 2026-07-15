@@ -54,7 +54,9 @@ describe('buildSite', () => {
     // pages.liquid loops `collections.events`; the public event renders with its
     // resolved URL and date field — proving collections reach templates in the build.
     const hello = await readFile(join(out, 'pages/hello/index.html'), 'utf8');
-    expect(hello).toContain('<li><a href="/events/fete/">Summer Fete</a> 2026-08-15</li>');
+    expect(hello).toContain(
+      '<li><a href="/events/fete/">Summer Fete</a> 2026-08-15</li>',
+    );
   });
 
   it('omits drafts from the build', async () => {
@@ -81,11 +83,21 @@ describe('buildSite', () => {
     expect(note).toContain('<h1>A Note</h1>');
   });
 
+  it('resolves {% render %} partials from the templates dir (SPEC §6 snippets)', async () => {
+    // pages.liquid does `{% render 'footer' %}`; templates/footer.liquid must resolve
+    // through the in-memory map the build assembles — proving reuse across template files.
+    await buildSite(siteFixture, out);
+    const hello = await readFile(join(out, 'pages/hello/index.html'), 'utf8');
+    expect(hello).toContain('<footer class="from-partial">shared footer</footer>');
+  });
+
   it('copies site-wide and colocated assets', async () => {
     await buildSite(siteFixture, out);
     expect(await exists(join(out, 'assets/site.css'))).toBe(true);
     // colocated bundle asset ships next to its page
-    const src = await readFile(join(siteFixture, 'content/events/fete/images/pixel.webp'));
+    const src = await readFile(
+      join(siteFixture, 'content/events/fete/images/pixel.webp'),
+    );
     const copied = await readFile(join(out, 'events/fete/images/pixel.webp'));
     expect(Buffer.compare(src, copied)).toBe(0);
   });
@@ -102,7 +114,9 @@ describe('buildSite', () => {
     // ...but its data drives per-page SEO (title suffix, canonical) in the <head>.
     const hello = await readFile(join(out, 'pages/hello/index.html'), 'utf8');
     expect(hello).toContain('<title>Hello · Fixture Site</title>');
-    expect(hello).toContain('<link rel="canonical" href="https://fixture.example/pages/hello/">');
+    expect(hello).toContain(
+      '<link rel="canonical" href="https://fixture.example/pages/hello/">',
+    );
   });
 
   it('emits sitemap.xml and robots.txt with canonical URLs', async () => {
@@ -153,9 +167,27 @@ describe('buildSite', () => {
     const hello = model.objects.find((o) => o.path === 'content/pages/hello/index.md')!;
     const seo = pageSeo(hello, schemas.get('pages')!, site);
 
-    const markdown = await readFile(join(siteFixture, 'content/pages/hello/index.md'), 'utf8');
+    const markdown = await readFile(
+      join(siteFixture, 'content/pages/hello/index.md'),
+      'utf8',
+    );
     const template = await readFile(join(siteFixture, 'templates/pages.liquid'), 'utf8');
-    const preview = await renderPage({ markdown, template, site, collections, seo });
+    // The preview supplies the same bare-name template map the build assembles, so a
+    // template using `{% render %}`/`{% layout %}` resolves identically (SPEC §6).
+    const templates = {
+      default: await readFile(join(siteFixture, 'templates/default.liquid'), 'utf8'),
+      pages: template,
+      events: await readFile(join(siteFixture, 'templates/events.liquid'), 'utf8'),
+      footer: await readFile(join(siteFixture, 'templates/footer.liquid'), 'utf8'),
+    };
+    const preview = await renderPage({
+      markdown,
+      template,
+      templates,
+      site,
+      collections,
+      seo,
+    });
 
     expect(built).toBe(preview);
   });

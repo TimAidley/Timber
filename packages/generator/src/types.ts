@@ -21,6 +21,15 @@ export interface ParsedDocument {
 export type SiteContext = Record<string, unknown>;
 
 /**
+ * The site's other templates, keyed by **bare name** (no `.liquid`), for resolving
+ * `{% layout %}`, `{% render %}`, and `{% include %}` references (SPEC §6 block/layout
+ * inheritance + `{% render %}` snippets). LiquidJS resolves these against this in-memory
+ * map — no filesystem — so the same map works in the browser preview and the Node build,
+ * keeping preview ≡ build. E.g. `{% layout 'default' %}` looks up the `default` key.
+ */
+export type TemplateMap = Record<string, string>;
+
+/**
  * Collections context exposed to templates as `{{ collections }}` — collection-type
  * name → its entries (each entry a plain data record). The generator core stays
  * environment-agnostic, so this is deliberately loose; `@timber/content` assembles
@@ -32,8 +41,13 @@ export type CollectionsContext = Record<string, Array<Record<string, unknown>>>;
 export interface RenderPageInput {
   /** Raw `index.md` contents (YAML front matter + Markdown body). */
   markdown: string;
-  /** The Liquid template source to render the page with. */
+  /** The Liquid template source to render the page with (the layout-inheritance "child"). */
   template: string;
+  /**
+   * The site's other templates (keyed by bare name), so `template` can `{% layout %}` /
+   * `{% render %}` / `{% include %}` them (SPEC §6). Omit for a self-contained template.
+   */
+  templates?: TemplateMap | undefined;
   /** Optional site-wide context exposed as `{{ site }}`. */
   site?: SiteContext;
   /** Optional per-type collections exposed as `{{ collections }}` (SPEC §6). */

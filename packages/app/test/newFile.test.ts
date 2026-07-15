@@ -49,9 +49,14 @@ describe('validateFileName', () => {
 });
 
 describe('buildStarterFile', () => {
-  it('generates a template that passes the same validator the commit gate uses', () => {
+  it('generates a template that extends default and passes the commit-gate validator', () => {
     const src = buildStarterFile({ kind: 'template', name: 'events' });
+    // Layout inheritance: fills only the `main` block, chrome stays in default.liquid.
+    expect(src).toContain("{% layout 'default' %}");
+    expect(src).toContain('{% block main %}');
     expect(src).toContain('{{ content }}');
+    // A `{% layout %}` template still parses (the base is resolved at render, not parse),
+    // so it commits like any valid template.
     expect(
       validateAdvancedFile({
         path: 'templates/events.liquid',

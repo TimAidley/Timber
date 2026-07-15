@@ -16,5 +16,6 @@ export type {
   RenderPageInput,
   SiteContext,
   CollectionsContext,
+  TemplateMap,
 } from './types.js';
 export type { FileSource, OutputSink } from './io.js';
