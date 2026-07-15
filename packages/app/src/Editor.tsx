@@ -57,6 +57,8 @@ import { useAdvanced } from './advanced/useAdvanced.js';
 import { AdvancedPreview } from './advanced/AdvancedPreview.js';
 import { AdvancedEditorPanel } from './advanced/AdvancedEditorPanel.js';
 import { AdvancedList } from './advanced/AdvancedList.js';
+import { AssetManager } from './advanced/AssetManager.js';
+import { listSiteAssets } from './media/siteAssets.js';
 import { NewTypeDialog } from './components/NewTypeDialog.js';
 import { NewFileDialog } from './components/NewFileDialog.js';
 import { Wordmark } from './components/Wordmark.js';
@@ -130,6 +132,9 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   // switching never drops unsaved state and edits coalesce into the same WIP commit.
   const advancedAllowed = canAccessAdvanced();
   const [view, setView] = useState<'content' | 'advanced'>('content');
+  // Within the advanced view, the asset manager (binary /assets files) is a mode toggled
+  // against the text-file editor — selecting a template/config file returns to the editor.
+  const [assetsActive, setAssetsActive] = useState(false);
   // Only load advanced files once the user first opens that view (lazy). Once seen,
   // the hook keeps its state so switching back and forth is instant.
   const [advancedSeen, setAdvancedSeen] = useState(false);
@@ -683,6 +688,18 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   // list renders in the shared sidebar and its editor/preview in the shared work area.
   const advanced = useAdvanced(session, autosave, advancedSeen);
 
+  // Site assets (binary /assets files) for the asset manager: the committed set is read
+  // straight from the loaded tree (no extra fetch); the manager overlays this session's
+  // uploads/deletes locally. Templates + stylesheets feed the delete-reference guard.
+  const initialAssets = useMemo(() => listSiteAssets(session.treeEntries), [session]);
+  const assetSources = useMemo(
+    () =>
+      (advanced.files ?? [])
+        .filter((f) => f.kind === 'template' || f.kind === 'style')
+        .map((f) => ({ path: f.path, text: f.content })),
+    [advanced.files],
+  );
+
   // ---- Layout: banner + drawer sidebar + split/tab/off preview (SPEC §8) ----------
   const layout = useLayout();
 
@@ -832,7 +849,21 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   // Content and advanced share the same chrome; only the inner editor + preview differ.
   const mainContent =
     view === 'advanced' ? (
-      advanced.loadError ? (
+      assetsActive ? (
+        <AssetManager
+          initialAssets={initialAssets}
+          assetStore={assetStore}
+          sources={assetSources}
+          onStage={(path) => {
+            autosave.markAssetDirty(path);
+            autosave.saveNow();
+          }}
+          onDelete={(paths) => {
+            autosave.markPathsDeleted(paths);
+            autosave.saveNow();
+          }}
+        />
+      ) : advanced.loadError ? (
         <p className="advanced__load">
           Couldn’t load advanced files: {advanced.loadError}
         </p>
@@ -1016,7 +1047,7 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
 
   const previewContent =
     view === 'advanced' ? (
-      advanced.selected ? (
+      assetsActive ? null : advanced.selected ? (
         <AdvancedPreview
           session={session}
           kind={advanced.selected.kind}
@@ -1209,13 +1240,37 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
                   ) : (
                     <AdvancedList
                       files={advanced.files}
-                      selectedPath={advanced.selectedPath}
+                      selectedPath={assetsActive ? undefined : advanced.selectedPath}
                       onSelect={(path) => {
+                        setAssetsActive(false);
                         advanced.setSelectedPath(path);
                         if (layout.isMobile) layout.setSidebarOpen(false);
                       }}
                     />
                   )}
+
+                  <section className="object-group">
+                    <div className="object-group__head">
+                      <span className="object-group__name">Assets</span>
+                    </div>
+                    <ul className="object-list">
+                      <li>
+                        <button
+                          type="button"
+                          className={assetsActive ? 'is-active' : ''}
+                          onClick={() => {
+                            setAssetsActive(true);
+                            if (layout.isMobile) layout.setSidebarOpen(false);
+                          }}
+                        >
+                          <span className="object-list__title">Manage assets</span>
+                          <span className="object-list__type">
+                            fonts, logos, favicons in /assets
+                          </span>
+                        </button>
+                      </li>
+                    </ul>
+                  </section>
                 </nav>
               )}
             </aside>

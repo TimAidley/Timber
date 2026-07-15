@@ -2596,3 +2596,121 @@ body {
   color: var(--danger);
   white-space: pre-wrap;
 }
+
+/* ---- Asset manager (binary /assets files) ------------------------------------ */
+.asset-manager {
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  overflow-y: auto;
+}
+
+.asset-manager__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.asset-manager__head h2 {
+  margin: 0;
+}
+
+.asset-manager__hint {
+  margin: 0.25rem 0 0;
+  max-width: 42ch;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.asset-manager__error {
+  font-size: 0.82rem;
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.75rem;
+  white-space: pre-wrap;
+}
+
+.asset-manager__error ul {
+  margin: 0.3rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.asset-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.75rem;
+}
+
+.asset-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  padding: 0.6rem;
+}
+
+.asset-card__thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 4 / 3;
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  overflow: hidden;
+}
+
+.asset-card__thumb img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.asset-card__thumb--tile .asset-card__ext {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.asset-card__meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.asset-card__name {
+  font-size: 0.82rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asset-card__sub {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.asset-card__delete {
+  align-self: flex-start;
+  font-size: 0.75rem;
+  color: var(--danger);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.asset-card__delete:hover {
+  color: var(--danger-strong);
+  text-decoration: underline;
+}
