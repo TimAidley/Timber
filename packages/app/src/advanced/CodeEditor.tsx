@@ -3,14 +3,23 @@ import { EditorState, type Extension } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import { basicSetup } from 'codemirror';
 import { html } from '@codemirror/lang-html';
+import { css } from '@codemirror/lang-css';
 import { yaml } from '@codemirror/lang-yaml';
 import { defaultKeymap, indentWithTab } from '@codemirror/commands';
 import type { AdvancedKind } from './loadAdvancedFiles.js';
 
 /** Pick the syntax-highlighting extension for a file kind. Liquid is HTML-with-tags,
- * so HTML highlighting is a good-enough surface without a bespoke Liquid mode. */
+ * so HTML highlighting is a good-enough surface without a bespoke Liquid mode; schemas
+ * and other config are YAML. */
 function languageFor(kind: AdvancedKind): Extension {
-  return kind === 'template' ? html() : yaml();
+  switch (kind) {
+    case 'template':
+      return html();
+    case 'style':
+      return css();
+    default:
+      return yaml();
+  }
 }
 
 /**

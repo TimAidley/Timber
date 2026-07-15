@@ -10,7 +10,7 @@ export interface ChangeEntry {
   /** Human label (page title / file name). */
   title: string;
   /** What kind of thing changed — drives the small type tag. */
-  kind: 'content' | 'template' | 'schema' | 'config' | 'asset';
+  kind: 'content' | 'template' | 'style' | 'schema' | 'config' | 'asset';
   state: Exclude<ChangeState, 'clean'>;
   /** Jump to this item in the editor (selects it, closes the panel). */
   onOpen?: (() => void) | undefined;
@@ -25,6 +25,7 @@ const STATE_GLYPH: Record<Exclude<ChangeState, 'clean'>, string> = {
 const KIND_LABEL: Record<ChangeEntry['kind'], string> = {
   content: 'page',
   template: 'template',
+  style: 'style',
   schema: 'schema',
   config: 'config',
   asset: 'asset',

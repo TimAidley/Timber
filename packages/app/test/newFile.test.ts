@@ -13,6 +13,9 @@ describe('newFilePath', () => {
       'templates/events.liquid',
     );
   });
+  it('puts a style under assets/ with a .css extension', () => {
+    expect(newFilePath({ kind: 'style', name: 'print' })).toBe('assets/print.css');
+  });
   it('puts a config under config/ (not config/schemas) with a .yml extension', () => {
     expect(newFilePath({ kind: 'config', name: 'navigation' })).toBe(
       'config/navigation.yml',
@@ -55,6 +58,15 @@ describe('buildStarterFile', () => {
         kind: 'template',
         content: src,
       }).valid,
+    ).toBe(true);
+  });
+
+  it('generates a style stub that is valid and names its own link path', () => {
+    const src = buildStarterFile({ kind: 'style', name: 'print' });
+    expect(src).toContain('assets/print.css');
+    expect(
+      validateAdvancedFile({ path: 'assets/print.css', kind: 'style', content: src })
+        .valid,
     ).toBe(true);
   });
 

@@ -21,6 +21,10 @@ const OK: AdvancedValidation = { valid: true, errors: [] };
  * Each kind is checked with the **same** machinery the build uses, so a pass here
  * means the build won't choke:
  * - `template` → LiquidJS `engine.parse` (the exact parser `renderPage` runs).
+ * - `style`    → always valid: the build copies `assets/**` verbatim (`build.node.ts`),
+ *                so there's no CSS parser to mirror, and browsers ignore bad rules rather
+ *                than choke. Gating on a home-grown lint would only risk blocking a valid
+ *                save — the very thing this gate exists to prevent for *broken* files.
  * - `schema`   → `loadSchemas` over a one-file snapshot (known field kinds, required
  *                options), the same validator the CLI runs.
  * - `config`   → structural YAML parse (malformed YAML is the failure mode).
@@ -29,6 +33,8 @@ export function validateAdvancedFile(file: AdvancedFile): AdvancedValidation {
   switch (file.kind) {
     case 'template':
       return validateTemplate(file.content);
+    case 'style':
+      return OK;
     case 'schema':
       return validateSchema(file.path, file.content);
     case 'config':

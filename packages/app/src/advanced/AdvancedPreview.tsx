@@ -33,8 +33,8 @@ function sampleRender(
   };
 }
 
-/** The advanced work area's preview pane: a live template render for `.liquid` files,
- * a note for config (which is validated on edit, not previewed). */
+/** The advanced work area's preview pane: a live template render for `.liquid` files, a
+ * style specimen for `.css` files, a note for config (validated on edit, not previewed). */
 export function AdvancedPreview({
   session,
   kind,
@@ -46,14 +46,51 @@ export function AdvancedPreview({
   template: string;
   valid: boolean;
 }): React.JSX.Element {
+  if (kind === 'style') return <StylePreview css={template} />;
   if (kind !== 'template') {
     return (
       <p className="app__preview-empty">
-        Preview shows for templates. Config is validated on edit.
+        Preview shows for templates and styles. Config is validated on edit.
       </p>
     );
   }
   return <TemplatePreview session={session} template={template} valid={valid} />;
+}
+
+/**
+ * A representative page skeleton — the default theme's own markup + class names
+ * (`.site-header`, `.page`, a heading/paragraph/link, a code block, the footer) — with
+ * the *edited* CSS applied live in a sandboxed frame. It shows what the stylesheet does
+ * to real theme selectors without needing to load templates or content into this pane.
+ * `url(fonts/…)` refs don't resolve here (they'd need the repo-blob rewriting the main
+ * site preview does), so self-hosted fonts fall back — colour/spacing/type still show.
+ */
+function stylePreviewDoc(css: string): string {
+  return [
+    '<!doctype html><html lang="en"><head><meta charset="utf-8" />',
+    `<style>${css}</style></head><body>`,
+    '<header class="site-header">',
+    '<a class="site-title" href="#">Site title</a>',
+    '<nav class="site-nav"><a href="#">Home</a><a href="#">About</a></nav>',
+    '</header>',
+    '<main class="site-main"><article class="page">',
+    '<h1>A specimen heading</h1>',
+    '<p>Body copy with a <a href="#">link</a> and <code>inline code</code>, so you can',
+    ' check colours, spacing and type against the theme’s selectors.</p>',
+    '<pre><code>const example = "code block";</code></pre>',
+    '</article></main>',
+    '<footer class="site-footer"><p>© Site title — a tagline</p></footer>',
+    '</body></html>',
+  ].join('');
+}
+
+/** Render the style specimen. The frame is `allow-scripts`-free (no scripts to run) and
+ * has an opaque origin, so the edited CSS can't reach this token-holding app. */
+function StylePreview({ css }: { css: string }): React.JSX.Element {
+  const doc = useMemo(() => stylePreviewDoc(css), [css]);
+  return (
+    <iframe className="advanced__frame" title="Style specimen" sandbox="" srcDoc={doc} />
+  );
 }
 
 /** Render a sample content object through the *edited* template — the live half of

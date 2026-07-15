@@ -15,9 +15,10 @@ interface NewFileDialogProps {
 }
 
 /**
- * "New file" dialog for the advanced area (SPEC §8). Adds a **template** (`.liquid`) or
- * a plain **config** (`.yml`) file — the create affordance that "New type" (schemas)
- * didn't cover. Collects a kind + a slug-safe name and previews the resulting repo path;
+ * "New file" dialog for the advanced area (SPEC §8). Adds a **template** (`.liquid`), a
+ * **style** (`assets/*.css`), or a plain **config** (`.yml`) file — the create affordance
+ * that "New type" (schemas) didn't cover. Collects a kind + a slug-safe name and previews
+ * the resulting repo path;
  * the caller turns the result into starter content and commits it through the shared
  * advanced edit-preview-commit loop. No reload nudge (unlike a new type): a template or
  * config file changes nothing in the content model, so it's live in preview immediately.
@@ -69,6 +70,19 @@ export function NewFileDialog({
             <input
               type="radio"
               name="file-kind"
+              checked={kind === 'style'}
+              onChange={() => setKind('style')}
+            />
+            <span>
+              <strong>Style</strong> — a <code>.css</code> file in <code>assets/</code>.
+              Link it from a template; <code>theme.css</code> is already linked by the
+              default theme.
+            </span>
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="file-kind"
               checked={kind === 'config'}
               onChange={() => setKind('config')}
             />
@@ -85,7 +99,13 @@ export function NewFileDialog({
           <input
             autoFocus
             value={name}
-            placeholder={kind === 'template' ? 'e.g. events' : 'e.g. navigation'}
+            placeholder={
+              kind === 'template'
+                ? 'e.g. events'
+                : kind === 'style'
+                  ? 'e.g. print'
+                  : 'e.g. navigation'
+            }
             aria-invalid={showError}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => {

@@ -7,17 +7,18 @@ function file(path: string, kind: AdvancedFile['kind']): AdvancedFile {
 }
 
 describe('groupAdvancedFiles', () => {
-  it('groups files by kind in a stable heading order (templates → schemas → config)', () => {
+  it('groups files by kind in a stable heading order (templates → styles → schemas → config)', () => {
     const files = [
       file('config/navigation.yml', 'config'),
       file('config/schemas/pages.yml', 'schema'),
       file('templates/default.liquid', 'template'),
+      file('assets/theme.css', 'style'),
       file('config/schemas/settings.yml', 'schema'),
     ];
     const groups = groupAdvancedFiles(files);
-    expect(groups.map((g) => g.kind)).toEqual(['template', 'schema', 'config']);
-    expect(groups.map((g) => g.label)).toEqual(['Templates', 'Schemas', 'Config']);
-    expect(groups.map((g) => g.files.length)).toEqual([1, 2, 1]);
+    expect(groups.map((g) => g.kind)).toEqual(['template', 'style', 'schema', 'config']);
+    expect(groups.map((g) => g.label)).toEqual(['Templates', 'Styles', 'Schemas', 'Config']);
+    expect(groups.map((g) => g.files.length)).toEqual([1, 1, 2, 1]);
   });
 
   it('preserves the incoming file order within a group', () => {

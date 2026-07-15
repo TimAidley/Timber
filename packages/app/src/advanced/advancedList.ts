@@ -14,18 +14,20 @@ export interface AdvancedGroup {
   files: AdvancedFile[];
 }
 
-/** Display heading + display order for each kind (templates → schemas → config). */
+/** Display heading + display order for each kind (templates → styles → schemas →
+ *  config). Styles sit next to templates: together they *are* the theme. */
 const GROUP_LABEL: Record<AdvancedKind, string> = {
   template: 'Templates',
+  style: 'Styles',
   schema: 'Schemas',
   config: 'Config',
 };
-const GROUP_ORDER: AdvancedKind[] = ['template', 'schema', 'config'];
+const GROUP_ORDER: AdvancedKind[] = ['template', 'style', 'schema', 'config'];
 
 /**
- * Group advanced files by kind, in a stable heading order (templates → schemas →
- * config). Files keep the incoming order within a group — `loadAdvancedFiles` already
- * sorts them by path — and empty groups are dropped.
+ * Group advanced files by kind, in a stable heading order (templates → styles →
+ * schemas → config). Files keep the incoming order within a group — `loadAdvancedFiles`
+ * already sorts them by path — and empty groups are dropped.
  */
 export function groupAdvancedFiles(files: readonly AdvancedFile[]): AdvancedGroup[] {
   const byKind = new Map<AdvancedKind, AdvancedFile[]>();

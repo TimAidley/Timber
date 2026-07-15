@@ -21,6 +21,7 @@ function file(path: string, kind: AdvancedFile['kind']): AdvancedFile {
 
 const FILES: AdvancedFile[] = [
   file('templates/default.liquid', 'template'),
+  file('assets/theme.css', 'style'),
   file('config/schemas/pages.yml', 'schema'),
   file('config/schemas/settings.yml', 'schema'),
   file('config/navigation.yml', 'config'),
@@ -69,13 +70,14 @@ const titlesIn = (groupIndex: number): string[] => {
 };
 
 describe('AdvancedList (rendered)', () => {
-  it('groups files by kind under Templates → Schemas → Config headings', async () => {
+  it('groups files by kind under Templates → Styles → Schemas → Config headings', async () => {
     mount();
     await waitFor(() => document.querySelector('.object-group'));
-    expect(groupNames()).toEqual(['Templates', 'Schemas', 'Config']);
+    expect(groupNames()).toEqual(['Templates', 'Styles', 'Schemas', 'Config']);
     expect(titlesIn(0)).toEqual(['default.liquid']);
-    expect(titlesIn(1)).toEqual(['pages.yml', 'settings.yml']);
-    expect(titlesIn(2)).toEqual(['navigation.yml']);
+    expect(titlesIn(1)).toEqual(['theme.css']);
+    expect(titlesIn(2)).toEqual(['pages.yml', 'settings.yml']);
+    expect(titlesIn(3)).toEqual(['navigation.yml']);
   });
 
   it('marks the selected file active', async () => {

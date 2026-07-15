@@ -3,17 +3,21 @@ import { validateAdvancedFile } from '../src/advanced/validate.js';
 import { kindOf } from '../src/advanced/loadAdvancedFiles.js';
 
 describe('kindOf', () => {
-  it('classifies templates, schemas, and other config', () => {
+  it('classifies templates, styles, schemas, and other config', () => {
     expect(kindOf('templates/default.liquid')).toBe('template');
     expect(kindOf('templates/pages.liquid')).toBe('template');
+    expect(kindOf('assets/theme.css')).toBe('style');
+    expect(kindOf('assets/print.css')).toBe('style');
+    expect(kindOf('assets/css/nested.css')).toBe('style');
     expect(kindOf('config/schemas/pages.yml')).toBe('schema');
     expect(kindOf('config/navigation.yml')).toBe('config');
     expect(kindOf('config/settings.yaml')).toBe('config');
   });
 
-  it('ignores content and assets (not editable in the advanced area)', () => {
+  it('ignores content and non-CSS assets (fonts/images need a binary manager, not this text loop)', () => {
     expect(kindOf('content/pages/hello/index.md')).toBeUndefined();
-    expect(kindOf('assets/theme.css')).toBeUndefined();
+    expect(kindOf('assets/fonts/source-serif.woff2')).toBeUndefined();
+    expect(kindOf('assets/logo.webp')).toBeUndefined();
     expect(kindOf('README.md')).toBeUndefined();
   });
 });
@@ -68,6 +72,22 @@ describe('validateAdvancedFile — schemas (loadSchemas)', () => {
       content: 'name: Pages\n  kind: : collection\n',
     };
     expect(validateAdvancedFile(file).valid).toBe(false);
+  });
+});
+
+describe('validateAdvancedFile — style (CSS)', () => {
+  // The build copies assets/** verbatim, so there's no CSS gate to mirror: any CSS
+  // is committable (a false "invalid" would only wrongly block a valid save).
+  it('treats any CSS as valid, including gibberish', () => {
+    for (const content of [
+      ':root { --fg: #111; }\nbody { color: var(--fg); }\n',
+      'this is not valid css at all {{{',
+      '',
+    ]) {
+      expect(validateAdvancedFile({ path: 'assets/theme.css', kind: 'style', content }).valid).toBe(
+        true,
+      );
+    }
   });
 });
 

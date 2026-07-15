@@ -1,11 +1,12 @@
 import { kindOf, type AdvancedFile, type AdvancedKind } from './loadAdvancedFiles.js';
 import { validateAdvancedFile } from './validate.js';
 
-/** Sort key for the advanced file list: templates → schemas → config, then by path. */
+/** Sort key for the advanced file list: templates → styles → schemas → config, by path. */
 export const KIND_ORDER: Record<AdvancedKind, number> = {
   template: 0,
-  schema: 1,
-  config: 2,
+  style: 1,
+  schema: 2,
+  config: 3,
 };
 
 /** A locally-persisted draft (from the IndexedDB draft store), by repo path. */

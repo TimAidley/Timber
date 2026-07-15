@@ -9,7 +9,7 @@
  * unit-testable, mirroring `schemaTemplate.ts`.
  */
 
-export type NewFileKind = 'template' | 'config';
+export type NewFileKind = 'template' | 'style' | 'config';
 
 export interface NewFileOptions {
   kind: NewFileKind;
@@ -22,9 +22,14 @@ const NAME_RE = /^[a-z][a-z0-9-]*$/;
 
 /** Repo path for a new file of the given kind. */
 export function newFilePath(opts: NewFileOptions): string {
-  return opts.kind === 'template'
-    ? `templates/${opts.name}.liquid`
-    : `config/${opts.name}.yml`;
+  switch (opts.kind) {
+    case 'template':
+      return `templates/${opts.name}.liquid`;
+    case 'style':
+      return `assets/${opts.name}.css`;
+    case 'config':
+      return `config/${opts.name}.yml`;
+  }
 }
 
 /**
@@ -56,10 +61,21 @@ export function validateFileName(
  *   type (e.g. `events`) renders that type's pages **instead of** `default.liquid`
  *   (see the CLI's `resolveTemplate`), so the header comment points that out and names
  *   the render context the generator exposes.
+ * - `style` → a commented CSS stub. It's copied verbatim to the built site, but a
+ *   template only picks it up if you `<link>` it (unlike `assets/theme.css`, which the
+ *   default templates already link), so the header says so.
  * - `config` → a commented-out YAML stub (an empty doc parses fine); the author fills
  *   in the structured data their templates read.
  */
 export function buildStarterFile(opts: NewFileOptions): string {
+  if (opts.kind === 'style') {
+    return [
+      `/* “${opts.name}” stylesheet — copied as-is to /assets on build.`,
+      `   Reference it from a template with:`,
+      `   <link rel="stylesheet" href="{{ site.basePath }}/assets/${opts.name}.css" /> */`,
+      ``,
+    ].join('\n');
+  }
   if (opts.kind === 'template') {
     return [
       `{% comment %}`,

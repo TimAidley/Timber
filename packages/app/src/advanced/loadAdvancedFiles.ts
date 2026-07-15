@@ -13,14 +13,18 @@ export interface AdvancedFile {
 }
 
 /** Which validator + editor language a file gets. */
-export type AdvancedKind = 'template' | 'schema' | 'config';
+export type AdvancedKind = 'template' | 'style' | 'schema' | 'config';
 
 const TEMPLATE_RE = /^templates\/.*\.liquid$/;
+const STYLE_RE = /^assets\/.*\.css$/;
 const CONFIG_RE = /^config\/.*\.ya?ml$/;
 
-/** Classify a repo path into the kind that drives validation + syntax highlighting. */
+/** Classify a repo path into the kind that drives validation + syntax highlighting.
+ *  `assets/**.css` is the theme's stylesheet(s) — editable text, unlike the fonts/images
+ *  that also live under `assets/` (those need a binary manager, not this text loop). */
 export function kindOf(path: string): AdvancedKind | undefined {
   if (TEMPLATE_RE.test(path)) return 'template';
+  if (STYLE_RE.test(path)) return 'style';
   if (CONFIG_RE.test(path)) return path.startsWith('config/schemas/') ? 'schema' : 'config';
   return undefined;
 }
@@ -48,6 +52,6 @@ export async function loadAdvancedFiles(client: RepoClient, ref: string): Promis
     })),
   );
 
-  const order: Record<AdvancedKind, number> = { template: 0, schema: 1, config: 2 };
+  const order: Record<AdvancedKind, number> = { template: 0, style: 1, schema: 2, config: 3 };
   return files.sort((a, b) => order[a.kind] - order[b.kind] || a.path.localeCompare(b.path));
 }
