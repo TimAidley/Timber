@@ -56,6 +56,7 @@ import { parseFrontMatter } from '@timber/generator';
 import { useAdvanced } from './advanced/useAdvanced.js';
 import { AdvancedPreview } from './advanced/AdvancedPreview.js';
 import { AdvancedEditorPanel } from './advanced/AdvancedEditorPanel.js';
+import { AdvancedList } from './advanced/AdvancedList.js';
 import { NewTypeDialog } from './components/NewTypeDialog.js';
 import { NewFileDialog } from './components/NewFileDialog.js';
 import { Wordmark } from './components/Wordmark.js';
@@ -1189,27 +1190,14 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
                   ) : !advanced.files ? (
                     <p className="object-list__empty">Loading…</p>
                   ) : (
-                    <ul className="object-list">
-                      {advanced.files.map((f) => (
-                        <li key={f.path}>
-                          <button
-                            type="button"
-                            className={
-                              f.path === advanced.selectedPath ? 'is-active' : ''
-                            }
-                            onClick={() => {
-                              advanced.setSelectedPath(f.path);
-                              if (layout.isMobile) layout.setSidebarOpen(false);
-                            }}
-                          >
-                            <span className="object-list__title">
-                              {f.path.split('/').pop()}
-                            </span>
-                            <span className="object-list__type">{f.path}</span>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
+                    <AdvancedList
+                      files={advanced.files}
+                      selectedPath={advanced.selectedPath}
+                      onSelect={(path) => {
+                        advanced.setSelectedPath(path);
+                        if (layout.isMobile) layout.setSidebarOpen(false);
+                      }}
+                    />
                   )}
                 </nav>
               )}
