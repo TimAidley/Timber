@@ -16,6 +16,7 @@ import { repoAssetLoader } from './state/assetLoader.js';
 import { useAutosave } from './state/autosave.js';
 import { LocalDraftStore } from './state/localDraft.js';
 import { reassembleDocument } from './content/document.js';
+import { mergeEditIntoObjects } from './content/editState.js';
 import { repoConfig } from './github/config.js';
 import { buildInfo, canCheckForUpdate } from './github/buildInfo.js';
 import { getToken } from './github/auth.js';
@@ -272,9 +273,15 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   // so it re-seeds when the document changes but is NOT rebuilt (and blurred) on every
   // edit; the blur otherwise dropped the caret so the next key escaped the editor.
   const [bodySeed, setBodySeed] = useState(0);
-  // On selection change, restore an in-progress edit (autosave) if present, so
-  // switching objects never loses unsaved work; else seed from the model.
+  // On selection change: first fold the OUTGOING page's live buffer back into `objects`
+  // (so a later return reseeds from the current edit, not the load-time data, even after
+  // autosave has cleared its dirty entry), then seed the editor for the incoming page —
+  // restoring its in-progress edit from autosave if present, else from the (now
+  // up-to-date) snapshot, so switching objects never loses unsaved work.
   if (selected && editingPath !== selectedPath) {
+    if (editingPath) {
+      setObjects((prev) => mergeEditIntoObjects(prev, editingPath, edit.data, edit.body));
+    }
     setEditingPath(selectedPath);
     const dirty = autosave.getDirtyObject(selectedPath);
     setEdit(
