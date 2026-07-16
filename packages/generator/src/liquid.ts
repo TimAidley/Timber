@@ -1,4 +1,5 @@
 import { Liquid } from 'liquidjs';
+import { registerComparisonFilters } from './filters.js';
 import type { TemplateMap } from './types.js';
 
 /**
@@ -58,12 +59,16 @@ function outputEscape(value: unknown): string {
  * in the browser and Node (preview ≡ build). Omit it for a single self-contained template.
  */
 export function createEngine(templates?: TemplateMap): Liquid {
-  return new Liquid({
+  const engine = new Liquid({
     jsTruthy: true,
     outputEscape,
     // `templates` makes LiquidJS resolve partials/layouts from the map instead of `fs`.
     ...(templates ? { templates } : {}),
   });
+  // Comparison query filters (SPEC §6) — `where` is equality-only, so these add
+  // `where_gt`/`where_gte`/`where_lt`/`where_lte`/`where_ne`/`where_between` + `days_between`.
+  registerComparisonFilters(engine);
+  return engine;
 }
 
 /** A shared default engine instance for the common (no-partials) render path. */

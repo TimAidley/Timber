@@ -9,6 +9,8 @@ export { renderPage } from './render.js';
 export { renderMarkdown } from './markdown.js';
 export { parseFrontMatter } from './frontmatter.js';
 export { createEngine, engine } from './liquid.js';
+export { buildClock } from './clock.js';
+export type { Clock } from './clock.js';
 
 export type {
   FrontMatter,

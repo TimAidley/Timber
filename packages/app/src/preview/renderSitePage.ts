@@ -1,4 +1,4 @@
-import { renderPage, type FrontMatter } from '@timber/generator';
+import { renderPage, buildClock, type FrontMatter } from '@timber/generator';
 import {
   assembleCollections,
   siteContext,
@@ -75,6 +75,10 @@ export async function renderSitePage(input: RenderSitePageInput): Promise<string
     return target && targetSchema ? effectiveUrl(target, targetSchema) : undefined;
   });
 
+  // Temporal context (SPEC §6): `now`/`today` for time-relative templates (used by
+  // `where_exp` / the comparison filters), exactly as the CLI build derives it — preview ≡ build.
+  const clock = buildClock(new Date());
+
   // Per-type collections for listing loops (SPEC §6), assembled exactly as the CLI build
   // does — same `effectiveUrl`, same @timber/content helper — so preview ≡ build.
   const collections = assembleCollections(model, effectiveUrl);
@@ -90,6 +94,8 @@ export async function renderSitePage(input: RenderSitePageInput): Promise<string
     site,
     collections,
     seo,
+    now: clock.now,
+    today: clock.today,
   });
 
   // Inline the theme stylesheet in place of its (unreachable) `<link>`.

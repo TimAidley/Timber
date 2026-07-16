@@ -52,6 +52,10 @@ export async function renderPage(input: RenderPageInput): Promise<string> {
     site: input.site ?? {},
     collections: input.collections ?? {},
     seo: input.seo ?? {},
+    // Temporal context (SPEC §6): top-level so `where_exp`/comparison filters can read
+    // `today`/`now` directly. Omitted keys simply render as empty.
+    now: input.now,
+    today: input.today,
   });
 
   return html;

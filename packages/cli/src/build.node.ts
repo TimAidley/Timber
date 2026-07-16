@@ -1,6 +1,6 @@
 import { readdir, readFile, writeFile, mkdir } from 'node:fs/promises';
 import { dirname, join, relative, sep } from 'node:path';
-import { renderPage } from '@timber/generator';
+import { renderPage, buildClock } from '@timber/generator';
 import {
   aliasUrls,
   assembleCollections,
@@ -138,6 +138,11 @@ export async function buildSite(repoDir: string, outDir: string): Promise<BuildR
   // Per-type collections for listing loops (SPEC §6): every page can `{% for x in
   // collections.<type> %}`. Uses the same `effectiveUrl` as page routing so listing
   // links match the pages they point at (homepage-at-root included).
+  // Temporal context (SPEC §6): the build instant drives `now`/`today` in templates (used
+  // by `where_exp` / the comparison filters). Read from the clock here at the impure CLI
+  // edge — the generator core stays pure. CI's daily scheduled rebuild refreshes it so
+  // time-relative content ("upcoming") stays correct without runtime logic.
+  const clock = buildClock(new Date());
   const collections = assembleCollections(model, effectiveUrl);
 
   let pages = 0;
@@ -176,6 +181,8 @@ export async function buildSite(repoDir: string, outDir: string): Promise<BuildR
       site,
       collections,
       seo,
+      now: clock.now,
+      today: clock.today,
     });
 
     const dir = urlToDir(url);

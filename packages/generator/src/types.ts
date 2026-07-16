@@ -54,4 +54,13 @@ export interface RenderPageInput {
   collections?: CollectionsContext;
   /** Optional per-page derived data (e.g. SEO) exposed as `{{ seo }}` (SPEC §13). */
   seo?: Record<string, unknown>;
+  /**
+   * Optional temporal context (SPEC §6): the build/preview instant, exposed at the top
+   * level as `{{ now }}` (ISO-8601) and `{{ today }}` (`YYYY-MM-DD`). Supplied by the
+   * caller (never read from the clock here, so preview ≡ build) — see {@link buildClock}.
+   * Being top-level, `today` is directly usable in `where_exp` predicates, e.g.
+   * `collections.events | where_exp: 'e', 'e.start >= today'`.
+   */
+  now?: string;
+  today?: string;
 }
