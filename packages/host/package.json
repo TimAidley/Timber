@@ -1,0 +1,21 @@
+{
+  "name": "@timber/host",
+  "version": "0.0.0",
+  "description": "Timber's host-provider port: the host-neutral types and interfaces the editor depends on, so a git host (GitHub today; GitLab/Gitea/self-hosted later) is a swappable adapter behind a seam.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  }
+}

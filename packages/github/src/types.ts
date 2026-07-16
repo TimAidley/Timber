@@ -1,111 +1,56 @@
+import type { GetToken, DeployRun } from '@timber/host';
+
+// The host-neutral types now live in `@timber/host` (the port). Re-export them so
+// existing `@timber/github` importers keep working unchanged while the app migrates to
+// importing straight from the port.
+export type {
+  ChangedPath,
+  CommitFilesInput,
+  CommitResult,
+  DeployRun,
+  FileWrite,
+  GetToken,
+  MoveEntry,
+  PublishSquashInput,
+  RefComparison,
+  RepoSnapshot,
+  RepoTree,
+  TreeEntry,
+} from '@timber/host';
+
+/**
+ * Construction config for the GitHub adapter. `owner`/`repo` are GitHub's namespace/repo
+ * slug; `getToken` is the shared auth seam (SPEC §9). This is adapter-specific — the port
+ * itself knows nothing about "owner/repo".
+ */
 export interface RepoClientOptions {
   owner: string;
   repo: string;
-  getToken: import('./token.js').GetToken;
-}
-
-export interface TreeEntry {
-  path: string;
-  type: 'blob' | 'tree';
-  sha: string;
-  size?: number;
-}
-
-/** The result of loading a branch's content into memory (SPEC §11: "the browser is a cache"). */
-export interface RepoTree {
-  ref: string;
-  commitSha: string;
-  treeSha: string;
-  entries: TreeEntry[];
+  getToken: GetToken;
+  /**
+   * The GitHub Actions workflow file that builds + deploys the site (SPEC §12), used by
+   * the {@link DeployBackend} capability. Defaults to the site-template's `deploy.yml`.
+   */
+  deployWorkflow?: string;
 }
 
 /**
- * A file to write in a commit. Text (`content`) covers Markdown/YAML/templates;
- * binary (`bytes`) covers processed images from the editor's upload pipeline
- * (SPEC §7) — both become base64 Git Data API blobs.
+ * @deprecated Use {@link DeployRun} from `@timber/host`. Kept as an alias while callers
+ * migrate — GitHub's "workflow run" is one host's realization of a deploy.
  */
-export type FileWrite = { path: string; content: string } | { path: string; bytes: Uint8Array };
-
-/** An in-memory snapshot of a repo's text files, keyed by repo-relative path. */
-export type RepoSnapshot = Map<string, string>;
-
-export interface CommitFilesInput {
-  /** Branch to commit to; created from `baseBranch` if it doesn't exist yet. */
-  branch: string;
-  /** Only used when `branch` doesn't exist yet. Defaults to the repo's default branch. */
-  baseBranch?: string;
-  message: string;
-  files: FileWrite[];
-  /**
-   * Paths to remove in the same commit (deleted from `base_tree` via a `sha: null`
-   * tree entry). Powers object delete and the old-path side of a rename (SPEC §5).
-   */
-  deletions?: string[];
-  /**
-   * Paths to move by **reusing an existing blob SHA** — no re-upload of the bytes.
-   * Each writes `to` at `sha` and deletes `from`; used to relocate a bundle's
-   * colocated assets on rename (SPEC §5). The moved `index.md` is a normal `files`
-   * write (its content changes) plus a `from` deletion.
-   */
-  moves?: MoveEntry[];
-}
+export type WorkflowRun = DeployRun;
 
 /**
- * Relocate an existing blob to a new path without re-uploading its bytes. A move with
- * `from === to` is a **re-add**: it re-attaches the blob at its own path without a
- * deletion — used to restore a bundle's colocated assets after a cancelled delete.
+ * An entry to overlay onto a base tree; `sha: null` deletes the path. GitHub-specific
+ * (its blob→tree→commit model) — an internal detail of this adapter's `publishSquash`,
+ * not part of the host port.
  */
-export interface MoveEntry {
-  from: string;
-  to: string;
-  sha: string;
-}
-
-export interface CommitResult {
-  sha: string;
-}
-
-/** One file changed between two commits (SPEC §11 publish diff / conflict overlap). */
-export interface ChangedPath {
-  path: string;
-  /** GitHub status: added | modified | removed | renamed | copied | changed. */
-  status: string;
-  /** For `renamed`, the old path. */
-  previousPath?: string;
-}
-
-/** An entry to overlay onto a base tree; `sha: null` deletes the path. */
 export interface TreeOverlayEntry {
   path: string;
   sha: string | null;
 }
 
-/**
- * How one ref stands relative to another (GitHub's `compare` result). Powers the
- * editor's "your build is out of date" check: compare the Timber commit the editor
- * was built from against the tip of the Timber branch it follows (SPEC §12).
- */
-export interface RefComparison {
-  /** `ahead` | `behind` | `identical` | `diverged`, relative to `base`. */
-  status: string;
-  /** Commits `head` has that `base` doesn't (how far the followed ref moved on). */
-  aheadBy: number;
-  /** Commits `base` has that `head` doesn't. */
-  behindBy: number;
-}
-
-/** The latest run of a workflow — drives the editor's deploy-status indicator (SPEC §12). */
-export interface WorkflowRun {
-  /** queued | in_progress | completed. */
-  status: string;
-  /** success | failure | cancelled | … | null while running. */
-  conclusion: string | null;
-  /** Link to the run on GitHub. */
-  url: string;
-  headBranch: string | null;
-  createdAt: string;
-}
-
+/** GitHub-specific commit-from-tree input — internal to this adapter (see {@link TreeOverlayEntry}). */
 export interface CommitTreeInput {
   branch: string;
   message: string;

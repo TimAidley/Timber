@@ -1,4 +1,5 @@
 import { Octokit } from '@octokit/rest';
+import type { DeployBackend, HostProvider, PublishSquashInput } from '@timber/host';
 import { base64ToBytes, base64ToUtf8, bytesToBase64, utf8ToBase64 } from './base64.js';
 import type {
   ChangedPath,
@@ -14,6 +15,9 @@ import type {
   TreeOverlayEntry,
   WorkflowRun,
 } from './types.js';
+
+/** The GitHub Actions workflow file the site-template ships for build+deploy (SPEC §12). */
+const DEFAULT_DEPLOY_WORKFLOW = 'deploy.yml';
 
 /**
  * Text files the content model reads (SPEC §5): Markdown bundles + schema/config
@@ -59,19 +63,33 @@ function isNonFastForwardError(err: unknown): boolean {
  * as a clear error rather than being silently retried, and a refreshed/short-lived
  * token is picked up automatically on the next call.
  */
-export class RepoClient {
+export class RepoClient implements HostProvider {
   private readonly octokit: Octokit;
   private readonly owner: string;
   private readonly repo: string;
+  private readonly deployWorkflow: string;
+
+  /**
+   * The optional {@link DeployBackend} capability (SPEC §12). GitHub always has Actions,
+   * so this adapter always provides it — mapping the port's host-neutral deploy calls
+   * onto the site-template's deploy workflow. Built once so its identity is stable (React
+   * effect deps compare it by reference).
+   */
+  readonly deploy: DeployBackend;
 
   constructor(options: RepoClientOptions) {
     this.owner = options.owner;
     this.repo = options.repo;
+    this.deployWorkflow = options.deployWorkflow ?? DEFAULT_DEPLOY_WORKFLOW;
     this.octokit = new Octokit();
     this.octokit.hook.before('request', async (requestOptions) => {
       const token = await options.getToken();
       requestOptions.headers.authorization = `Bearer ${token}`;
     });
+    this.deploy = {
+      getLatestDeploy: (branch) => this.getLatestWorkflowRun(this.deployWorkflow, branch),
+      triggerDeploy: (ref) => this.dispatchWorkflow(this.deployWorkflow, ref),
+    };
   }
 
   async getDefaultBranch(): Promise<string> {
@@ -215,7 +233,9 @@ export class RepoClient {
    * paths (the content model only carries `index.md`) and reuse existing blob SHAs when
    * moving them (SPEC §5).
    */
-  async loadSnapshotWithTree(ref?: string): Promise<{ snapshot: RepoSnapshot; tree: RepoTree }> {
+  async loadSnapshotWithTree(
+    ref?: string,
+  ): Promise<{ snapshot: RepoSnapshot; tree: RepoTree }> {
     const tree = await this.loadTree(ref);
     const textEntries = tree.entries.filter(
       (e) => e.type === 'blob' && SNAPSHOT_FILE.test(e.path),
@@ -236,7 +256,8 @@ export class RepoClient {
   }
 
   private async createBlob(file: FileWrite): Promise<{ path: string; sha: string }> {
-    const content = 'bytes' in file ? bytesToBase64(file.bytes) : utf8ToBase64(file.content);
+    const content =
+      'bytes' in file ? bytesToBase64(file.bytes) : utf8ToBase64(file.content);
     const { data } = await this.octokit.rest.git.createBlob({
       owner: this.owner,
       repo: this.repo,
@@ -295,12 +316,14 @@ export class RepoClient {
         type: 'blob' as const,
         sha: move.sha,
       })),
-      ...[...deletions, ...moves.filter((m) => m.from !== m.to).map((m) => m.from)].map((path) => ({
-        path,
-        mode: '100644' as const,
-        type: 'blob' as const,
-        sha: null,
-      })),
+      ...[...deletions, ...moves.filter((m) => m.from !== m.to).map((m) => m.from)].map(
+        (path) => ({
+          path,
+          mode: '100644' as const,
+          type: 'blob' as const,
+          sha: null,
+        }),
+      ),
     ];
 
     // Build the commit on the current tip and fast-forward the ref. If the ref moved
@@ -345,7 +368,12 @@ export class RepoClient {
         // Give up if we're out of attempts, it's not a fast-forward race, or the tip
         // hasn't actually advanced (a stale read that a retry can't fix — let the
         // caller's backoff retry once the refs read catches up).
-        if (attempt >= MAX_ATTEMPTS || !isNonFastForwardError(err) || !latest || latest === tipSha) {
+        if (
+          attempt >= MAX_ATTEMPTS ||
+          !isNonFastForwardError(err) ||
+          !latest ||
+          latest === tipSha
+        ) {
           throw err;
         }
         tipSha = latest;
@@ -425,6 +453,49 @@ export class RepoClient {
     return { sha: commit.sha };
   }
 
+  /**
+   * Intent-level publish (SPEC §11): squash-merge WIP onto the default branch and reset
+   * WIP to the new tip. The app decides *whether* to publish and computes the plan (clean
+   * vs rebase, conflict detection); this maps that plan onto GitHub's blob→tree→commit
+   * model — the mechanics another host would express differently. `clean` reuses WIP's
+   * tree wholesale (main hasn't moved); `rebase` overlays WIP's changed files onto main's
+   * current tree (main moved but the files don't overlap).
+   */
+  async publishSquash(input: PublishSquashInput): Promise<CommitResult> {
+    let treeSha: string;
+    if (input.strategy === 'clean') {
+      // WIP was built on the (unchanged) main tip, so its tree IS the squash result.
+      treeSha = await this.treeShaOf(input.wipTip);
+    } else {
+      // Rebase: main's tree with WIP's changed files overlaid on top.
+      const mainTree = await this.treeShaOf(input.parentSha);
+      const wipTree = await this.loadTree(input.wipBranch);
+      const wipByPath = new Map(
+        wipTree.entries.filter((e) => e.type === 'blob').map((e) => [e.path, e.sha]),
+      );
+      const entries: TreeOverlayEntry[] = [];
+      for (const c of input.changes) {
+        if (c.status === 'removed') {
+          entries.push({ path: c.path, sha: null });
+          continue;
+        }
+        const sha = wipByPath.get(c.path);
+        if (sha) entries.push({ path: c.path, sha });
+        if (c.previousPath) entries.push({ path: c.previousPath, sha: null }); // renamed: drop old
+      }
+      treeSha = await this.overlayTree(mainTree, entries);
+    }
+
+    const { sha } = await this.commitTree({
+      branch: input.defaultBranch,
+      message: input.message,
+      treeSha,
+      parents: [input.parentSha],
+    });
+    await this.resetBranch(input.wipBranch, sha);
+    return { sha };
+  }
+
   /** Force-reset a branch to a SHA (SPEC §11: reset WIP from new main after publish). */
   async resetBranch(branch: string, toSha: string): Promise<void> {
     await this.octokit.rest.git.updateRef({
@@ -441,7 +512,10 @@ export class RepoClient {
    * for one branch — powers the editor's deploy-status indicator (SPEC §12:
    * "building… / published ✓ / failed").
    */
-  async getLatestWorkflowRun(workflowFile: string, branch?: string): Promise<WorkflowRun | undefined> {
+  async getLatestWorkflowRun(
+    workflowFile: string,
+    branch?: string,
+  ): Promise<WorkflowRun | undefined> {
     const { data } = await this.octokit.rest.actions.listWorkflowRuns({
       owner: this.owner,
       repo: this.repo,

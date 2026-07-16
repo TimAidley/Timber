@@ -18,7 +18,8 @@
     "record-fixtures": "tsx scripts/record-fixtures.ts"
   },
   "dependencies": {
-    "@octokit/rest": "^21.1.0"
+    "@octokit/rest": "^21.1.0",
+    "@timber/host": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

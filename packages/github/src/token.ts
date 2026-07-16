@@ -1,9 +1,8 @@
-/**
- * The auth seam (SPEC §9): the rest of the app only ever needs "a valid token" —
- * the mechanism (pasted PAT for dev, an OAuth broker, a GitHub App flow later) can
- * be swapped without touching callers. `RepoClient` depends only on this type.
- */
-export type GetToken = () => Promise<string>;
+import type { GetToken } from '@timber/host';
+
+// The `GetToken` seam now lives in the host port; re-export it so existing
+// `@timber/github` importers are unaffected.
+export type { GetToken } from '@timber/host';
 
 /**
  * A Node/dev `GetToken`: reads a fine-grained PAT from an environment variable.

@@ -9,6 +9,14 @@ export { base64ToUtf8, utf8ToBase64, bytesToBase64, base64ToBytes } from './base
 
 export type { GetToken } from './token.js';
 export type {
+  DeployBackend,
+  DeployRun,
+  HostIdentity,
+  HostProvider,
+  HostRepo,
+  PublishSquashInput,
+} from '@timber/host';
+export type {
   ChangedPath,
   CommitFilesInput,
   CommitResult,
