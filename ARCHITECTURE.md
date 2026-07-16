@@ -22,7 +22,8 @@ a site* see **`INSTALL.md`**.
 | `@timber/content` | Content model: schemas, id→object index, reference resolution, validation, SEO, navigation, redirects, video allowlist, visibility | browser and Node |
 | `@timber/cli` | `timber build . _site` — builds the whole static site | Node (CI) |
 | `@timber/app` | The browser editor SPA (React): auth, editor, preview, media pipeline | browser |
-| `@timber/github` | `RepoClient` (Octokit): load/commit via the Git Data API, read/dispatch workflow runs | browser |
+| `@timber/host` | The **host-provider port**: host-neutral types + the `HostProvider` interface (`HostRepo` + `HostIdentity` + optional `DeployBackend`) the editor depends on, so a git host is a swappable adapter | browser and Node |
+| `@timber/github` | **A `HostProvider` adapter** — `RepoClient` (Octokit): load/commit via the Git Data API, read/dispatch workflow runs. Today's only host adapter | browser |
 | `@timber/oauth-broker` | Cloudflare Worker: OAuth token exchange (holds the secret) **+** device-flow relay (secret-less) | edge |
 
 **Core principle:** the generator is **one codebase with two entry points** — the browser
@@ -63,6 +64,31 @@ So a live site leans on four things: **its own repo**, the **public `TimAidley/T
 repo** (checked out at build time — *not* forked), a **Cloudflare broker**, and a **GitHub
 App**. The `TIMBER_REF` in both workflows pins which Timber version is used (`main` today;
 set it to a release tag for stability).
+
+## The git host — the `HostProvider` seam
+
+Everything the editor does against a git host — load content, commit edits to the WIP
+branch, publish (squash WIP→main), watch the deploy — flows through **one port**,
+`HostProvider` (`packages/host`). The app constructs a concrete adapter in exactly one
+place — `createHostProvider()` (`packages/app/src/github/hostProvider.ts`) — and depends
+only on the port everywhere else. Today there is one adapter, `@timber/github`'s
+`RepoClient`; a GitLab/Gitea/self-hosted adapter later means writing a new adapter +
+extending that factory, not touching the editor/publish/autosave/deploy code.
+
+The port is split by capability so a host provides what it can:
+
+| Capability | Interface | Notes |
+|---|---|---|
+| Read/write git content + **publish** | `HostRepo` | Always required. Publish is the intent-level `publishSquash()` — the app computes the *plan* (validity gate, clean-vs-rebase, conflict detection, all host-neutral); the adapter owns the host-specific mechanics of building the squashed commit (GitHub's blob→tree→commit model stays inside `@timber/github`). |
+| Who is signed in | `HostIdentity` | `getAuthenticatedLogin()` drives the per-user `<login>_wip` branch (SPEC §11). |
+| Trigger/observe a build | `DeployBackend` (**optional**) | `getLatestDeploy()` / `triggerDeploy()`. A host with **no CI** omits it, and the editor degrades — no publish-status morph, no out-of-date banner — instead of assuming GitHub Actions + Pages. GitHub maps it onto the site-template's `deploy.yml` workflow. |
+
+Two GitHub *hosting assumptions* still live in generated output rather than the port and
+would move under `DeployBackend` when a second host lands: the project-Pages **base path**
+(`you.github.io/<repo>/`, `@timber/content` `seo.ts`) and the **meta-refresh redirect
+stubs** emitted because GitHub Pages has no server-side redirects (`redirects.ts`). A host
+with different base-path/redirect semantics (e.g. Codeberg/GitLab Pages, which are
+branch-based) would declare them there.
 
 ## Authentication — the `getToken()` seam
 
