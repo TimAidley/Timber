@@ -80,6 +80,9 @@ importers:
       '@timber/github':
         specifier: workspace:*
         version: link:../github
+      '@timber/host':
+        specifier: workspace:*
+        version: link:../host
       codemirror:
         specifier: ^6.0.2
         version: 6.0.2

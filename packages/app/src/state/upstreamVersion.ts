@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { RefComparison } from '@timber/github';
+import type { RefComparison } from '@timber/host';
 
 /**
  * Whether the editor bundle is up to date with the Timber branch it follows (SPEC §12).

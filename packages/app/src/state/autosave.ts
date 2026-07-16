@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { FileWrite, MoveEntry } from '@timber/github';
+import type { FileWrite, MoveEntry } from '@timber/host';
 import type { FrontMatter } from '@timber/generator';
 import { reassembleDocument } from '../content/document.js';
 import type { AssetStore } from './assets.js';

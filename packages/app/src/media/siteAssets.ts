@@ -1,4 +1,4 @@
-import type { TreeEntry } from '@timber/github';
+import type { TreeEntry } from '@timber/host';
 import { extensionOf } from './assetPolicy.js';
 
 /**

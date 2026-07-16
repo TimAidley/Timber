@@ -1,4 +1,4 @@
-import type { RepoClient } from '@timber/github';
+import type { HostProvider } from '@timber/host';
 
 /**
  * A source file the advanced area edits: a Liquid template or a config YAML. These
@@ -36,7 +36,7 @@ export function kindOf(path: string): AdvancedKind | undefined {
  * fetching each blob concurrently. Sorted templates → schemas → config for a stable
  * file list.
  */
-export async function loadAdvancedFiles(client: RepoClient, ref: string): Promise<AdvancedFile[]> {
+export async function loadAdvancedFiles(client: HostProvider, ref: string): Promise<AdvancedFile[]> {
   const tree = await client.loadTree(ref);
   const targets = tree.entries.flatMap((entry) => {
     if (entry.type !== 'blob') return [];

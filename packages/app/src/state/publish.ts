@@ -5,27 +5,20 @@ import {
   Validator,
   type RepoSnapshot,
 } from '@timber/content';
-import type { ChangedPath, RepoTree, TreeOverlayEntry } from '@timber/github';
+import type { ChangedPath, CommitResult, PublishSquashInput } from '@timber/host';
 
 /**
- * The subset of RepoClient the publisher needs (RepoClient satisfies it
- * structurally). Declaring it here keeps planPublish/runPublish unit-testable with
- * a fake client, no network — the same split used for the Autosaver.
+ * The subset of the host port the publisher needs (a {@link HostProvider} satisfies it
+ * structurally). Declaring it here keeps planPublish/runPublish unit-testable with a
+ * fake client, no network — the same split used for the Autosaver. The publish *decision*
+ * (validity gate, clean-vs-rebase, conflict detection) is host-neutral and lives here;
+ * the host-specific mechanics of building the squash commit live behind `publishSquash`.
  */
 export interface PublishClient {
   getBranchSha(branch: string): Promise<string | undefined>;
   compareChangedPaths(base: string, head: string): Promise<ChangedPath[]>;
-  treeShaOf(commitSha: string): Promise<string>;
-  loadTree(ref: string): Promise<RepoTree>;
   loadSnapshot(ref: string): Promise<RepoSnapshot>;
-  overlayTree(baseTreeSha: string, entries: TreeOverlayEntry[]): Promise<string>;
-  commitTree(input: {
-    branch: string;
-    message: string;
-    treeSha: string;
-    parents: string[];
-  }): Promise<{ sha: string }>;
-  resetBranch(branch: string, toSha: string): Promise<void>;
+  publishSquash(input: PublishSquashInput): Promise<CommitResult>;
 }
 
 export interface PublishContext {
@@ -101,9 +94,11 @@ export async function planPublish(client: PublishClient, ctx: PublishContext): P
 }
 
 /**
- * Execute an approved {@link PublishPlan}: squash-merge onto the default branch, then
- * reset WIP to the new tip. Returns the new default-branch SHA (the caller updates
- * `session.baseSha` and clears local drafts).
+ * Execute an approved {@link PublishPlan}: hand the plan to the host's intent-level
+ * {@link PublishClient.publishSquash}, which squash-merges onto the default branch and
+ * resets WIP to the new tip. Returns the new default-branch SHA (the caller updates
+ * `session.baseSha` and clears local drafts). The tree mechanics (clean reuse vs rebase
+ * overlay) are the adapter's job — see the host port's `publishSquash`.
  */
 export async function runPublish(
   client: PublishClient,
@@ -111,36 +106,13 @@ export async function runPublish(
   plan: Extract<PublishPlan, { ok: true }>,
   message: string,
 ): Promise<{ sha: string }> {
-  let treeSha: string;
-  if (plan.strategy === 'clean') {
-    // WIP was built on the (unchanged) main tip, so its tree IS the squash result.
-    treeSha = await client.treeShaOf(plan.wipTip);
-  } else {
-    // Rebase: main's tree with WIP's changed files overlaid on top.
-    const mainTree = await client.treeShaOf(plan.currentMain);
-    const wipTree = await client.loadTree(ctx.wipBranch);
-    const wipByPath = new Map(
-      wipTree.entries.filter((e) => e.type === 'blob').map((e) => [e.path, e.sha]),
-    );
-    const entries: TreeOverlayEntry[] = [];
-    for (const c of plan.wipChanged) {
-      if (c.status === 'removed') {
-        entries.push({ path: c.path, sha: null });
-        continue;
-      }
-      const sha = wipByPath.get(c.path);
-      if (sha) entries.push({ path: c.path, sha });
-      if (c.previousPath) entries.push({ path: c.previousPath, sha: null }); // renamed: drop old
-    }
-    treeSha = await client.overlayTree(mainTree, entries);
-  }
-
-  const { sha } = await client.commitTree({
-    branch: ctx.defaultBranch,
+  return client.publishSquash({
+    defaultBranch: ctx.defaultBranch,
+    wipBranch: ctx.wipBranch,
+    parentSha: plan.currentMain,
+    wipTip: plan.wipTip,
     message,
-    treeSha,
-    parents: [plan.currentMain],
+    strategy: plan.strategy,
+    changes: plan.wipChanged,
   });
-  await client.resetBranch(ctx.wipBranch, sha);
-  return { sha };
 }

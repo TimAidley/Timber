@@ -1,4 +1,4 @@
-import type { RepoClient } from '@timber/github';
+import type { HostProvider } from '@timber/host';
 
 /**
  * The edited site's own theme + templates, loaded so the live preview renders like the
@@ -48,7 +48,7 @@ function resolvePath(baseDir: string, ref: string): string {
 async function inlineCssAssets(
   css: string,
   baseDir: string,
-  client: RepoClient,
+  client: HostProvider,
   shaByPath: Map<string, string>,
   objectUrls: string[],
 ): Promise<string> {
@@ -83,7 +83,7 @@ async function inlineCssAssets(
  * Load a branch's templates + theme stylesheet + navigation so the preview can render
  * a page exactly as the build would. One tree read, then the blobs concurrently.
  */
-export async function loadSiteTheme(client: RepoClient, ref: string): Promise<SiteTheme> {
+export async function loadSiteTheme(client: HostProvider, ref: string): Promise<SiteTheme> {
   const tree = await client.loadTree(ref);
   const shaByPath = new Map(
     tree.entries.filter((e) => e.type === 'blob').map((e) => [e.path, e.sha] as const),

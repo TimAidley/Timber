@@ -1,4 +1,4 @@
-import type { ChangedPath, MoveEntry } from '@timber/github';
+import type { ChangedPath, MoveEntry } from '@timber/host';
 
 export interface BundleResetPlan {
   /** Files to reset to main's blob (present on main, changed/removed on WIP). */

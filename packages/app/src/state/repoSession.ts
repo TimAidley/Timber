@@ -1,4 +1,4 @@
-import { RepoClient, type ChangedPath, type RepoTree, type TreeEntry } from '@timber/github';
+import type { ChangedPath, HostProvider, RepoTree, TreeEntry } from '@timber/host';
 import {
   assembleContent,
   loadSchemas,
@@ -9,15 +9,16 @@ import {
 } from '@timber/content';
 import { getToken } from '../github/auth.js';
 import { repoConfig } from '../github/config.js';
+import { createHostProvider } from '../github/hostProvider.js';
 
 /**
- * An open editing session against a real GitHub repo (SPEC §11). Content is loaded
+ * An open editing session against the configured host repo (SPEC §11). Content is loaded
  * from the user's `<login>_wip` branch if it exists (their durable, portable
  * in-progress work), else from the default branch. `baseSha` records the
  * default-branch tip the WIP is based on — Phase 5b's conflict check needs it.
  */
 export interface RepoSession {
-  client: RepoClient;
+  client: HostProvider;
   login: string;
   /** The per-user WIP branch name, `<login>_wip` (SPEC §11). */
   wipBranch: string;
@@ -51,7 +52,7 @@ export interface DeletedObject {
 // path segment — are never user-deletable, so pending deletions are always collections).
 const OBJECT_INDEX = /^content\/[^/]+\/[^/]+\/index\.md$/;
 
-/** The minimal slice of RepoClient the deletion-derivation needs (fakeable in tests). */
+/** The minimal slice of the host port the deletion-derivation needs (fakeable in tests). */
 export interface PendingDeletionDeps {
   compareChangedPaths: (base: string, head: string) => Promise<ChangedPath[]>;
   loadTree: (ref: string) => Promise<RepoTree>;
@@ -94,13 +95,13 @@ export async function derivePendingDeletions(
 }
 
 /**
- * Connect to the configured repo and assemble its content model in-browser — the
- * same `loadSchemas` + `assembleContent` the CLI runs, but fed by
- * `RepoClient.loadSnapshot` instead of the filesystem. Replaces the bundled demo
- * repo as the editor's content source.
+ * Connect to the configured host repo and assemble its content model in-browser — the
+ * same `loadSchemas` + `assembleContent` the CLI runs, but fed by the host port's
+ * `loadSnapshot` instead of the filesystem. Replaces the bundled demo repo as the
+ * editor's content source.
  */
 export async function loadRepoSession(): Promise<RepoSession> {
-  const client = new RepoClient({ owner: repoConfig.owner, repo: repoConfig.repo, getToken });
+  const client = createHostProvider({ owner: repoConfig.owner, repo: repoConfig.repo }, getToken);
 
   const login = await client.getAuthenticatedLogin();
   const defaultBranch = await client.getDefaultBranch();

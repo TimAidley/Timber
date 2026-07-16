@@ -1,4 +1,4 @@
-import type { GetToken } from '@timber/github';
+import type { GetToken } from '@timber/host';
 
 /**
  * The browser implementation of the `getToken()` seam (SPEC §9). For dev, the user

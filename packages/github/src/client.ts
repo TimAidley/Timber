@@ -20,6 +20,33 @@ import type {
 const DEFAULT_DEPLOY_WORKFLOW = 'deploy.yml';
 
 /**
+ * The rebase overlay for a publish (SPEC §11): given WIP's changed paths since the
+ * conflict base and WIP's file tree, produce the tree-overlay entries to apply onto
+ * main's current tree — the changed file's blob (reused, no re-upload), a `null` to
+ * delete a removed file, and a `null` on a rename's old path. Pure (no network), so the
+ * publish tree logic is unit-tested here in the adapter, where GitHub's tree model lives.
+ */
+export function planRebaseOverlay(
+  changes: readonly ChangedPath[],
+  wipEntries: readonly TreeEntry[],
+): TreeOverlayEntry[] {
+  const wipByPath = new Map(
+    wipEntries.filter((e) => e.type === 'blob').map((e) => [e.path, e.sha]),
+  );
+  const entries: TreeOverlayEntry[] = [];
+  for (const c of changes) {
+    if (c.status === 'removed') {
+      entries.push({ path: c.path, sha: null });
+      continue;
+    }
+    const sha = wipByPath.get(c.path);
+    if (sha) entries.push({ path: c.path, sha });
+    if (c.previousPath) entries.push({ path: c.previousPath, sha: null }); // renamed: drop old
+  }
+  return entries;
+}
+
+/**
  * Text files the content model reads (SPEC §5): Markdown bundles + schema/config
  * YAML under `content/` and `config/`. Binary assets aren't loaded into the
  * snapshot — mirrors the CLI's `buildSnapshotFromDir`.
@@ -470,19 +497,7 @@ export class RepoClient implements HostProvider {
       // Rebase: main's tree with WIP's changed files overlaid on top.
       const mainTree = await this.treeShaOf(input.parentSha);
       const wipTree = await this.loadTree(input.wipBranch);
-      const wipByPath = new Map(
-        wipTree.entries.filter((e) => e.type === 'blob').map((e) => [e.path, e.sha]),
-      );
-      const entries: TreeOverlayEntry[] = [];
-      for (const c of input.changes) {
-        if (c.status === 'removed') {
-          entries.push({ path: c.path, sha: null });
-          continue;
-        }
-        const sha = wipByPath.get(c.path);
-        if (sha) entries.push({ path: c.path, sha });
-        if (c.previousPath) entries.push({ path: c.previousPath, sha: null }); // renamed: drop old
-      }
+      const entries = planRebaseOverlay(input.changes, wipTree.entries);
       treeSha = await this.overlayTree(mainTree, entries);
     }
 

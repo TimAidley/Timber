@@ -1,4 +1,4 @@
-import type { GetToken } from '@timber/github';
+import type { GetToken } from '@timber/host';
 import { repoConfig } from './config.js';
 import { getToken as patGetToken } from './token.js';
 import { getToken as oauthGetToken } from './oauth.js';

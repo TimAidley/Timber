@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ChangedPath, RepoSnapshot, RepoTree, TreeOverlayEntry } from '@timber/github';
+import type { ChangedPath, PublishSquashInput, RepoSnapshot } from '@timber/host';
 import { planPublish, runPublish, type PublishClient, type PublishContext } from '../src/state/publish.js';
 
 const CTX: PublishContext = { wipBranch: 'octocat_wip', defaultBranch: 'main', baseSha: 'BASE' };
@@ -19,15 +19,14 @@ interface FakeConfig {
   branches: Record<string, string | undefined>;
   compares: Record<string, ChangedPath[]>;
   snapshot: RepoSnapshot;
-  wipEntries?: RepoTree['entries'];
 }
 
+// A fake host port for the publisher. Since publish became an intent-level port op, the
+// tree mechanics live in the adapter (tested in @timber/github's publish.test.ts); here
+// the fake just records the PublishSquashInput so we can assert runPublish hands the plan
+// to publishSquash correctly.
 class FakeClient implements PublishClient {
-  readonly calls = {
-    commitTree: [] as Array<{ branch: string; treeSha: string; parents: string[] }>,
-    overlayTree: [] as Array<{ base: string; entries: TreeOverlayEntry[] }>,
-    resetBranch: [] as Array<{ branch: string; toSha: string }>,
-  };
+  readonly calls = { publishSquash: [] as PublishSquashInput[] };
   constructor(private readonly cfg: FakeConfig) {}
   async getBranchSha(b: string) {
     return this.cfg.branches[b];
@@ -35,25 +34,12 @@ class FakeClient implements PublishClient {
   async compareChangedPaths(base: string, head: string) {
     return this.cfg.compares[`${base}...${head}`] ?? [];
   }
-  async treeShaOf(sha: string) {
-    return `${sha}-tree`;
-  }
-  async loadTree(ref: string): Promise<RepoTree> {
-    return { ref, commitSha: '', treeSha: '', entries: this.cfg.wipEntries ?? [] };
-  }
   async loadSnapshot() {
     return this.cfg.snapshot;
   }
-  async overlayTree(base: string, entries: TreeOverlayEntry[]) {
-    this.calls.overlayTree.push({ base, entries });
-    return 'OVERLAID';
-  }
-  async commitTree(input: { branch: string; message: string; treeSha: string; parents: string[] }) {
-    this.calls.commitTree.push({ branch: input.branch, treeSha: input.treeSha, parents: input.parents });
+  async publishSquash(input: PublishSquashInput) {
+    this.calls.publishSquash.push(input);
     return { sha: 'NEWMAIN' };
-  }
-  async resetBranch(branch: string, toSha: string) {
-    this.calls.resetBranch.push({ branch, toSha });
   }
 }
 
@@ -129,7 +115,7 @@ describe('planPublish', () => {
 });
 
 describe('runPublish', () => {
-  it('clean squash: commits WIP tree onto main and resets WIP', async () => {
+  it('clean squash: hands publishSquash a clean plan (WIP tip onto unmoved main)', async () => {
     const c = new FakeClient({
       branches: { main: 'BASE', octocat_wip: 'WIP' },
       compares: { 'main...octocat_wip': [{ path: 'content/pages/hello/index.md', status: 'modified' }] },
@@ -140,12 +126,19 @@ describe('runPublish', () => {
 
     const result = await runPublish(c, CTX, plan, 'Publish');
     expect(result.sha).toBe('NEWMAIN');
-    expect(c.calls.commitTree).toEqual([{ branch: 'main', treeSha: 'WIP-tree', parents: ['BASE'] }]);
-    expect(c.calls.resetBranch).toEqual([{ branch: 'octocat_wip', toSha: 'NEWMAIN' }]);
-    expect(c.calls.overlayTree).toHaveLength(0);
+    expect(c.calls.publishSquash).toHaveLength(1);
+    expect(c.calls.publishSquash[0]).toEqual({
+      defaultBranch: 'main',
+      wipBranch: 'octocat_wip',
+      parentSha: 'BASE', // main tip (unmoved)
+      wipTip: 'WIP',
+      message: 'Publish',
+      strategy: 'clean',
+      changes: [{ path: 'content/pages/hello/index.md', status: 'modified' }],
+    });
   });
 
-  it('rebase: overlays WIP changes onto main tree, commits, resets WIP', async () => {
+  it('rebase: hands publishSquash a rebase plan with WIP-since-base changes', async () => {
     const c = new FakeClient({
       branches: { main: 'MAIN', octocat_wip: 'WIP' },
       compares: {
@@ -157,22 +150,21 @@ describe('runPublish', () => {
         ],
       },
       snapshot: validSnapshot,
-      wipEntries: [
-        { path: 'content/pages/hello/index.md', type: 'blob', sha: 'HELLOBLOB' },
-      ],
     });
     const plan = await planPublish(c, CTX);
     if (!plan.ok) throw new Error('expected a runnable plan');
 
     await runPublish(c, CTX, plan, 'Publish');
-    expect(c.calls.overlayTree).toHaveLength(1);
-    expect(c.calls.overlayTree[0]!.base).toBe('MAIN-tree');
-    // modified file overlaid with its blob; removed file deleted (sha null).
-    expect(c.calls.overlayTree[0]!.entries).toEqual([
-      { path: 'content/pages/hello/index.md', sha: 'HELLOBLOB' },
-      { path: 'content/pages/removed/index.md', sha: null },
+    expect(c.calls.publishSquash).toHaveLength(1);
+    const input = c.calls.publishSquash[0]!;
+    expect(input.strategy).toBe('rebase');
+    expect(input.parentSha).toBe('MAIN'); // the moved main tip
+    expect(input.defaultBranch).toBe('main');
+    expect(input.wipBranch).toBe('octocat_wip');
+    // The overlay set is WIP's changes since the conflict base, incl. the removal.
+    expect(input.changes).toEqual([
+      { path: 'content/pages/hello/index.md', status: 'modified' },
+      { path: 'content/pages/removed/index.md', status: 'removed' },
     ]);
-    expect(c.calls.commitTree[0]!.treeSha).toBe('OVERLAID');
-    expect(c.calls.resetBranch).toEqual([{ branch: 'octocat_wip', toSha: 'NEWMAIN' }]);
   });
 });

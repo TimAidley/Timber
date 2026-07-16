@@ -11,7 +11,7 @@ import { PathDiff } from '../diff/PathDiff.js';
 import type { RefTextClient } from '../diff/useRefText.js';
 
 interface PublishDialogProps {
-  /** RepoClient satisfies both structurally (planning + per-file diffs). */
+  /** A HostProvider satisfies both structurally (planning + per-file diffs). */
   client: PublishClient & RefTextClient;
   ctx: PublishContext;
   onClose: () => void;

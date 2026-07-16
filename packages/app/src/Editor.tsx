@@ -9,7 +9,6 @@ import {
   type ContentTypeSchema,
 } from '@timber/content';
 import type { FrontMatter, TemplateMap } from '@timber/generator';
-import { RepoClient } from '@timber/github';
 import type { RepoSession } from './state/repoSession.js';
 import { AssetStore } from './state/assets.js';
 import { repoAssetLoader } from './state/assetLoader.js';
@@ -20,6 +19,7 @@ import { mergeEditIntoObjects } from './content/editState.js';
 import { repoConfig } from './github/config.js';
 import { buildInfo, canCheckForUpdate } from './github/buildInfo.js';
 import { getToken } from './github/auth.js';
+import { createHostProvider } from './github/hostProvider.js';
 import { useUpstreamVersion } from './state/upstreamVersion.js';
 import { UpdateBanner, type UpdatePhase } from './components/UpdateBanner.js';
 import { SchemaForm } from './forms/SchemaForm.js';
@@ -66,9 +66,6 @@ import { schemaNameFromPath } from './advanced/schemaTemplate.js';
 import { canAccessAdvanced } from './github/access.js';
 import { newObject } from './content/newObject.js';
 import { useBackNavigationGuard } from './editor/backNavGuard.js';
-
-/** The deploy workflow's file name (the site-template ships deploy.yml). */
-const DEPLOY_WORKFLOW = 'deploy.yml';
 
 interface EditState {
   data: FrontMatter;
@@ -151,8 +148,7 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   const [publishPhase, setPublishPhase] = useState<PublishPhase>('idle');
   const [deploySince, setDeploySince] = useState<string | undefined>(undefined);
   const deployState = useDeployPoll(
-    session.client,
-    DEPLOY_WORKFLOW,
+    session.client.deploy,
     session.defaultBranch,
     publishPhase === 'building',
     deploySince,
@@ -166,7 +162,7 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   const upstreamClient = useMemo(
     () =>
       canCheck && buildInfo.upstream
-        ? new RepoClient({ ...buildInfo.upstream, getToken })
+        ? createHostProvider(buildInfo.upstream, getToken)
         : undefined,
     [canCheck],
   );
@@ -189,8 +185,7 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   const [updateSince, setUpdateSince] = useState<string | undefined>(undefined);
   const [updateArmed, setUpdateArmed] = useState(false);
   const updateDeployState = useDeployPoll(
-    session.client,
-    DEPLOY_WORKFLOW,
+    session.client.deploy,
     session.defaultBranch,
     updatePhase === 'updating' && updateArmed,
     updateSince,
@@ -211,12 +206,9 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
     setUpdateArmed(false);
     setUpdatePhase('updating');
     try {
-      const latest = await session.client.getLatestWorkflowRun(
-        DEPLOY_WORKFLOW,
-        session.defaultBranch,
-      );
+      const latest = await session.client.deploy?.getLatestDeploy(session.defaultBranch);
       setUpdateSince(latest?.createdAt);
-      await session.client.dispatchWorkflow(DEPLOY_WORKFLOW, session.defaultBranch);
+      await session.client.deploy?.triggerDeploy(session.defaultBranch);
       setUpdateArmed(true);
     } catch (err) {
       console.warn('[timber] editor update failed to dispatch', err);
@@ -635,10 +627,7 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
     setPublishPhase('idle'); // clear a prior done/failed
     autosave.saveNow();
     try {
-      const latest = await session.client.getLatestWorkflowRun(
-        DEPLOY_WORKFLOW,
-        session.defaultBranch,
-      );
+      const latest = await session.client.deploy?.getLatestDeploy(session.defaultBranch);
       setDeploySince(latest?.createdAt);
     } catch {
       setDeploySince(undefined);
@@ -654,12 +643,9 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   async function retryDeploy(): Promise<void> {
     setPublishPhase('building');
     try {
-      const latest = await session.client.getLatestWorkflowRun(
-        DEPLOY_WORKFLOW,
-        session.defaultBranch,
-      );
+      const latest = await session.client.deploy?.getLatestDeploy(session.defaultBranch);
       setDeploySince(latest?.createdAt);
-      await session.client.dispatchWorkflow(DEPLOY_WORKFLOW, session.defaultBranch);
+      await session.client.deploy?.triggerDeploy(session.defaultBranch);
     } catch (err) {
       console.warn('[timber] deploy retry failed to dispatch', err);
       setPublishPhase('failed');
