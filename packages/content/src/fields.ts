@@ -10,6 +10,7 @@ export const FIELD_KINDS: readonly FieldKind[] = [
   'datetime',
   'enum',
   'tags',
+  'color',
   'image',
   'reference',
   'video',
@@ -57,6 +58,11 @@ export function fieldToJsonSchema(field: FieldSchema): JsonSchemaFragment {
       return { type: 'string', enum: field.options ?? [] };
     case 'tags':
       return { type: 'array', items: { type: 'string' } };
+    case 'color':
+      // Stored as a string; the picker only ever yields a valid `#rrggbb`, and the
+      // generator re-validates the hex before it reaches CSS (defence in depth for a
+      // hand-edited value), so no format constraint is imposed here.
+      return field.required ? { type: 'string', minLength: 1 } : { type: 'string' };
     case 'image':
       return { type: 'string', minLength: 1 };
     case 'reference':

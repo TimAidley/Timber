@@ -297,7 +297,8 @@ Multiple editors, but few, and single-file-per-page makes most conflicts structu
 - **Navigation — manual / almost-manual.** Not auto-derived from the content tree (that would dump every event into the menu). A page carries a flag/field like "list in top-level navigation," and/or an explicit ordered nav config. Editorial, not structural.
 - **Global settings** — a singleton type (title, description, base URL, social links), edited through the standard form machinery.
 - **SEO — baked-in defaults** (nearly free from existing data): per-page `<title>` and meta description (from front matter, defaulting from title/excerpt), Open Graph tags with the page's hero image, canonical URLs, auto-generated `sitemap.xml` and `robots.txt`, with per-page front-matter overrides.
-- **Themes** — one good **default theme** (Liquid templates + CSS) ships in the site-template; "customizing the theme" means editing those templates/CSS in the advanced area. **No** theme browser or theme switching. (Settings-driven theme options — a few color/font fields the CSS reads — are a nice idea but **post-MVP**.) **Implemented:** the advanced area edits the theme's **stylesheets** (`assets/**/*.css`) alongside its templates — same load/edit/validate/commit/revert loop, grouped under a "Styles" heading, with a live style specimen preview. CSS is always committable (the build copies `assets/**` verbatim, so there's no parser to gate on). Non-CSS files under `assets/` (fonts, images, logos) are **not** yet manageable in-app — see below.
+- **Themes** — one good **default theme** (Liquid templates + CSS) ships in the site-template; "customizing the theme" means editing those templates/CSS in the advanced area. **No** theme browser or theme switching. **Implemented:** the advanced area edits the theme's **stylesheets** (`assets/**/*.css`) alongside its templates — same load/edit/validate/commit/revert loop, grouped under a "Styles" heading, with a live style specimen preview. CSS is always committable (the build copies `assets/**` verbatim, so there's no parser to gate on). Non-CSS files under `assets/` (fonts, images, logos) are managed by the asset manager (next bullet).
+- **Settings-driven theme options — Implemented.** A few **colour/font/layout knobs** on the global-settings singleton override the default theme's CSS variables, edited through the standard form machinery — no CSS knowledge needed. Fields: `accentColor`/`textColor`/`backgroundColor` (a new **`color` field type** with a native picker → `--accent`/`--fg`/`--bg`), `bodyFont`/`headingFont` (enum → `--font-body`/`--font-heading` from fixed, known-safe stacks), and `contentWidth` (enum → `--maxw`). The generator computes a **validated** `:root{…}` override block (`themeStyle`, exposed as `{{ site.themeStyle }}`) that the default template emits into a `<style>` after `theme.css` — so templates stay dumb and preview ≡ build. **Because these land in `<head>`, every value is validated**: colours must match a hex pattern, fonts/widths come from fixed maps; nothing author-supplied is interpolated raw (emitted via `| raw` precisely because it's generator-trusted). Unset knobs fall through to the theme defaults.
 - **Site assets (binary) — Implemented.** A **"Manage assets"** surface in the advanced area browses `/assets`, uploads, and deletes the theme's shared binaries (fonts, logos, favicons) — the site-wide counterpart to colocated content images. Uploads run a **curated allowlist** (`assetPolicy`): images through the existing in-browser pipeline (§7); font formats (`woff2`/`woff`/`ttf`/`otf`), `.ico`, and `.pdf` passed through byte-for-byte (a favicon stays an icon — *not* re-encoded to WebP); everything else rejected, with an 8 MB cap. The committed set is read from the loaded tree (no extra fetch) and the session's uploads/deletes overlay it; bytes stage in the shared `AssetStore` and autosave commits them. **Delete is guarded**: before removing an asset the manager scans templates + stylesheets for a reference to it (full path and assets-relative forms) and, if found, names where it's used before you confirm — so a delete never silently breaks the build.
 - **Search — Pagefind.** Runs at build time from the already-rendered HTML, ships a chunked WASM index loaded lazily, no backend/API key. Slots in as a **CI step after the generator**, plus a search widget in the theme. Low effort; can be enabled early. Lives in the live site, not the editor.
 - **RSS** — opt-in per collection type; easy to add but **post-MVP**.
@@ -325,7 +326,7 @@ Multiple editors, but few, and single-file-per-page makes most conflicts structu
 
 **In scope for MVP:**
 - Content repo with folder-per-object bundles; schema-defined collection and singleton types
-- Field types: text (single/multi), Markdown body, number, boolean, date/datetime, enum, tags, image, reference, video
+- Field types: text (single/multi), Markdown body, number, boolean, date/datetime, enum, tags, color, image, reference, video
 - Stable-id identity, editable slugs, reference picker, dangling-reference detection, rename-with-redirect, guarded delete
 - Tolerant validation; public/private gated on validity
 - LiquidJS rendering + remark/rehype pipeline; shared browser/Node generator with derived fields and id index
@@ -344,7 +345,6 @@ Multiple editors, but few, and single-file-per-page makes most conflicts structu
 - Search (Pagefind) — easy, can be pulled forward
 - RSS feeds (per-type opt-in)
 - Pagination / archives / taxonomy pages
-- Settings-driven theme options
 - Nested/repeater field types
 - In-browser three-way merge UI
 
@@ -358,7 +358,7 @@ Multiple editors, but few, and single-file-per-page makes most conflicts structu
 3. ~~**Exact image-layout directive syntax**~~ — **resolved (see §7 → Images):** a `remark-directive` container named `figure` wrapping a standard `![alt](src)` plus an optional formattable caption paragraph, with bounded `layout`/`size` enums in the attribute block; trivial full-width/no-caption images stay bare `![]()` for byte-stability; `srcset` is a build-time (`sharp`) concern, not encoded in the syntax.
 4. **Whether to pull Search forward** into MVP (low effort, user is keen).
 5. **Product name.**
-6. Minor tuning: idle-commit interval; per-type validation specifics; whether/when settings-driven theme options land.
+6. Minor tuning: idle-commit interval; per-type validation specifics.
 7. ~~**Multilingual / i18n content model**~~ — **resolved (see §5 → Multilingual content):** one bundle per language variant (not per-field locale maps), linked by a shared `translationKey`, language as a path segment, uniformly language-prefixed URLs, assets copied by blob-SHA reuse on "Add translation." **Still open (deferred refinements):** per-language navigation shape, cross-language reference resolution, UI-string/settings localization, and missing-translation fallback policy.
 
 ---

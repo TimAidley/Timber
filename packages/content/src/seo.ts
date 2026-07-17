@@ -1,4 +1,5 @@
 import { urlFor } from './references.js';
+import { themeStyle } from './theme.js';
 import type { ContentObject, ContentTypeSchema } from './types.js';
 
 /** Site-wide context exposed to templates as `{{ site }}` (SPEC §13 global settings). */
@@ -46,6 +47,9 @@ export function siteContext(settings?: ContentObject): SiteContext {
   // `/repo` for those; `''` for a root site / custom domain / no baseUrl. Host-neutral: it's
   // derived from the configured `baseUrl`. Templates prefix root-absolute links: `{{ site.basePath }}/...`.
   site.basePath = basePathOf(baseUrl);
+  // Settings-driven theme overrides (SPEC §13): a validated `:root{…}` block the default
+  // template emits into a `<style>` after theme.css. Empty string when no knob is set.
+  site.themeStyle = themeStyle(data);
   return site;
 }
 

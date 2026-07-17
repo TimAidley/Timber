@@ -17,6 +17,7 @@ export type FieldKind =
   | 'datetime' // date + time (ISO-8601)
   | 'enum' // single-select from `options`
   | 'tags' // multi-select: array of strings
+  | 'color' // CSS colour (hex), edited with a picker
   | 'image' // path to a colocated/asset image
   | 'reference' // stores a target object's id, displays its title
   | 'video'; // external URL, provider-allowlisted

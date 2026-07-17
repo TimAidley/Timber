@@ -55,6 +55,11 @@ export const FIELD_REFERENCE: readonly FieldDoc[] = [
     options: [...COMMON, 'options (required)'],
   },
   { kind: 'tags', summary: 'A list of free-text tags', options: ['label'] },
+  {
+    kind: 'color',
+    summary: 'A colour (hex), edited with a picker',
+    options: [...COMMON],
+  },
   { kind: 'image', summary: 'An uploaded image (colocated asset)', options: [...COMMON] },
   {
     kind: 'reference',

@@ -25,8 +25,8 @@ describe('siteContext', () => {
     expect(site.baseUrl).toBe('https://example.com'); // trailing slash trimmed
   });
 
-  it('has no settings beyond an empty basePath when there is no singleton', () => {
-    expect(siteContext(undefined)).toEqual({ basePath: '' });
+  it('has no settings beyond basePath + empty themeStyle when there is no singleton', () => {
+    expect(siteContext(undefined)).toEqual({ basePath: '', themeStyle: '' });
   });
 
   it('derives basePath from the base URL path (for subpath / project-Pages deploys)', () => {

@@ -91,6 +91,36 @@ export function FieldWidget({
         </select>
       );
 
+    case 'color': {
+      // Native picker; an unset field shows "theme default" and stays undefined until the
+      // author picks (so it doesn't force a value), with Clear to return to the default.
+      const current = asString(value);
+      return (
+        <span className="color-field">
+          <input
+            id={id}
+            type="color"
+            value={current || '#000000'}
+            onChange={(e) => onChange(e.target.value)}
+          />
+          {current ? (
+            <>
+              <code>{current}</code>
+              <button
+                type="button"
+                className="color-field__clear"
+                onClick={() => onChange(undefined)}
+              >
+                Clear
+              </button>
+            </>
+          ) : (
+            <span className="color-field__hint">theme default</span>
+          )}
+        </span>
+      );
+    }
+
     case 'tags': {
       const tags = Array.isArray(value) ? (value as unknown[]).map(asString) : [];
       return (

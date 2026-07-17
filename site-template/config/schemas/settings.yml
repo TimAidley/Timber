@@ -11,3 +11,26 @@ fields:
   homepage:
     type: reference
     referenceType: pages
+  # Theme options (SPEC §13): override the default theme's CSS variables. Each is
+  # optional — leave it unset to keep the theme default.
+  accentColor:
+    type: color
+    label: Accent colour
+  textColor:
+    type: color
+    label: Text colour
+  backgroundColor:
+    type: color
+    label: Background colour
+  bodyFont:
+    type: enum
+    label: Body font
+    options: [serif, sans, mono]
+  headingFont:
+    type: enum
+    label: Heading font
+    options: [serif, sans, mono]
+  contentWidth:
+    type: enum
+    label: Content width
+    options: [narrow, normal, wide]

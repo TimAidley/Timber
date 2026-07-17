@@ -1457,6 +1457,46 @@ button.object-list__lang:hover {
   color: var(--text-muted);
 }
 
+.color-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.color-field input[type='color'] {
+  inline-size: 2.4rem;
+  block-size: 1.8rem;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: none;
+  cursor: pointer;
+}
+
+.color-field code {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.color-field__hint {
+  font-size: 0.78rem;
+  color: var(--text-faint);
+}
+
+.color-field__clear {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.color-field__clear:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
 .video-field__facade {
   max-width: 200px;
   border-radius: var(--radius);
