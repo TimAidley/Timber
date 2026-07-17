@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  assembleContent,
   canPublish,
   resolvePublic,
   withPublic,
@@ -8,6 +9,7 @@ import {
   type ContentObject,
   type ContentTypeSchema,
 } from '@timber/content';
+import type { StorageLevel } from './state/location.js';
 import type { FrontMatter, TemplateMap } from '@timber/generator';
 import type { RepoSession } from './state/repoSession.js';
 import { AssetStore } from './state/assets.js';
@@ -86,7 +88,11 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   useBackNavigationGuard();
   const validator = useMemo(() => new Validator(model.schemas), [model]);
   const assetStore = useMemo(() => new AssetStore(repoAssetLoader(session)), [session]);
-  const autosave = useAutosave(session, assetStore);
+  // Objects the author is keeping **On this device** (SPEC §5/§8 storage axis): held out
+  // of the WIP commit, their sole copy the IndexedDB draft. Loaded from the draft store on
+  // mount; the autosaver reads this (via a ref) to filter its commit.
+  const [deviceOnlyPaths, setDeviceOnlyPaths] = useState<ReadonlySet<string>>(new Set());
+  const autosave = useAutosave(session, assetStore, (path) => deviceOnlyPaths.has(path));
 
   // The working object list — mutated by create/delete/rename (SPEC §5). The derived
   // `workingModel` recomputes the id index so validation, reference pickers, and the
@@ -333,14 +339,42 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
       .then(async (store) => {
         if (cancelled) return;
         draftStore.current = store;
-        for (const draft of await store.allForRepo(repoKey)) {
+        const devicePaths = await store.devicePaths(repoKey);
+        if (cancelled) return;
+        setDeviceOnlyPaths(devicePaths);
+        const drafts = await store.allForRepo(repoKey);
+        if (cancelled) return;
+
+        // Device-only objects live **only** in IndexedDB (never on the branch), so their
+        // draft is the sole copy — reconstruct them into the working model through the
+        // same assembler the branch load uses (SPEC §5/§8). Skip any that somehow also
+        // exist on the branch (a demoted-then-reloaded edge) — the branch copy wins.
+        const deviceDrafts = drafts.filter(
+          (d) => devicePaths.has(d.path) && !model.objects.some((o) => o.path === d.path),
+        );
+        if (deviceDrafts.length > 0) {
+          const snapshot = new Map(
+            deviceDrafts.map((d) => [d.path, reassembleDocument(d.data, d.body)] as const),
+          );
+          const assembled = assembleContent(snapshot, model.schemas);
+          if (assembled.objects.length > 0) {
+            setObjects((prev) => {
+              const have = new Set(prev.map((o) => o.path));
+              return [...prev, ...assembled.objects.filter((o) => !have.has(o.path))];
+            });
+          }
+        }
+
+        // Recover backed-up drafts as unsaved edits; autosave re-commits them to WIP.
+        // Device-only drafts are not WIP edits, so they're excluded from recovery.
+        for (const draft of drafts) {
+          if (devicePaths.has(draft.path)) continue;
           const committed = model.objects.find((o) => o.path === draft.path);
           if (!committed) continue;
           const changed =
             reassembleDocument(draft.data, draft.body) !==
             reassembleDocument(committed.data, committed.body);
           if (changed) {
-            // Restore as an unsaved edit; autosave will re-commit it to WIP.
             autosave.markObjectDirty(draft.path, draft.data, draft.body);
             if (draft.path === selectedPath) {
               setEdit({ data: { ...draft.data }, body: draft.body });
@@ -360,7 +394,10 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   // persists a local draft for crash recovery.
   function applyEdit(next: EditState): void {
     setEdit(next);
-    autosave.markObjectDirty(selectedPath, next.data, next.body);
+    // Device-only objects (SPEC §5/§8) persist to IndexedDB only — never queued to WIP.
+    if (!deviceOnlyPaths.has(selectedPath)) {
+      autosave.markObjectDirty(selectedPath, next.data, next.body);
+    }
     void draftStore.current?.put(repoKey, selectedPath, next.data, next.body);
   }
 
@@ -372,9 +409,10 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   }
 
   // Create a new draft object (SPEC §5): unique slug within its type, seeded front
-  // matter, staged as an unsaved edit + IndexedDB draft; autosave commits its
-  // index.md to the WIP branch like any other edit.
-  function createObject(schema: ContentTypeSchema, title: string): void {
+  // matter, persisted to IndexedDB. The author picks its **storage level** at creation
+  // (SPEC §5/§8): `backed-up` commits its index.md to WIP like any other edit; `device`
+  // keeps it on this machine only (never queued to WIP), the tradeoff shown in the dialog.
+  function createObject(schema: ContentTypeSchema, title: string, storage: StorageLevel): void {
     // On an i18n site a new collection object gets the default language (front matter +
     // lang-prefixed path); singletons and single-language sites get none (SPEC §5 → ML).
     const lang =
@@ -387,8 +425,13 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
     const created = newObject(schema.name, title, schema, taken, lang);
     setObjects((prev) => [...prev, created]);
     setSelectedPath(created.path);
-    autosave.markObjectDirty(created.path, created.data, created.body);
     void draftStore.current?.put(repoKey, created.path, created.data, created.body);
+    if (storage === 'device') {
+      setDeviceOnlyPaths((prev) => new Set(prev).add(created.path));
+      void draftStore.current?.setStorage(repoKey, created.path, 'device');
+    } else {
+      autosave.markObjectDirty(created.path, created.data, created.body);
+    }
     setShowNew(false);
   }
 
@@ -484,6 +527,22 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   // schedule the removal in the next coalesced WIP commit. The local draft is cleared;
   // the in-memory object still holds its data/body so Restore can re-add it.
   function confirmDelete(target: ContentObject): void {
+    // A device-only object (SPEC §5/§8) exists only in IndexedDB — there's nothing on the
+    // branch to schedule for removal, and no published version to restore to, so it's
+    // dropped immediately and locally (like discarding a never-saved page).
+    if (deviceOnlyPaths.has(target.path)) {
+      setObjects((prev) => prev.filter((o) => o.path !== target.path));
+      setDeviceOnlyPaths((prev) => {
+        const next = new Set(prev);
+        next.delete(target.path);
+        return next;
+      });
+      void draftStore.current?.delete(repoKey, target.path);
+      void draftStore.current?.deleteStorage(repoKey, target.path);
+      if (selectedPath === target.path) setSelectedPath('');
+      setDeleteTarget(null);
+      return;
+    }
     const bundleFiles = [target.path, ...bundleAssetEntries(target).map((e) => e.path)];
     autosave.markPathsDeleted(bundleFiles);
     void draftStore.current?.delete(repoKey, target.path);
@@ -615,6 +674,36 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
     const oldDir = `content/${selected.type}/${selected.slug}`;
     const newDir = `content/${selected.type}/${newSlug}`;
     const newPath = `${newDir}/index.md`;
+
+    // A device-only object (SPEC §5/§8) was never published, so a rename needs no redirect
+    // alias and no branch move — just swap the path locally and move its draft + storage
+    // record. Repoint bundle-relative front-matter values as usual.
+    if (deviceOnlyPaths.has(oldPath)) {
+      const data: FrontMatter = {};
+      for (const [k, v] of Object.entries(edit.data)) {
+        data[k] =
+          typeof v === 'string' && v.startsWith(`${oldDir}/`)
+            ? `${newDir}/${v.slice(oldDir.length + 1)}`
+            : v;
+      }
+      void draftStore.current?.delete(repoKey, oldPath);
+      void draftStore.current?.put(repoKey, newPath, data, edit.body);
+      void draftStore.current?.deleteStorage(repoKey, oldPath);
+      void draftStore.current?.setStorage(repoKey, newPath, 'device');
+      setDeviceOnlyPaths((prev) => {
+        const next = new Set(prev);
+        next.delete(oldPath);
+        next.add(newPath);
+        return next;
+      });
+      const renamed: ContentObject = { ...selected, slug: newSlug, path: newPath, data };
+      setObjects((prev) => prev.map((o) => (o.path === oldPath ? renamed : o)));
+      setEdit({ data: { ...data }, body: edit.body });
+      setEditingPath(newPath);
+      setSelectedPath(newPath);
+      setShowRename(false);
+      return;
+    }
 
     const prevAliases = Array.isArray(edit.data.aliases)
       ? edit.data.aliases.filter((a): a is string => typeof a === 'string')

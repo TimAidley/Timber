@@ -1,28 +1,50 @@
 import { useState } from 'react';
 import type { ContentModel, ContentTypeSchema } from '@timber/content';
+import type { StorageLevel } from '../state/location.js';
 
 interface NewObjectDialogProps {
   model: ContentModel;
   onClose: () => void;
-  /** Chosen a collection type + title → create the object. */
-  onCreate: (schema: ContentTypeSchema, title: string) => void;
+  /** Chosen a collection type + title + storage level → create the object. */
+  onCreate: (schema: ContentTypeSchema, title: string, storage: StorageLevel) => void;
+  /**
+   * Repo visibility (SPEC §5), for the "Back up" option's wording: `true` ⇒ "visible to
+   * anyone", `false` ⇒ "visible to collaborators", `undefined` ⇒ neutral (unknown).
+   */
+  repoPublic?: boolean | undefined;
 }
 
 /**
  * "New object" dialog (SPEC §5 object creation). Lists the **collection** types
- * (singletons have exactly one instance, so they're never created here) and takes a
- * title; the caller derives the id + unique slug and stages the draft bundle.
+ * (singletons have exactly one instance, so they're never created here), takes a
+ * title, and asks where to keep it — the **storage level** choice (SPEC §5/§8), made
+ * up front so nothing reaches the host before the author decides. The caller derives
+ * the id + unique slug and stages the draft bundle.
  */
-export function NewObjectDialog({ model, onClose, onCreate }: NewObjectDialogProps): React.JSX.Element {
+export function NewObjectDialog({
+  model,
+  onClose,
+  onCreate,
+  repoPublic,
+}: NewObjectDialogProps): React.JSX.Element {
   const collections = [...model.schemas.values()].filter((s) => s.kind === 'collection');
   const [type, setType] = useState(collections[0]?.name ?? '');
   const [title, setTitle] = useState('');
+  const [storage, setStorage] = useState<StorageLevel>('backed-up');
 
   const schema = model.schemas.get(type);
 
+  // How exposed "Back up" is, in plain words, keyed off repo visibility.
+  const backedUpExposure =
+    repoPublic === true
+      ? 'visible to anyone who can see the repo'
+      : repoPublic === false
+        ? 'visible to your repo collaborators'
+        : 'stored in the content repo';
+
   function submit(): void {
     if (!schema) return;
-    onCreate(schema, title);
+    onCreate(schema, title, storage);
   }
 
   return (
@@ -61,6 +83,36 @@ export function NewObjectDialog({ model, onClose, onCreate }: NewObjectDialogPro
                 }}
               />
             </label>
+            <fieldset className="new-object__storage">
+              <legend>Where to keep it</legend>
+              <label>
+                <input
+                  type="radio"
+                  name="storage"
+                  checked={storage === 'backed-up'}
+                  onChange={() => setStorage('backed-up')}
+                />
+                <span>
+                  <strong>Back up to the repo</strong>
+                  <small>Durable and synced across your devices — {backedUpExposure}.</small>
+                </span>
+              </label>
+              <label>
+                <input
+                  type="radio"
+                  name="storage"
+                  checked={storage === 'device'}
+                  onChange={() => setStorage('device')}
+                />
+                <span>
+                  <strong>Keep on this device</strong>
+                  <small>
+                    Private to this browser — <em>not backed up</em>; can be lost if you clear
+                    site data or switch devices. Back it up later when you're ready.
+                  </small>
+                </span>
+              </label>
+            </fieldset>
             <div className="modal__actions">
               <button type="button" onClick={onClose}>
                 Cancel

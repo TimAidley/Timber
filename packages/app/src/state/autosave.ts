@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FileWrite, MoveEntry } from '@timber/host';
 import type { FrontMatter } from '@timber/generator';
 import { reassembleDocument } from '../content/document.js';
@@ -394,10 +394,21 @@ export interface Autosave {
   saveNow: () => void;
 }
 
-/** React binding for {@link Autosaver}: commits dirty edits to the session's WIP branch. */
-export function useAutosave(session: RepoSession, assetStore: AssetStore): Autosave {
+/**
+ * React binding for {@link Autosaver}: commits dirty edits to the session's WIP branch.
+ * `isDeviceOnly` (SPEC §5/§8) is read through a ref so the predicate can change with the
+ * editor's storage-level state without rebuilding — and blurring — the autosaver.
+ */
+export function useAutosave(
+  session: RepoSession,
+  assetStore: AssetStore,
+  isDeviceOnly?: (path: string) => boolean,
+): Autosave {
   const [syncState, setSyncState] = useState<SyncState>('idle');
   const [editingPaths, setEditingPaths] = useState<ReadonlySet<string>>(new Set());
+
+  const isDeviceOnlyRef = useRef(isDeviceOnly);
+  isDeviceOnlyRef.current = isDeviceOnly;
 
   const saver = useMemo(
     () =>
@@ -413,6 +424,7 @@ export function useAutosave(session: RepoSession, assetStore: AssetStore): Autos
           });
         },
         assetBytes: (path) => assetStore.bytes(path),
+        isDeviceOnly: (path) => isDeviceOnlyRef.current?.(path) ?? false,
         onError: (error) => {
           // Surface why a save failed so it's diagnosable from DevTools; the backoff
           // handles the retry cadence.

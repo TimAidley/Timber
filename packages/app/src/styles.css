@@ -2663,6 +2663,45 @@ button.object-list__lang:hover {
   color: var(--text-muted);
 }
 
+/* New-object storage-level picker (SPEC §5/§8): two radios with a plain-language
+   tradeoff under each. */
+.new-object__storage {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.75rem;
+  margin: 0.2rem 0 0;
+}
+
+.new-object__storage legend {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  padding: 0 0.35rem;
+}
+
+.new-object__storage label {
+  display: flex;
+  gap: 0.55rem;
+  align-items: flex-start;
+  padding: 0.4rem 0.2rem;
+  cursor: pointer;
+}
+
+.new-object__storage input[type='radio'] {
+  margin-top: 0.2rem;
+}
+
+.new-object__storage span {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.new-object__storage small {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
 .publish__message input {
   width: 100%;
   padding: 0.5rem;
