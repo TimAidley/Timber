@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import type { FieldSchema } from '@timber/content';
 
 /** One reference-picker option: an object's id and a human label (its title). */
@@ -15,6 +16,61 @@ export interface WidgetProps {
 
 function asString(value: unknown): string {
   return typeof value === 'string' ? value : value == null ? '' : String(value);
+}
+
+/** Split a comma-separated string into trimmed, non-empty tags. */
+function parseTags(text: string): string[] {
+  return text
+    .split(',')
+    .map((t) => t.trim())
+    .filter((t) => t.length > 0);
+}
+
+function sameTags(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((x, i) => x === b[i]);
+}
+
+/**
+ * Comma-separated tags input (SPEC §8 multi-select). The **parsed array** is the model
+ * value, but the text box keeps its **own raw string** while you type. Deriving the box's
+ * value from the parsed array on every keystroke (the old bug) stripped the separator you
+ * were mid-typing — `en,` re-parsed to `['en']` and rendered back as `en`, so a comma or a
+ * trailing space could never survive. The raw text is re-seeded from the model only when
+ * the value changes from **outside** (e.g. switching objects), never from our own edits.
+ */
+function TagsField({
+  id,
+  value,
+  onChange,
+}: {
+  id: string;
+  value: unknown;
+  onChange: (value: unknown) => void;
+}): React.JSX.Element {
+  const [text, setText] = useState(() =>
+    (Array.isArray(value) ? (value as unknown[]).map(asString) : []).join(', '),
+  );
+
+  // Re-seed the text only on an external value change: if the incoming array no longer
+  // matches what our current text parses to, adopt it. Our own edits already parse to the
+  // value we emitted, so this is a no-op for them (no clobbering the separator being typed).
+  useEffect(() => {
+    const ext = Array.isArray(value) ? (value as unknown[]).map(asString) : [];
+    setText((cur) => (sameTags(ext, parseTags(cur)) ? cur : ext.join(', ')));
+  }, [value]);
+
+  return (
+    <input
+      id={id}
+      type="text"
+      value={text}
+      placeholder="comma, separated, tags"
+      onChange={(e) => {
+        setText(e.target.value);
+        onChange(parseTags(e.target.value));
+      }}
+    />
+  );
 }
 
 /**
@@ -121,24 +177,8 @@ export function FieldWidget({
       );
     }
 
-    case 'tags': {
-      const tags = Array.isArray(value) ? (value as unknown[]).map(asString) : [];
-      return (
-        <input
-          id={id}
-          type="text"
-          value={tags.join(', ')}
-          placeholder="comma, separated, tags"
-          onChange={(e) => {
-            const next = e.target.value
-              .split(',')
-              .map((t) => t.trim())
-              .filter((t) => t.length > 0);
-            onChange(next);
-          }}
-        />
-      );
-    }
+    case 'tags':
+      return <TagsField id={id} value={value} onChange={onChange} />;
 
     case 'video':
       return (
