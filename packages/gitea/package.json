@@ -1,0 +1,22 @@
+{
+  "name": "@timber/gitea",
+  "version": "0.0.0",
+  "description": "Timber's Gitea/Forgejo (Codeberg) host adapter: a second HostProvider implementation, over the Gitea REST API via fetch — proves the host seam is not GitHub-shaped.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@timber/host": "workspace:*"
+  }
+}

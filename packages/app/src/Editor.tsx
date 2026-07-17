@@ -161,8 +161,10 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   const canCheck = canCheckForUpdate(buildInfo);
   const upstreamClient = useMemo(
     () =>
+      // Timber's own source repo is on GitHub regardless of where the *site* is hosted,
+      // so the out-of-date check always uses the GitHub adapter (SPEC §12).
       canCheck && buildInfo.upstream
-        ? createHostProvider(buildInfo.upstream, getToken)
+        ? createHostProvider({ host: 'github', ...buildInfo.upstream }, getToken)
         : undefined,
     [canCheck],
   );

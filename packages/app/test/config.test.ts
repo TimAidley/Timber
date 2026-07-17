@@ -43,6 +43,29 @@ describe('resolveConfig', () => {
     expect(c.oauth.brokerUrl).toBe('https://rt.broker');
   });
 
+  it('defaults host to github with no apiBaseUrl', () => {
+    const c = resolveConfig({}, {});
+    expect(c.host).toBe('github');
+    expect(c.apiBaseUrl).toBeUndefined();
+  });
+
+  it('selects the gitea host and apiBaseUrl (runtime and env)', () => {
+    const rt = resolveConfig({ host: 'gitea', apiBaseUrl: 'https://codeberg.org' }, {});
+    expect(rt.host).toBe('gitea');
+    expect(rt.apiBaseUrl).toBe('https://codeberg.org');
+
+    const env = resolveConfig(
+      {},
+      { VITE_TIMBER_HOST: 'gitea', VITE_TIMBER_API_BASE_URL: 'https://git.example.org' },
+    );
+    expect(env.host).toBe('gitea');
+    expect(env.apiBaseUrl).toBe('https://git.example.org');
+  });
+
+  it('falls back to github for an unknown host value', () => {
+    expect(resolveConfig({ host: 'bitbucket' }, {}).host).toBe('github');
+  });
+
   it('preserves an EMPTY scope (GitHub App mode) instead of defaulting to repo', () => {
     const c = resolveConfig({ oauth: { scope: '' } }, {});
     expect(c.oauth.scope).toBe('');

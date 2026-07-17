@@ -24,6 +24,7 @@
     "@timber/content": "workspace:*",
     "@timber/generator": "workspace:*",
     "@timber/github": "workspace:*",
+    "@timber/gitea": "workspace:*",
     "@timber/host": "workspace:*",
     "codemirror": "^6.0.2",
     "diff": "^9.0.0",

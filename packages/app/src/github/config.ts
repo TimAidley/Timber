@@ -1,4 +1,17 @@
+/** Which git host adapter backs this instance (SPEC's host-provider seam). */
+export type HostKind = 'github' | 'gitea';
+
 export interface RepoConfig {
+  /**
+   * The git host to edit against: `github` (default) or `gitea` (Gitea/Forgejo, e.g.
+   * Codeberg). Selects the {@link HostProvider} adapter in `createHostProvider`.
+   */
+  host: HostKind;
+  /**
+   * For `gitea`: the instance origin, e.g. `https://codeberg.org` (the `/api/v1` root is
+   * appended by the adapter). Unused by `github`.
+   */
+  apiBaseUrl: string | undefined;
   owner: string;
   repo: string;
   /**
@@ -42,6 +55,8 @@ export interface RepoConfig {
  * build var (legacy / dev) and then a default.
  */
 export interface RuntimeConfig {
+  host?: string;
+  apiBaseUrl?: string;
   owner?: string;
   repo?: string;
   oauth?: {
@@ -67,7 +82,11 @@ function str(value: unknown): string | undefined {
  * module-load gymnastics.
  */
 export function resolveConfig(runtime: RuntimeConfig, env: EnvLike): RepoConfig {
+  // Only `gitea` opts out of the GitHub default; anything else resolves to `github`.
+  const rawHost = str(runtime.host) ?? str(env.VITE_TIMBER_HOST);
   return {
+    host: rawHost === 'gitea' ? 'gitea' : 'github',
+    apiBaseUrl: str(runtime.apiBaseUrl) ?? str(env.VITE_TIMBER_API_BASE_URL),
     owner: str(runtime.owner) ?? str(env.VITE_TIMBER_OWNER) ?? 'TimAidley',
     repo: str(runtime.repo) ?? str(env.VITE_TIMBER_REPO) ?? 'Timber-test-sandbox',
     oauth: {
@@ -86,7 +105,9 @@ export function resolveConfig(runtime: RuntimeConfig, env: EnvLike): RepoConfig 
 /** Read the site-provided runtime config, if any (browser only). */
 function runtimeConfig(): RuntimeConfig {
   if (typeof window === 'undefined') return {};
-  return (window as unknown as { __TIMBER_CONFIG__?: RuntimeConfig }).__TIMBER_CONFIG__ ?? {};
+  return (
+    (window as unknown as { __TIMBER_CONFIG__?: RuntimeConfig }).__TIMBER_CONFIG__ ?? {}
+  );
 }
 
 /**

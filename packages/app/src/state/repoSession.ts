@@ -9,7 +9,7 @@ import {
 } from '@timber/content';
 import { getToken } from '../github/auth.js';
 import { repoConfig } from '../github/config.js';
-import { createHostProvider } from '../github/hostProvider.js';
+import { createHostProvider, hostTargetFromConfig } from '../github/hostProvider.js';
 
 /**
  * An open editing session against the configured host repo (SPEC §11). Content is loaded
@@ -101,7 +101,7 @@ export async function derivePendingDeletions(
  * editor's content source.
  */
 export async function loadRepoSession(): Promise<RepoSession> {
-  const client = createHostProvider({ owner: repoConfig.owner, repo: repoConfig.repo }, getToken);
+  const client = createHostProvider(hostTargetFromConfig(repoConfig), getToken);
 
   const login = await client.getAuthenticatedLogin();
   const defaultBranch = await client.getDefaultBranch();

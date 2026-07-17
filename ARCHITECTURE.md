@@ -23,7 +23,8 @@ a site* see **`INSTALL.md`**.
 | `@timber/cli` | `timber build . _site` — builds the whole static site | Node (CI) |
 | `@timber/app` | The browser editor SPA (React): auth, editor, preview, media pipeline | browser |
 | `@timber/host` | The **host-provider port**: host-neutral types + the `HostProvider` interface (`HostRepo` + `HostIdentity` + optional `DeployBackend`) the editor depends on, so a git host is a swappable adapter | browser and Node |
-| `@timber/github` | **A `HostProvider` adapter** — `RepoClient` (Octokit): load/commit via the Git Data API, read/dispatch workflow runs. Today's only host adapter | browser |
+| `@timber/github` | **A `HostProvider` adapter** — `RepoClient` (Octokit): load/commit via the Git Data API, read/dispatch workflow runs | browser |
+| `@timber/gitea` | **A second `HostProvider` adapter** — `GiteaClient` for Gitea/Forgejo (Codeberg), over the Gitea REST API via `fetch` (no SDK). Proves the port is host-neutral | browser |
 | `@timber/oauth-broker` | Cloudflare Worker: OAuth token exchange (holds the secret) **+** device-flow relay (secret-less) | edge |
 
 **Core principle:** the generator is **one codebase with two entry points** — the browser
@@ -71,9 +72,23 @@ Everything the editor does against a git host — load content, commit edits to 
 branch, publish (squash WIP→main), watch the deploy — flows through **one port**,
 `HostProvider` (`packages/host`). The app constructs a concrete adapter in exactly one
 place — `createHostProvider()` (`packages/app/src/github/hostProvider.ts`) — and depends
-only on the port everywhere else. Today there is one adapter, `@timber/github`'s
-`RepoClient`; a GitLab/Gitea/self-hosted adapter later means writing a new adapter +
-extending that factory, not touching the editor/publish/autosave/deploy code.
+only on the port everywhere else. Two adapters exist: **`@timber/github`** (`RepoClient`,
+Octokit) and **`@timber/gitea`** (`GiteaClient`, Gitea/Forgejo/Codeberg, over `fetch`); a
+site picks one via `config.host` (`github` default, or `gitea` + an `apiBaseUrl`). Adding
+GitLab/self-hosted later means a new adapter + a branch in that factory — nothing else.
+
+The Gitea adapter was built specifically to prove the port isn't GitHub-shaped, and it
+holds: `GiteaClient implements HostProvider` with a completely different HTTP model. Where
+the hosts diverge, the **adapter** absorbs it and the port stays clean — a useful map of
+where the abstraction earns its keep:
+
+| Concern | GitHub adapter | Gitea adapter | Port stays neutral because… |
+|---|---|---|---|
+| Commit | blob→tree→commit overlay | one **ChangeFiles** call (create/update/delete ops) | `commitFiles` takes a write-set; the adapter classifies create-vs-update against the branch tree |
+| Move | reuse blob sha server-side | read the bytes and re-upload | `MoveEntry.sha` is documented as an **opaque content handle**, not "a GitHub blob sha" |
+| Publish | compose a squashed tree | **replay** the WIP change-set onto main | `publishSquash` carries the plan; Gitea ignores `wipTip`/`strategy` (GitHub tree concerns) |
+| Changed paths | `compare` returns a file list | **diff the two trees** by path+sha | callers only need added/modified/removed (a rename reads as add+remove) |
+| Deploy | GitHub Actions (`deploy.yml`) | **none** — Codeberg Pages is branch-based | `DeployBackend` is optional; the editor degrades when it's absent |
 
 The port is split by capability so a host provides what it can:
 
