@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { resolveConfig, type RuntimeConfig } from '../src/github/config.js';
+import { resolveConfig, type RuntimeConfig } from '../src/host/config.js';
 
 describe('resolveConfig', () => {
   it('uses defaults when neither runtime nor env is set', () => {
@@ -94,7 +94,7 @@ describe('repoConfig (window.__TIMBER_CONFIG__ glue)', () => {
       oauth: { clientId: 'win-cid', brokerUrl: 'https://win.broker', scope: '' },
     };
     vi.resetModules();
-    const { repoConfig } = await import('../src/github/config.js');
+    const { repoConfig } = await import('../src/host/config.js');
     expect(repoConfig.owner).toBe('winowner');
     expect(repoConfig.repo).toBe('winrepo');
     expect(repoConfig.oauth.clientId).toBe('win-cid');

@@ -35,7 +35,7 @@ interface CompareClient {
 /**
  * Check once, on mount, whether the Timber build the editor is running has fallen behind
  * the branch it follows. `builtSha` is the commit this bundle was built from and `ref` is
- * the branch/tag it tracks (both baked in at build time, see `github/buildInfo`); `client`
+ * the branch/tag it tracks (both baked in at build time, see `host/buildInfo`); `client`
  * is bound to the **upstream Timber repo**, not the site repo.
  *
  * Deliberately best-effort: any error (the upstream repo unreadable with this token, a

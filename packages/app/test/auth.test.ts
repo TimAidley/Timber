@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { authMode } from '../src/github/auth.js';
+import { authMode } from '../src/host/auth.js';
 
 describe('auth mode selection', () => {
   it('defaults to the dev PAT gate when OAuth env vars are absent', () => {

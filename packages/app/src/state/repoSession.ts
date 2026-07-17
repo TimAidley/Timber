@@ -7,9 +7,9 @@ import {
   type ContentTypeSchema,
   type RepoSnapshot,
 } from '@timber/content';
-import { getToken } from '../github/auth.js';
-import { repoConfig } from '../github/config.js';
-import { createHostProvider, hostTargetFromConfig } from '../github/hostProvider.js';
+import { getToken } from '../host/auth.js';
+import { repoConfig } from '../host/config.js';
+import { createHostProvider, hostTargetFromConfig } from '../host/hostProvider.js';
 
 /**
  * An open editing session against the configured host repo (SPEC §11). Content is loaded

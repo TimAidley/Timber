@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // OAuth mode requires a configured client id + broker URL; mock the config so the
 // flow is exercised without Vite env.
-vi.mock('../src/github/config.js', () => ({
+vi.mock('../src/host/config.js', () => ({
   repoConfig: { owner: 'o', repo: 'r', oauth: { clientId: 'cid', brokerUrl: 'https://broker.test/token' } },
 }));
 
@@ -12,7 +12,7 @@ import {
   isAuthenticated,
   signOut,
   getToken,
-} from '../src/github/oauth.js';
+} from '../src/host/oauth.js';
 
 beforeEach(() => {
   signOut();

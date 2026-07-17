@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Device flow needs a client id + broker (relay) URL; mock the config.
-vi.mock('../src/github/config.js', () => ({
+vi.mock('../src/host/config.js', () => ({
   repoConfig: {
     owner: 'o',
     repo: 'r',
@@ -16,7 +16,7 @@ import {
   isAuthenticated,
   signOut,
   getToken,
-} from '../src/github/deviceFlow.js';
+} from '../src/host/deviceFlow.js';
 
 beforeEach(() => {
   signOut();

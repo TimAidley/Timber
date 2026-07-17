@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 
-import type { RuntimeConfig } from './github/config.js';
+import type { RuntimeConfig } from './host/config.js';
 
 declare global {
   interface Window {

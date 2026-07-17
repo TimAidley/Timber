@@ -1,5 +1,6 @@
 import type { GetToken } from '@timber/host';
 import { repoConfig } from './config.js';
+import { hostDescriptor } from './hostDescriptor.js';
 
 /**
  * Production sign-in: the GitHub OAuth **authorization-code flow with PKCE** (SPEC §9),
@@ -21,8 +22,6 @@ import { repoConfig } from './config.js';
 const VERIFIER_KEY = 'timber.oauth.verifier';
 const STATE_KEY = 'timber.oauth.state';
 const TOKEN_KEY = 'timber.oauth.token';
-
-const AUTHORIZE_URL = 'https://github.com/login/oauth/authorize';
 
 /** The redirect target GitHub returns to — the app parses `?code` itself. Pinned to
  * the configured value (must match the App's registered callback) so the `?code` can
@@ -71,7 +70,7 @@ export function signOut(): void {
 /** The `GetToken` implementation for OAuth mode; rejects if not signed in. */
 export const getToken: GetToken = async () => {
   const token = readToken();
-  if (!token) throw new Error('Not signed in — start the GitHub sign-in flow.');
+  if (!token) throw new Error(`Not signed in — start the ${hostDescriptor.label} sign-in flow.`);
   return token;
 };
 
@@ -107,7 +106,7 @@ export async function beginLogin(): Promise<void> {
   sessionStorage.setItem(VERIFIER_KEY, verifier);
   sessionStorage.setItem(STATE_KEY, state);
 
-  const url = new URL(AUTHORIZE_URL);
+  const url = new URL(hostDescriptor.authorizeUrl);
   url.searchParams.set('client_id', clientId);
   url.searchParams.set('redirect_uri', redirectUri());
   // A GitHub App ignores `scope` (permissions come from the App); OAuth Apps need it.

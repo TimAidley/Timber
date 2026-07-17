@@ -1,16 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
-import { repoConfig } from '../github/config.js';
-import { startDeviceLogin, pollForToken, type DeviceLogin } from '../github/deviceFlow.js';
+import { repoConfig } from '../host/config.js';
+import { startDeviceLogin, pollForToken, type DeviceLogin } from '../host/deviceFlow.js';
+import { hostDescriptor } from '../host/hostDescriptor.js';
 import { Wordmark } from './Wordmark.js';
 
 type Phase = 'idle' | 'starting' | 'waiting' | 'error';
 
 /**
- * Device-flow sign-in (SPEC §9): click → get a short code → approve on github.com →
- * the app polls until authorized. No client secret, no redirect. On success it calls
- * `onAuthed`; the token is already stored by {@link pollForToken}.
+ * Device-flow sign-in (SPEC §9): click → get a short code → approve on the host's device
+ * page → the app polls until authorized. No client secret, no redirect. On success it
+ * calls `onAuthed`; the token is already stored by {@link pollForToken}.
  */
 export function DeviceSignIn({ onAuthed }: { onAuthed: () => void }): React.JSX.Element {
+  const host = hostDescriptor.label;
   const [phase, setPhase] = useState<Phase>('idle');
   const [login, setLogin] = useState<DeviceLogin | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -29,7 +31,7 @@ export function DeviceSignIn({ onAuthed }: { onAuthed: () => void }): React.JSX.
       const started = await startDeviceLogin();
       setLogin(started);
       setPhase('waiting');
-      // Open GitHub's verification page (pre-filled with the code when available).
+      // Open the host's verification page (pre-filled with the code when available).
       window.open(started.verificationUriComplete ?? started.verificationUri, '_blank', 'noopener');
       await pollForToken(started, controller.signal);
       onAuthed();
@@ -44,7 +46,7 @@ export function DeviceSignIn({ onAuthed }: { onAuthed: () => void }): React.JSX.
     <div className="token-gate">
       <h1><Wordmark /></h1>
       <p>
-        Editing <code>{repoConfig.owner}/{repoConfig.repo}</code>. Sign in with GitHub to edit
+        Editing <code>{repoConfig.owner}/{repoConfig.repo}</code>. Sign in with {host} to edit
         this site.
       </p>
 
@@ -61,7 +63,7 @@ export function DeviceSignIn({ onAuthed }: { onAuthed: () => void }): React.JSX.
             <code>{login.userCode}</code>
           </p>
           <p className="device-flow__status" aria-live="polite">
-            Waiting for you to authorize on GitHub…
+            Waiting for you to authorize on {host}…
           </p>
           <button type="button" onClick={begin}>
             Start over
@@ -76,7 +78,7 @@ export function DeviceSignIn({ onAuthed }: { onAuthed: () => void }): React.JSX.
             onClick={begin}
             disabled={phase === 'starting'}
           >
-            {phase === 'starting' ? 'Starting…' : 'Sign in with GitHub'}
+            {phase === 'starting' ? 'Starting…' : `Sign in with ${host}`}
           </button>
         </>
       )}

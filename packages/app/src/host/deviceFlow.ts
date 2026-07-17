@@ -1,5 +1,6 @@
 import type { GetToken } from '@timber/host';
 import { repoConfig } from './config.js';
+import { hostDescriptor } from './hostDescriptor.js';
 
 /**
  * GitHub **device flow** sign-in (SPEC §9), behind the same `getToken()` seam as the
@@ -53,7 +54,7 @@ export function signOut(): void {
 /** The `GetToken` implementation for device mode; rejects if not signed in. */
 export const getToken: GetToken = async () => {
   if (isAuthenticated() && inMemoryToken) return inMemoryToken;
-  throw new Error('Not signed in — start the GitHub sign-in flow.');
+  throw new Error(`Not signed in — start the ${hostDescriptor.label} sign-in flow.`);
 };
 
 // --- relay + flow ------------------------------------------------------------

@@ -71,7 +71,7 @@ set it to a release tag for stability).
 Everything the editor does against a git host — load content, commit edits to the WIP
 branch, publish (squash WIP→main), watch the deploy — flows through **one port**,
 `HostProvider` (`packages/host`). The app constructs a concrete adapter in exactly one
-place — `createHostProvider()` (`packages/app/src/github/hostProvider.ts`) — and depends
+place — `createHostProvider()` (`packages/app/src/host/hostProvider.ts`) — and depends
 only on the port everywhere else. Two adapters exist: **`@timber/github`** (`RepoClient`,
 Octokit) and **`@timber/gitea`** (`GiteaClient`, Gitea/Forgejo/Codeberg, over `fetch`); a
 site picks one via `config.host` (`github` default, or `gitea` + an `apiBaseUrl`). Adding
@@ -107,8 +107,14 @@ branch-based) would declare them there.
 
 ## Authentication — the `getToken()` seam
 
-Everything auth flows through one seam (`packages/app/src/github/auth.ts` picks the mode;
-the rest of the app only ever calls `getToken()`). Three interchangeable modes:
+Everything auth flows through one seam (`packages/app/src/host/auth.ts` picks the mode;
+the rest of the app only ever calls `getToken()`). The host-specific bits of sign-in —
+the "Sign in with X" label, the OAuth authorize endpoint, where to create a token — come
+from a **host descriptor** (`host/hostDescriptor.ts`, derived from `config.host`), so a
+Codeberg/Gitea site presents its own host instead of a hardcoded "GitHub". The PAT path is
+fully host-neutral (a Gitea PAT is just a token to `getToken()`); the OAuth **broker** still
+calls GitHub's token endpoint, so full *Gitea OAuth* is a broker follow-up. Three
+interchangeable modes:
 
 | Mode | Server needed | Client secret | UX | Selected when |
 |---|---|---|---|---|
@@ -121,12 +127,12 @@ sends no CORS, so a static SPA can't finish OAuth alone. The GitHub *API* (`api.
 *does* send CORS, which is why the PAT path needs no server. Device flow removes the
 secret but still needs the relay (GitHub's device endpoints also lack CORS).
 
-There's a second seam, `canAccessAdvanced()` (`github/access.ts`, returns `true`), gating
+There's a second seam, `canAccessAdvanced()` (`host/access.ts`, returns `true`), gating
 the template/config "advanced" area — where real roles slot in later.
 
 ## Configuration — how values reach the editor
 
-`packages/app/src/github/config.ts` (`resolveConfig`) resolves config with this precedence:
+`packages/app/src/host/config.ts` (`resolveConfig`) resolves config with this precedence:
 
 ```
 window.__TIMBER_CONFIG__  (config.js, runtime)   >   VITE_TIMBER_*  (build vars)   >   defaults
@@ -202,7 +208,7 @@ Cross-cutting things and every file they touch:
   config — it describes the build, so it can't come from a site's `config.js`. Touch
   points: `packages/app/vite.config.ts` (the `timber-build-provenance` plugin stamps
   them from git HEAD + repo/ref defaults, so the banner works without a workflow change)
-  + `github/buildInfo.ts` (resolve) + `state/upstreamVersion.ts` +
+  + `host/buildInfo.ts` (resolve) + `state/upstreamVersion.ts` +
   `components/UpdateBanner.tsx` + `site-template/.github/workflows/deploy.yml` (optional
   explicit overrides) + `packages/app/.env.example`.
 - **The two-axis status model** (storage: On this device ⇄ Backed up; publication:
@@ -218,5 +224,5 @@ Cross-cutting things and every file they touch:
 - **The site scaffold** (theme, schemas, sample content, workflows) → edit **`site-template/`**
   only; the mirror regenerates the template repo. Never edit `Timber-site-template` directly.
 - **Setup instructions** → **`INSTALL.md`** only (canonical); the template's README is a stub.
-- **Auth flow / mode** → `github/{auth,oauth,deviceFlow,token}.ts` + the sign-in components
+- **Auth flow / mode** → `host/{auth,oauth,deviceFlow,token}.ts` + the sign-in components
   + `docs/auth-github-app.md`.

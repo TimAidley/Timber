@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { RepoSession } from '../state/repoSession.js';
 import type { Autosave } from '../state/autosave.js';
 import { LocalDraftStore } from '../state/localDraft.js';
-import { repoConfig } from '../github/config.js';
+import { repoConfig } from '../host/config.js';
 import { loadAdvancedFiles, type AdvancedFile } from './loadAdvancedFiles.js';
 import { validateAdvancedFile, type AdvancedValidation } from './validate.js';
 import { buildSchemaYaml, schemaPathFor, type NewTypeOptions } from './schemaTemplate.js';

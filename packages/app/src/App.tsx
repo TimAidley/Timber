@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { repoConfig } from './github/config.js';
-import { authMode } from './github/auth.js';
-import { getStoredToken, setStoredToken, clearStoredToken } from './github/token.js';
-import * as oauth from './github/oauth.js';
-import * as device from './github/deviceFlow.js';
+import { repoConfig } from './host/config.js';
+import { authMode } from './host/auth.js';
+import { getStoredToken, setStoredToken, clearStoredToken } from './host/token.js';
+import * as oauth from './host/oauth.js';
+import * as device from './host/deviceFlow.js';
 import { loadRepoSession, type RepoSession } from './state/repoSession.js';
 import { TokenGate } from './components/TokenGate.js';
 import { SignIn } from './components/SignIn.js';

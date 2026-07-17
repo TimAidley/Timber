@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { RefComparison } from '@timber/github';
 import { interpretComparison } from '../src/state/upstreamVersion.js';
-import { canCheckForUpdate, resolveBuildInfo } from '../src/github/buildInfo.js';
+import { canCheckForUpdate, resolveBuildInfo } from '../src/host/buildInfo.js';
 
 function cmp(status: string, aheadBy: number, behindBy = 0): RefComparison {
   return { status, aheadBy, behindBy };
