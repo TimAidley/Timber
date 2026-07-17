@@ -76,6 +76,18 @@ export interface ContentObject {
   body: string;
   /** Resolved visibility — draft (false) by default when the `public` key is absent. */
   public: boolean;
+  /**
+   * BCP-47 language of this variant (SPEC §5 → Multilingual). Present only when the
+   * site is i18n-enabled (its settings singleton declares `languages`); `undefined`
+   * for a single-language site, which keeps URLs unprefixed exactly as before.
+   */
+  lang?: string;
+  /**
+   * Shared key linking an object to its translations (SPEC §5 → Multilingual). Every
+   * bundle sharing a `translationKey` is a translation of the others; there is no
+   * privileged "original". Distinct from `id`, which stays unique per variant.
+   */
+  translationKey?: string;
 }
 
 /** An in-memory snapshot of a repo's text files, keyed by repo-relative path. */
@@ -95,7 +107,13 @@ export interface ValidationResult {
 
 /** A model-level problem that spans objects (duplicate id, dangling ref, cardinality). */
 export interface ModelError {
-  kind: 'duplicate-id' | 'dangling-reference' | 'cardinality' | 'unknown-type';
+  kind:
+    | 'duplicate-id'
+    | 'dangling-reference'
+    | 'cardinality'
+    | 'unknown-type'
+    | 'unknown-language'
+    | 'translation-conflict';
   message: string;
   /** Path(s) of the object(s) involved. */
   paths: string[];
@@ -107,6 +125,12 @@ export interface ContentModel {
   objects: ContentObject[];
   /** id → object index; powers reference resolution and dangling detection (SPEC §5). */
   byId: Map<string, ContentObject>;
+  /**
+   * translationKey → (lang → object): the translation index (SPEC §5 → Multilingual),
+   * built in the same up-front pass as `byId`. Powers `page.translations`, the language
+   * switcher, and per-language SEO alternates. Empty for a single-language site.
+   */
+  byTranslation: Map<string, Map<string, ContentObject>>;
   /** Structural problems found during assembly. */
   errors: ModelError[];
 }

@@ -18,6 +18,7 @@ import { buildSnapshotFromDir } from '../src/snapshot.node.js';
 const here = dirname(fileURLToPath(import.meta.url));
 const siteFixture = join(here, 'fixtures', 'site');
 const invalidFixture = join(here, 'fixtures', 'site-invalid');
+const i18nFixture = join(here, 'fixtures', 'site-i18n');
 
 async function exists(path: string): Promise<boolean> {
   return access(path)
@@ -147,6 +148,29 @@ describe('buildSite', () => {
     const note = await readFile(join(out, 'notes/note1/index.html'), 'utf8');
     expect(note).toContain('<a href="/">Home</a>'); // ref resolved to homepage-at-root
     expect(note).toContain('<a href="/about/">About</a>'); // explicit url
+  });
+
+  it('routes each language variant to a language-prefixed URL (SPEC §5 → Multilingual)', async () => {
+    const result = await buildSite(i18nFixture, out);
+    expect(result.pages).toBe(2);
+
+    const en = await readFile(join(out, 'en/posts/hello/index.html'), 'utf8');
+    expect(en).toContain('<h1>Hello</h1>');
+    expect(en).toContain('<link rel="canonical" href="https://i18n.example/en/posts/hello/">');
+
+    const fr = await readFile(join(out, 'fr/posts/bonjour/index.html'), 'utf8');
+    expect(fr).toContain('<h1>Bonjour</h1>');
+    expect(fr).toContain('<link rel="canonical" href="https://i18n.example/fr/posts/bonjour/">');
+
+    // The unprefixed URLs must NOT exist — every language is prefixed, uniformly.
+    expect(await exists(join(out, 'posts/hello/index.html'))).toBe(false);
+  });
+
+  it('emits per-language sitemap entries for translated content', async () => {
+    await buildSite(i18nFixture, out);
+    const sitemap = await readFile(join(out, 'sitemap.xml'), 'utf8');
+    expect(sitemap).toContain('<loc>https://i18n.example/en/posts/hello/</loc>');
+    expect(sitemap).toContain('<loc>https://i18n.example/fr/posts/bonjour/</loc>');
   });
 
   it('build output equals renderPage output for the same object (preview ≡ build)', async () => {

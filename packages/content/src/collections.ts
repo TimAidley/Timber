@@ -18,6 +18,12 @@ export interface CollectionEntry extends FrontMatter {
   slug: string;
   /** The object's resolved, human-readable URL (homepage-at-root aware). */
   url: string;
+  /**
+   * The object's language (SPEC §5 → Multilingual), present only on i18n-enabled sites.
+   * Lets a listing filter to the current page's language with the existing `where`
+   * filter: `collections.posts | where: 'lang', page.lang`.
+   */
+  lang?: string;
 }
 
 /** Template-facing `{{ collections }}`: collection-type name → its public entries. */
@@ -75,6 +81,8 @@ export function assembleCollections(
     // Only referenceable objects carry an `id`; omit the key entirely otherwise
     // (`exactOptionalPropertyTypes` forbids an explicit `undefined`).
     if (object.id !== undefined) entry.id = object.id;
+    // Language, only on i18n-enabled sites (omit rather than write `undefined`).
+    if (object.lang !== undefined) entry.lang = object.lang;
     (collections[object.type] ??= []).push(entry);
   }
 

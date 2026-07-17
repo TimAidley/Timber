@@ -1,0 +1,8 @@
+kind: singleton
+page: false
+hasBody: false
+fields:
+  title:
+    type: text
+  baseUrl:
+    type: text

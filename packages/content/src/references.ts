@@ -17,10 +17,63 @@ export function resolveReference(
  * Build a human-readable URL for an object. Default pattern `/{type}/{slug}/`,
  * overridable per type via `schema.urlPattern`. (Homepage-at-root and redirect
  * stubs are Phase 7 concerns; this is the minimal form reference display needs.)
+ *
+ * Multilingual (SPEC §5 → Multilingual): when the object carries a `lang` (i.e. the
+ * site is i18n-enabled), the URL is language-prefixed — `/{lang}/{type}/{slug}/` —
+ * uniformly for every language including the default. A pattern may instead place the
+ * language itself via a `{lang}` placeholder, in which case it is substituted and the
+ * automatic prefix is skipped. A `lang`-less object (single-language site) is unchanged.
  */
 export function urlFor(object: ContentObject, schema: ContentTypeSchema): string {
   const pattern = schema.urlPattern ?? '/{type}/{slug}/';
-  return pattern.replace(/\{type\}/g, object.type).replace(/\{slug\}/g, object.slug);
+  let url = pattern.replace(/\{type\}/g, object.type).replace(/\{slug\}/g, object.slug);
+  if (pattern.includes('{lang}')) {
+    url = url.replace(/\{lang\}/g, object.lang ?? '').replace(/\/{2,}/g, '/');
+  } else if (object.lang) {
+    url = `/${object.lang}${url}`;
+  }
+  return url;
+}
+
+/** One sibling translation of an object, for a language switcher / `hreflang` alternates. */
+export interface Translation {
+  /** BCP-47 language code of this sibling. */
+  lang: string;
+  /** The sibling's resolved URL. */
+  url: string;
+  /** The sibling's title (falls back to its slug). */
+  title: string;
+}
+
+/**
+ * The translations of an object (SPEC §5 → Multilingual): every sibling sharing its
+ * `translationKey`, **including the object itself**, so a template can render a full
+ * language switcher and mark the current language active. Sorted by language code for a
+ * stable order. Empty when the object has no `translationKey` (single-language content).
+ *
+ * `urlOf` is injected (defaulting to {@link urlFor}) so callers that route specially —
+ * e.g. the CLI's homepage-at-root — get matching URLs here, keeping preview ≡ build.
+ */
+export function translationsOf(
+  model: ContentModel,
+  object: ContentObject,
+  urlOf: (o: ContentObject, s: ContentTypeSchema) => string = urlFor,
+): Translation[] {
+  if (!object.translationKey) return [];
+  const group = model.byTranslation.get(object.translationKey);
+  if (!group) return [];
+  const out: Translation[] = [];
+  for (const [lang, sibling] of group) {
+    const schema = model.schemas.get(sibling.type);
+    if (!schema) continue;
+    const title =
+      typeof sibling.data.title === 'string' && sibling.data.title
+        ? sibling.data.title
+        : sibling.slug;
+    out.push({ lang, url: urlOf(sibling, schema), title });
+  }
+  out.sort((a, b) => (a.lang < b.lang ? -1 : a.lang > b.lang ? 1 : 0));
+  return out;
 }
 
 /**
