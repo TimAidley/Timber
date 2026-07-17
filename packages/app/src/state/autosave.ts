@@ -28,6 +28,14 @@ export interface AutosaverDeps {
   onDirtyObjects?: (paths: string[]) => void;
   /** Notified on a failed flush (before the backoff retry) — surfaces the cause. */
   onError?: (error: unknown) => void;
+  /**
+   * Whether an object path is parked **On this device** (SPEC §5/§8 storage axis).
+   * Device-only objects are held out of the WIP commit entirely — their durable copy
+   * is the IndexedDB draft, not the branch. Editing routes them around the autosaver,
+   * so this is a defensive filter at the commit boundary (e.g. a demoted object that
+   * was already queued). Defaults to "nothing is device-only".
+   */
+  isDeviceOnly?: (path: string) => boolean;
   idleMs?: number;
   retryMs?: number;
   /** Cap for the exponential retry backoff (default 60s). */
@@ -274,8 +282,11 @@ export class Autosaver {
     )
       return;
 
-    // Optimistically take the dirty set; restore it on failure.
-    const objects = [...this.dirtyObjects.entries()];
+    // Optimistically take the dirty set; restore it on failure. Device-only objects
+    // (SPEC §5/§8) are dropped here — never committed, never re-queued; their durable
+    // copy is the IndexedDB draft.
+    const isDeviceOnly = this.deps.isDeviceOnly ?? (() => false);
+    const objects = [...this.dirtyObjects.entries()].filter(([path]) => !isDeviceOnly(path));
     const rawFiles = [...this.dirtyFiles.entries()];
     const assets = [...this.dirtyAssets];
     const deletions = [...this.dirtyDeletions];
@@ -287,6 +298,20 @@ export class Autosaver {
     this.dirtyDeletions = new Set();
     this.dirtyMoves = new Map();
     this.dirtyRenames = new Map();
+
+    // If only device-only objects were dirty there is nothing to commit — settle the
+    // state without an empty commit (the drafts are already persisted locally).
+    if (
+      objects.length === 0 &&
+      rawFiles.length === 0 &&
+      assets.length === 0 &&
+      deletions.length === 0 &&
+      moves.length === 0
+    ) {
+      this.notifyDirtyObjects();
+      this.deps.onState('idle');
+      return;
+    }
     // These objects are in transit but not yet on the branch, so they stay "editing"
     // (not clean, not saved) until the commit lands — no mid-save badge flicker.
     this.flushingObjects = new Set(objects.map(([p]) => p));
