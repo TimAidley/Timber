@@ -94,7 +94,7 @@ The port is split by capability so a host provides what it can:
 
 | Capability | Interface | Notes |
 |---|---|---|
-| Read/write git content + **publish** | `HostRepo` | Always required. Publish is the intent-level `publishSquash()` — the app computes the *plan* (validity gate, clean-vs-rebase, conflict detection, all host-neutral); the adapter owns the host-specific mechanics of building the squashed commit (GitHub's blob→tree→commit model stays inside `@timber/github`). |
+| Read/write git content + **publish** | `HostRepo` | Always required. Publish is the intent-level `publishSquash()` — the app computes the *plan* (validity gate, clean-vs-rebase, conflict detection, all host-neutral); the adapter owns the host-specific mechanics of building the squashed commit (GitHub's blob→tree→commit model stays inside `@timber/github`). Also exposes repo **visibility** via `getVisibility()` → `public` / `private` / `unknown` (the last for a host that can't report it — both shipped adapters do). |
 | Who is signed in | `HostIdentity` | `getAuthenticatedLogin()` drives the per-user `<login>_wip` branch (SPEC §11). |
 | Trigger/observe a build | `DeployBackend` (**optional**) | `getLatestDeploy()` / `triggerDeploy()`. A host with **no CI** omits it, and the editor degrades — no publish-status morph, no out-of-date banner — instead of assuming GitHub Actions + Pages. GitHub maps it onto the site-template's `deploy.yml` workflow. |
 

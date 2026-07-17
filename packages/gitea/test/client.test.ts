@@ -54,6 +54,19 @@ describe('GiteaClient — reads', () => {
     expect(await c.getDefaultBranch()).toBe('main');
   });
 
+  it('getVisibility maps private -> private, false -> public, missing -> unknown', async () => {
+    const priv = client({ 'GET /repos/jane/site': () => ({ json: { private: true } }) });
+    expect(await priv.c.getVisibility()).toBe('private');
+
+    const pub = client({ 'GET /repos/jane/site': () => ({ json: { private: false } }) });
+    expect(await pub.c.getVisibility()).toBe('public');
+
+    const missing = client({
+      'GET /repos/jane/site': () => ({ json: { name: 'site' } }),
+    });
+    expect(await missing.c.getVisibility()).toBe('unknown');
+  });
+
   it('getBranchSha returns the tip, or undefined on 404', async () => {
     const { c } = client({
       'GET /repos/jane/site/branches/main': () => ({

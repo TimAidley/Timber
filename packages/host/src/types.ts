@@ -82,6 +82,14 @@ export interface ChangedPath {
 }
 
 /**
+ * Whether the content repo is publicly visible. `unknown` covers a host that doesn't
+ * expose visibility over its API (or a response that omits it) — so callers can degrade
+ * (e.g. "we can't confirm this repo is private") rather than assume. Both shipped adapters
+ * (GitHub, Gitea/Forgejo) do report it, so `unknown` is the honest not-all-hosts fallback.
+ */
+export type RepoVisibility = 'public' | 'private' | 'unknown';
+
+/**
  * How one ref stands relative to another. Powers the editor's "your build is out of
  * date" check: compare the Timber commit the editor was built from against the tip of
  * the branch it follows (SPEC §12).

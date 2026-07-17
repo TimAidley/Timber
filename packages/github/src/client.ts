@@ -1,5 +1,10 @@
 import { Octokit } from '@octokit/rest';
-import type { DeployBackend, HostProvider, PublishSquashInput } from '@timber/host';
+import type {
+  DeployBackend,
+  HostProvider,
+  PublishSquashInput,
+  RepoVisibility,
+} from '@timber/host';
 import { base64ToBytes, base64ToUtf8, bytesToBase64, utf8ToBase64 } from './base64.js';
 import type {
   ChangedPath,
@@ -125,6 +130,15 @@ export class RepoClient implements HostProvider {
       repo: this.repo,
     });
     return data.default_branch;
+  }
+
+  /** Whether the repo is public or private (SPEC §11) — GitHub always reports `private`. */
+  async getVisibility(): Promise<RepoVisibility> {
+    const { data } = await this.octokit.rest.repos.get({
+      owner: this.owner,
+      repo: this.repo,
+    });
+    return data.private ? 'private' : 'public';
   }
 
   /** The branch tip commit SHA, or `undefined` if the branch doesn't exist yet. */

@@ -16,6 +16,7 @@ export type {
   RefComparison,
   RepoSnapshot,
   RepoTree,
+  RepoVisibility,
   TreeEntry,
 } from './types.js';
 

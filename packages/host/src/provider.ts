@@ -7,6 +7,7 @@ import type {
   RefComparison,
   RepoSnapshot,
   RepoTree,
+  RepoVisibility,
 } from './types.js';
 
 /**
@@ -28,6 +29,12 @@ import type {
 export interface HostRepo {
   /** The repo's default branch name (e.g. `main`). */
   getDefaultBranch(): Promise<string>;
+  /**
+   * Whether the content repo is public or private — `unknown` if the host can't report it
+   * (SPEC §11). Lets the editor warn before, say, marking content public on a repo it can't
+   * confirm is private. A pure query; adapters map their host's repo-metadata field.
+   */
+  getVisibility(): Promise<RepoVisibility>;
   /** A branch's tip commit SHA, or `undefined` if the branch doesn't exist. */
   getBranchSha(branch: string): Promise<string | undefined>;
   /**

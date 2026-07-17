@@ -11,6 +11,7 @@ import type {
   RefComparison,
   RepoSnapshot,
   RepoTree,
+  RepoVisibility,
   TreeEntry,
 } from '@timber/host';
 import { base64ToBytes, base64ToUtf8, bytesToBase64, utf8ToBase64 } from './base64.js';
@@ -142,6 +143,16 @@ export class GiteaClient implements HostProvider {
   async getDefaultBranch(): Promise<string> {
     const data = await this.json<{ default_branch: string }>(this.repoPath(''));
     return data.default_branch;
+  }
+
+  /**
+   * Whether the repo is public or private (SPEC §11). Gitea/Forgejo reports `private` on
+   * the repo object; `unknown` if a response ever omits it (honouring the port contract).
+   */
+  async getVisibility(): Promise<RepoVisibility> {
+    const data = await this.json<{ private?: boolean }>(this.repoPath(''));
+    if (typeof data.private !== 'boolean') return 'unknown';
+    return data.private ? 'private' : 'public';
   }
 
   async getBranchSha(branch: string): Promise<string | undefined> {

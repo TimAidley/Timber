@@ -48,6 +48,14 @@ describe('RepoClient (replayed from fixtures recorded against the real sandbox r
     expect(served.every((r) => r.authorization === `Bearer ${FAKE_TOKEN}`)).toBe(true);
   });
 
+  it('getVisibility() maps the repo private flag (public sandbox)', async () => {
+    // Same GET /repos/{owner}/{repo} the default-branch call uses; the recorded response
+    // has "private": false → public.
+    useCassette('get-default-branch');
+
+    expect(await makeClient().getVisibility()).toBe('public');
+  });
+
   it('loadTree() returns the recorded tree shape', async () => {
     useCassette('load-tree');
 
