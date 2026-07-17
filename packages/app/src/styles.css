@@ -2056,6 +2056,26 @@ button.object-list__lang:hover {
   background: var(--success-soft);
 }
 
+/* The primary action for an on-device page (SPEC §5/§8): commit it to the repo. */
+.editor-header__backup {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8rem;
+  background: var(--accent);
+  color: var(--accent-contrast, #fff);
+  transition: filter var(--ease);
+}
+
+.editor-header__backup:hover {
+  filter: brightness(1.05);
+}
+
 /* -----------------------------------------------------------------------------
    Segmented controls, view toggles, tabs
    ----------------------------------------------------------------------------- */

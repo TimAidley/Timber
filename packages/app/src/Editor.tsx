@@ -12,6 +12,7 @@ import {
 import { computeLocationReadout, type StorageLevel } from './state/location.js';
 import type { RepoVisibility } from '@timber/host';
 import { LocationReadout } from './components/LocationReadout.js';
+import { BackupDialog } from './components/BackupDialog.js';
 import type { FrontMatter, TemplateMap } from '@timber/generator';
 import type { RepoSession } from './state/repoSession.js';
 import { AssetStore } from './state/assets.js';
@@ -161,6 +162,8 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   const [showNewFile, setShowNewFile] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ContentObject | null>(null);
   const [discardTarget, setDiscardTarget] = useState<ContentObject | null>(null);
+  // The device-only object awaiting "Back up to the repo" confirmation (SPEC §5/§8).
+  const [backupTarget, setBackupTarget] = useState<ContentObject | null>(null);
   const [discarding, setDiscarding] = useState(false);
   const [showRename, setShowRename] = useState(false);
   const [showAddTranslation, setShowAddTranslation] = useState(false);
@@ -567,6 +570,26 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
     void draftStore.current?.delete(repoKey, target.path);
     setDeletedPaths((prev) => new Set(prev).add(target.path));
     setDeleteTarget(null);
+  }
+
+  // Promote a device-only object to **Backed up** (SPEC §5/§8): clear its device flag and
+  // queue its current content to WIP, so autosave commits it like any edit. Uses the live
+  // edit buffer for the selected object (its latest keystrokes), else the stored copy. The
+  // debounced flush lands after this render, by when the autosaver's isDeviceOnly predicate
+  // (read via a ref) already reflects the removal — so the commit filter lets it through.
+  function confirmBackup(target: ContentObject): void {
+    const path = target.path;
+    const data = path === selectedPath ? edit.data : target.data;
+    const body = path === selectedPath ? edit.body : target.body;
+    setDeviceOnlyPaths((prev) => {
+      const next = new Set(prev);
+      next.delete(path);
+      return next;
+    });
+    void draftStore.current?.setStorage(repoKey, path, 'backed-up');
+    autosave.markObjectDirty(path, data, body);
+    void draftStore.current?.put(repoKey, path, data, body);
+    setBackupTarget(null);
   }
 
   // Restore a pending-delete object: cancel the scheduled deletion and re-add the
@@ -1124,6 +1147,16 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
             <code>{selected.path}</code>
           </div>
           <div className="editor-header__actions">
+            {deviceOnlyPaths.has(selected.path) ? (
+              <button
+                type="button"
+                className="editor-header__backup"
+                onClick={() => setBackupTarget(selected)}
+                title="Back up to the repo — commit this on-device page so it's durable and synced across your devices."
+              >
+                ☁ Back up to the repo
+              </button>
+            ) : null}
             {isPageType ? (
               <button
                 type="button"
@@ -1549,6 +1582,15 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
           repoPublic={
             repoVisibility === 'public' ? true : repoVisibility === 'private' ? false : undefined
           }
+        />
+      ) : null}
+
+      {backupTarget ? (
+        <BackupDialog
+          object={backupTarget}
+          visibility={repoVisibility}
+          onClose={() => setBackupTarget(null)}
+          onConfirm={() => confirmBackup(backupTarget)}
         />
       ) : null}
 
