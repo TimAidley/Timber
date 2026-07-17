@@ -180,7 +180,9 @@ Actions-side names use the `GH_`/plain prefix because GitHub **reserves** `GITHU
 ## Editing / publishing data flow
 
 `main` holds **source only** — built HTML never enters git. In the editor, edits autosave
-to IndexedDB and a per-user **`<username>_wip`** branch (debounced, coalesced commits).
+to IndexedDB and — for objects at storage level **Backed up** — a per-user
+**`<username>_wip`** branch (debounced, coalesced commits). Objects the author keeps
+**On this device** (SPEC §5/§8) stay in IndexedDB only and are held out of the WIP stream.
 **Publish** squash-merges WIP → `main`, which triggers `deploy.yml` → the site rebuilds and
 deploys to Pages as an artifact. The editor polls the deploy run to drive the Publish
 button's status.
@@ -203,6 +205,16 @@ Cross-cutting things and every file they touch:
   + `github/buildInfo.ts` (resolve) + `state/upstreamVersion.ts` +
   `components/UpdateBanner.tsx` + `site-template/.github/workflows/deploy.yml` (optional
   explicit overrides) + `packages/app/.env.example`.
+- **The two-axis status model** (storage: On this device ⇄ Backed up; publication:
+  Draft/Public — SPEC §5/§8/§11) → `packages/content/src/visibility.ts` (publication flag)
+  + `packages/app/src/state/changes.ts` (per-object state) + the autosave WIP-commit filter
+  (device-only objects excluded) + `packages/app/src/components/ChangeBadges.tsx` and the new
+  location-readout component + the host seam's **`HostRepo.getVisibility()`**
+  (`public`/`private`/`unknown`; both adapters report it) for the privacy label + the
+  New-object dialog's create-time storage choice. The readout's website stop keys off the
+  optional `DeployBackend` capability (absent host — e.g. Gitea/Codeberg — ⇒ no stop).
+  Storage level is **device-local metadata**
+  (IndexedDB), publication is **front matter** — keep the two in their separate homes.
 - **The site scaffold** (theme, schemas, sample content, workflows) → edit **`site-template/`**
   only; the mirror regenerates the template repo. Never edit `Timber-site-template` directly.
 - **Setup instructions** → **`INSTALL.md`** only (canonical); the template's README is a stub.
