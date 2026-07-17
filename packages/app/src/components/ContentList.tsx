@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { ContentObject, ContentTypeSchema } from '@timber/content';
-import { ChangeBadge, VisibilityBadge } from './ChangeBadges.js';
+import { ChangeBadge, DeviceBadge, VisibilityBadge } from './ChangeBadges.js';
 import { objectChangeState } from '../state/changes.js';
 import {
   CREATED_SORT,
@@ -25,6 +25,8 @@ interface ContentListProps {
   editingPaths: ReadonlySet<string>;
   savedPaths: ReadonlySet<string>;
   deletedPaths: ReadonlySet<string>;
+  /** Objects kept On this device (SPEC §5/§8): badged distinctly, not on the host. */
+  deviceOnlyPaths?: ReadonlySet<string>;
   onSelect: (path: string) => void;
   /** The site's declared languages (SPEC §5 → Multilingual); empty/omitted ⇒ single-language, no clustering. */
   languages?: string[];
@@ -32,6 +34,7 @@ interface ContentListProps {
 }
 
 const DEFAULT_SORT: SortState = { key: NAME_SORT, dir: 'asc' };
+const EMPTY: ReadonlySet<string> = new Set();
 
 /** Human-readable secondary line, showing the value the group is sorted by. */
 function secondaryText(o: ContentObject, sort: SortState): string {
@@ -66,6 +69,7 @@ export function ContentList({
   editingPaths,
   savedPaths,
   deletedPaths,
+  deviceOnlyPaths = EMPTY,
   onSelect,
   languages = [],
   defaultLanguage = '',
@@ -106,11 +110,13 @@ export function ContentList({
           onClick={() => onSelect(o.path)}
         >
           <span className="object-list__title">
-            <ChangeBadge state={changeStateOf(o.path)} />
+            {deviceOnlyPaths.has(o.path) ? <DeviceBadge /> : <ChangeBadge state={changeStateOf(o.path)} />}
             {objectName(o)}
           </span>
           <span className="object-list__type">
-            {(schemas.get(o.type)?.page ?? true) ? <VisibilityBadge isPublic={o.public} /> : null}
+            {!deviceOnlyPaths.has(o.path) && (schemas.get(o.type)?.page ?? true) ? (
+              <VisibilityBadge isPublic={o.public} />
+            ) : null}
             {secondaryText(o, sort)}
           </span>
         </button>
@@ -133,7 +139,7 @@ export function ContentList({
           onClick={() => onSelect(rep.path)}
         >
           <span className="object-list__title">
-            <ChangeBadge state={changeStateOf(rep.path)} />
+            {deviceOnlyPaths.has(rep.path) ? <DeviceBadge /> : <ChangeBadge state={changeStateOf(rep.path)} />}
             {objectName(rep)}
           </span>
           <span className="object-list__type">{secondaryText(rep, sort)}</span>

@@ -9,7 +9,9 @@ import {
   type ContentObject,
   type ContentTypeSchema,
 } from '@timber/content';
-import type { StorageLevel } from './state/location.js';
+import { computeLocationReadout, type StorageLevel } from './state/location.js';
+import type { RepoVisibility } from '@timber/host';
+import { LocationReadout } from './components/LocationReadout.js';
 import type { FrontMatter, TemplateMap } from '@timber/generator';
 import type { RepoSession } from './state/repoSession.js';
 import { AssetStore } from './state/assets.js';
@@ -93,6 +95,23 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   // mount; the autosaver reads this (via a ref) to filter its commit.
   const [deviceOnlyPaths, setDeviceOnlyPaths] = useState<ReadonlySet<string>>(new Set());
   const autosave = useAutosave(session, assetStore, (path) => deviceOnlyPaths.has(path));
+  // Repo visibility (SPEC §5), for the honest "backed up = visible to whom" wording. Read
+  // once through the host port; `unknown` (the default) stays conservative if it can't tell.
+  const [repoVisibility, setRepoVisibility] = useState<RepoVisibility>('unknown');
+  useEffect(() => {
+    let cancelled = false;
+    void session.client
+      .getVisibility()
+      .then((v) => {
+        if (!cancelled) setRepoVisibility(v);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [session]);
+  /** Whether the host can deploy a site at all (SPEC §8 — the website stop degrades if not). */
+  const canDeploy = session.client.deploy !== undefined;
 
   // The working object list — mutated by create/delete/rename (SPEC §5). The derived
   // `workingModel` recomputes the id index so validation, reference pickers, and the
@@ -767,6 +786,12 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
     [objects, autosave.editingPaths, savedPaths, deletedPaths],
   );
   const hasChanges = counts.editing > 0 || counts.saved > 0 || counts.deleting > 0;
+  // Objects kept On this device (SPEC §5/§8) — shown in the header, but not "pending
+  // publish" (they're not on the host), so they don't feed `hasChanges`.
+  const deviceCount = useMemo(
+    () => objects.filter((o) => deviceOnlyPaths.has(o.path) && !deletedPaths.has(o.path)).length,
+    [objects, deviceOnlyPaths, deletedPaths],
+  );
 
   // Whether the selected type renders as a page — visibility (Draft/Public) only
   // applies to those; a config singleton (page: false) has no public presence.
@@ -1168,6 +1193,18 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
           </div>
         </header>
 
+        <LocationReadout
+          readout={computeLocationReadout({
+            storage: deviceOnlyPaths.has(selected.path) ? 'device' : 'backed-up',
+            hasLocalEdits: autosave.editingPaths.has(selected.path),
+            differsFromMain: savedPaths.has(selected.path),
+            newToMain: addedIndexPaths.has(selected.path),
+            isPublic: edit.data.public === true,
+            canDeploy,
+          })}
+          visibility={repoVisibility}
+        />
+
         <section className="editor-panel">
           <h3>Fields</h3>
           <SchemaForm
@@ -1290,6 +1327,7 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
               editing={counts.editing}
               saved={counts.saved}
               deleting={counts.deleting}
+              device={deviceCount}
               syncState={autosave.syncState}
               onSaveNow={autosave.saveNow}
               onToggle={
@@ -1397,6 +1435,7 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
                     editingPaths={autosave.editingPaths}
                     savedPaths={savedPaths}
                     deletedPaths={deletedPaths}
+                    deviceOnlyPaths={deviceOnlyPaths}
                     onSelect={(path) => {
                       setSelectedPath(path);
                       if (layout.isMobile) layout.setSidebarOpen(false);
@@ -1507,6 +1546,9 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
           model={workingModel}
           onClose={() => setShowNew(false)}
           onCreate={createObject}
+          repoPublic={
+            repoVisibility === 'public' ? true : repoVisibility === 'private' ? false : undefined
+          }
         />
       ) : null}
 

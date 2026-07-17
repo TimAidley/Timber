@@ -2663,6 +2663,69 @@ button.object-list__lang:hover {
   color: var(--text-muted);
 }
 
+/* Per-page location readout (SPEC §8): 💻 device · ☁ host · 🌐 website, each stop
+   toned by whether it holds your latest. */
+.readout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.75rem;
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2, var(--surface));
+}
+
+.readout__stop {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.readout__glyph {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.readout__stop-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.readout__stop-name {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+}
+
+.readout__stop-state {
+  font-size: 0.82rem;
+  color: var(--text);
+}
+
+.readout__stop--good .readout__stop-state {
+  color: var(--ok, #2a7d2a);
+}
+.readout__stop--warn .readout__stop-state {
+  color: var(--warn, #9a6a00);
+}
+.readout__stop--off .readout__stop-state {
+  color: var(--text-muted);
+}
+
+.cbadge--device {
+  filter: grayscale(0.15);
+}
+
+.changes__seg--device {
+  color: var(--text-muted);
+}
+
 /* New-object storage-level picker (SPEC §5/§8): two radios with a plain-language
    tradeoff under each. */
 .new-object__storage {

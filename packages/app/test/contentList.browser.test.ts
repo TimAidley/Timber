@@ -220,3 +220,39 @@ describe('ContentList (i18n clustering)', () => {
     expect(titlesIn(0)).toEqual(['Solo']);
   });
 });
+
+describe('ContentList device-only surfacing (SPEC §5/§8)', () => {
+  const rowByTitle = (title: string): Element =>
+    [...document.querySelectorAll('.object-list > li')].find((li) =>
+      li.querySelector('.object-list__title')?.textContent?.includes(title),
+    )!;
+
+  it('badges an On-this-device object distinctly and hides its Draft/Public badge', async () => {
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    root.render(
+      React.createElement(ContentList, {
+        objects: OBJECTS,
+        schemas,
+        selectedPath: '',
+        editingPaths: new Set<string>(),
+        savedPaths: new Set<string>(),
+        deletedPaths: new Set<string>(),
+        deviceOnlyPaths: new Set(['content/events/gala/index.md']),
+        onSelect: () => undefined,
+      }),
+    );
+    await waitFor(() => document.querySelector('.object-group'));
+
+    const gala = rowByTitle('Gala');
+    // The device-only object carries the 💻 badge, not a change/visibility badge.
+    expect(gala.querySelector('.cbadge--device')).not.toBeNull();
+    expect(gala.querySelector('.vbadge')).toBeNull();
+
+    // A normal (backed-up) object still shows its Draft/Public badge.
+    const meetup = rowByTitle('Meetup');
+    expect(meetup.querySelector('.cbadge--device')).toBeNull();
+    expect(meetup.querySelector('.vbadge')).not.toBeNull();
+  });
+});

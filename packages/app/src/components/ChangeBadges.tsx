@@ -25,6 +25,21 @@ export function ChangeBadge({ state }: { state: ChangeState }): React.JSX.Elemen
 }
 
 /**
+ * Storage-axis badge for an object kept **On this device** (SPEC §5/§8): held out of
+ * the WIP commit, so its only copy is this browser's IndexedDB — private, but not
+ * backed up. Distinct glyph + label (never colour alone), and it replaces the change
+ * lifecycle badge in the sidebar since a device-only object isn't on the host at all.
+ */
+export function DeviceBadge(): React.JSX.Element {
+  const label = 'On this device — not backed up (kept in this browser only)';
+  return (
+    <span className="cbadge cbadge--device" role="img" aria-label={label} title={label}>
+      💻
+    </span>
+  );
+}
+
+/**
  * Page-visibility badge (Draft vs Public) — the axis orthogonal to the change
  * lifecycle. A Draft page's data still rides to `main`, but the build skips it, so it
  * never appears on the public site.
@@ -44,6 +59,8 @@ interface ChangesSummaryProps {
   editing: number;
   saved: number;
   deleting: number;
+  /** Objects kept On this device (SPEC §5/§8) — not backed up, not counted as pending publish. */
+  device: number;
   syncState: SyncState;
   onSaveNow: () => void;
   /** Toggle the changes panel (the counts become a button when there's anything to show). */
@@ -63,6 +80,7 @@ export function ChangesSummary({
   editing,
   saved,
   deleting,
+  device,
   syncState,
   onSaveNow,
   onToggle,
@@ -104,14 +122,23 @@ export function ChangesSummary({
         <span aria-hidden="true">✕</span> Deleting {deleting}
       </span>,
     );
+  if (device > 0)
+    segments.push(
+      <span key="device" className="changes__seg changes__seg--device">
+        <span aria-hidden="true">💻</span> On device {device}
+      </span>,
+    );
   if (segments.length === 0) return <div className="changes changes--clean">No unpublished changes</div>;
 
   const inner = segments.flatMap((seg, i) =>
     i === 0 ? [seg] : [<span key={`sep${i}`} className="changes__sep"> · </span>, seg],
   );
-  const label = `${editing} editing, ${saved} saved, ${deleting} deleting`;
+  const label = `${editing} editing, ${saved} saved, ${deleting} deleting, ${device} on device`;
 
-  if (onToggle) {
+  // The changes panel lists publishable (branch) changes; device-only items aren't in it,
+  // so when nothing is publishable the summary is plain text (no panel to open).
+  const publishable = editing > 0 || saved > 0 || deleting > 0;
+  if (onToggle && publishable) {
     return (
       <button
         type="button"
