@@ -173,6 +173,29 @@ describe('buildSite', () => {
     expect(sitemap).toContain('<loc>https://i18n.example/fr/posts/bonjour/</loc>');
   });
 
+  it('emits <html lang>, hreflang alternates, and a language switcher (Phase 2)', async () => {
+    await buildSite(i18nFixture, out);
+    const en = await readFile(join(out, 'en/posts/hello/index.html'), 'utf8');
+
+    // <html lang> reflects the page's resolved language.
+    expect(en).toContain('<html lang="en">');
+
+    // hreflang alternates for both languages + x-default (absolute against baseUrl).
+    expect(en).toContain(
+      '<link rel="alternate" hreflang="en" href="https://i18n.example/en/posts/hello/">',
+    );
+    expect(en).toContain(
+      '<link rel="alternate" hreflang="fr" href="https://i18n.example/fr/posts/bonjour/">',
+    );
+    expect(en).toContain(
+      '<link rel="alternate" hreflang="x-default" href="https://i18n.example/en/posts/hello/">',
+    );
+
+    // A language switcher linking each sibling, marking the current language.
+    expect(en).toContain('<a href="/en/posts/hello/" aria-current="true">en</a>');
+    expect(en).toContain('<a href="/fr/posts/bonjour/">fr</a>');
+  });
+
   it('build output equals renderPage output for the same object (preview ≡ build)', async () => {
     await buildSite(siteFixture, out);
     const built = await readFile(join(out, 'pages/hello/index.html'), 'utf8');

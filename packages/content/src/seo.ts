@@ -109,6 +109,38 @@ export function pageSeo(object: ContentObject, schema: ContentTypeSchema, site: 
   };
 }
 
+/** One `<link rel="alternate" hreflang="…">` entry (SPEC §5 → Multilingual). */
+export interface HreflangAlternate {
+  /** BCP-47 code, or the literal `x-default`. */
+  lang: string;
+  /** Absolute URL when a `baseUrl` is known, else the site-relative URL. */
+  href: string;
+}
+
+/**
+ * Build the `hreflang` alternates for a page from its sibling {@link Translation}s
+ * (SPEC §5 → Multilingual → SEO): one entry per language plus an `x-default` pointing at
+ * the default-language variant. Hrefs are **absolute** against `site.baseUrl` when known
+ * (Google recommends absolute hreflang), else left site-relative. Returns `[]` for a page
+ * with fewer than two variants — a lone page needs no alternates — so single-language
+ * sites emit nothing.
+ */
+export function hreflangAlternates(
+  translations: ReadonlyArray<{ lang: string; url: string }>,
+  site: SiteContext,
+  defaultLanguage?: string,
+): HreflangAlternate[] {
+  if (translations.length < 2) return [];
+  const baseUrl = str(site.baseUrl);
+  const abs = (url: string): string => (baseUrl ? `${baseUrl}${url}` : url);
+  const out: HreflangAlternate[] = translations.map((t) => ({ lang: t.lang, href: abs(t.url) }));
+  const fallback = translations[0]!;
+  const def =
+    (defaultLanguage && translations.find((t) => t.lang === defaultLanguage)) || fallback;
+  out.push({ lang: 'x-default', href: abs(def.url) });
+  return out;
+}
+
 function escapeXml(value: string): string {
   return value
     .replace(/&/g, '&amp;')

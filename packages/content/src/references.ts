@@ -35,15 +35,20 @@ export function urlFor(object: ContentObject, schema: ContentTypeSchema): string
   return url;
 }
 
-/** One sibling translation of an object, for a language switcher / `hreflang` alternates. */
-export interface Translation {
+/**
+ * One sibling translation of an object, for a language switcher / `hreflang` alternates.
+ * A `type` (not `interface`) so it stays assignable to the generator's loose
+ * `Array<Record<string, unknown>>` translations context (interfaces aren't, owing to
+ * declaration merging).
+ */
+export type Translation = {
   /** BCP-47 language code of this sibling. */
   lang: string;
   /** The sibling's resolved URL. */
   url: string;
   /** The sibling's title (falls back to its slug). */
   title: string;
-}
+};
 
 /**
  * The translations of an object (SPEC §5 → Multilingual): every sibling sharing its

@@ -10,10 +10,12 @@ import {
   buildRobots,
   buildSitemap,
   canPublish,
+  hreflangAlternates,
   isPublic,
   pageSeo,
   redirectStubHtml,
   siteContext,
+  translationsOf,
   urlFor,
   Validator,
   type ContentObject,
@@ -174,7 +176,17 @@ export async function buildSite(repoDir: string, outDir: string): Promise<BuildR
       const baseUrl = typeof site.baseUrl === 'string' ? site.baseUrl : '';
       seo.canonical = baseUrl ? `${baseUrl}/` : '/';
     }
-    const html = await renderPage({
+
+    // Multilingual (SPEC §5 → Multilingual): the sibling set drives `page.translations`
+    // (language switcher) and the `hreflang` alternates in `<head>`. Both use `effectiveUrl`
+    // so switcher links and pages agree. Empty for single-language sites → no-ops.
+    const translations = translationsOf(model, object, effectiveUrl);
+    const defaultLanguage =
+      typeof site.defaultLanguage === 'string' ? site.defaultLanguage : undefined;
+    const alternates = hreflangAlternates(translations, site, defaultLanguage);
+    if (alternates.length > 0) seo.alternates = alternates;
+
+    const renderInput: Parameters<typeof renderPage>[0] = {
       markdown,
       template,
       templates,
@@ -183,7 +195,10 @@ export async function buildSite(repoDir: string, outDir: string): Promise<BuildR
       seo,
       now: clock.now,
       today: clock.today,
-    });
+    };
+    if (object.lang !== undefined) renderInput.lang = object.lang;
+    if (translations.length > 0) renderInput.translations = translations;
+    const html = await renderPage(renderInput);
 
     const dir = urlToDir(url);
     await mkdir(join(outDir, dir), { recursive: true });

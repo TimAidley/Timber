@@ -78,6 +78,45 @@ describe('renderSitePage', () => {
     expect(html).toContain('Edited In Preview');
   });
 
+  it('renders the language switcher, hreflang, and <html lang> for a translated page (preview ≡ build)', async () => {
+    // An inline two-language site, rendered through the shipped default theme, so the
+    // preview exercises the same i18n path the CLI build does (SPEC §5 → Multilingual).
+    const snapshot: RepoSnapshot = new Map([
+      ['config/schemas/posts.yml', 'kind: collection\nhasBody: true\nfields:\n  title:\n    type: text\n'],
+      ['config/schemas/settings.yml', read('config/schemas/settings.yml')],
+      [
+        'content/settings/index.md',
+        '---\ntitle: Multi\nbaseUrl: https://ex.test\nlanguages:\n  - en\n  - fr\ndefaultLanguage: en\n---\n',
+      ],
+      ['content/posts/en/hi/index.md', '---\nid: HI-EN\ntitle: Hi\ntranslationKey: T\npublic: true\n---\nHi.\n'],
+      ['content/posts/fr/salut/index.md', '---\nid: HI-FR\ntitle: Salut\ntranslationKey: T\npublic: true\n---\nSalut.\n'],
+    ]);
+    const model = assembleContent(snapshot, loadSchemas(snapshot));
+    const theme: SiteTheme = {
+      templates: new Map([['default.liquid', read('templates/default.liquid')]]),
+      css: read('assets/theme.css'),
+      navigationYml: null,
+      objectUrls: [],
+    };
+    const en = model.objects.find((o) => o.path === 'content/posts/en/hi/index.md')!;
+    const html = await renderSitePage({
+      model,
+      object: en,
+      schema: model.schemas.get('posts')!,
+      data: en.data,
+      body: en.body,
+      theme,
+      assetStore: new AssetStore(),
+    });
+
+    expect(html).toContain('<html lang="en">');
+    expect(html).toContain('hreflang="fr" href="https://ex.test/fr/posts/salut/"');
+    expect(html).toContain('hreflang="x-default" href="https://ex.test/en/posts/hi/"');
+    // Switcher links both siblings, marking the current language.
+    expect(html).toContain('href="/fr/posts/salut/"');
+    expect(html).toContain('aria-current="true"');
+  });
+
   it('throws a helpful error when no template resolves', async () => {
     const { model } = fixture();
     const object = home(model);

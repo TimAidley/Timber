@@ -31,7 +31,7 @@ function engineFor(templates: TemplateMap | undefined): Liquid {
  * different environments supply the strings; the rendering is the same code.
  *
  * Template context:
- *   - `page`        — parsed front-matter data
+ *   - `page`        — parsed front-matter data (plus computed `lang`/`translations`)
  *   - `content`     — the rendered body HTML (emitted raw; see liquid.ts)
  *   - `site`        — optional site-wide context
  *   - `collections` — optional per-type collections (for listing loops)
@@ -45,7 +45,13 @@ export async function renderPage(input: RenderPageInput): Promise<string> {
   const content = await renderMarkdown(body);
 
   const html = await engineFor(input.templates).parseAndRender(input.template, {
-    page: data,
+    // Computed language/translations (SPEC §5 → Multilingual) win over any same-named
+    // front-matter key, mirroring the model where the path is authoritative for `lang`.
+    page: {
+      ...data,
+      ...(input.lang !== undefined ? { lang: input.lang } : {}),
+      ...(input.translations !== undefined ? { translations: input.translations } : {}),
+    },
     // The body is already rendered + sanitized HTML — mark it trusted so `{{ content }}`
     // emits it raw while every other output is auto-escaped (see liquid.ts).
     content: new SafeHtml(content),

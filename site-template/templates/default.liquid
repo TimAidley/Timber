@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{ page.lang | default: 'en' }}">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -10,6 +10,9 @@
     <meta property="og:description" content="{{ seo.ogDescription }}" />
     <meta property="og:type" content="{{ seo.ogType }}" />
     {% if seo.ogImage %}<meta property="og:image" content="{{ seo.ogImage }}" />{% endif %}
+    {% comment %} hreflang alternates for translated pages (empty on single-language sites) {% endcomment %}
+    {% for alt in seo.alternates %}<link rel="alternate" hreflang="{{ alt.lang }}" href="{{ alt.href }}" />
+    {% endfor %}
     <link rel="stylesheet" href="{{ site.basePath }}/assets/theme.css" />
   </head>
   <body>
@@ -18,6 +21,12 @@
       <nav class="site-nav">
         {% for item in site.nav %}<a href="{{ site.basePath }}{{ item.url }}">{{ item.label }}</a>{% endfor %}
       </nav>
+      {% comment %} Language switcher — only when the page has more than one translation {% endcomment %}
+      {% if page.translations.size > 1 %}
+      <nav class="site-langs" aria-label="Language">
+        {% for t in page.translations %}<a href="{{ site.basePath }}{{ t.url }}" lang="{{ t.lang }}"{% if t.lang == page.lang %} aria-current="true"{% endif %}>{{ t.lang }}</a>{% endfor %}
+      </nav>
+      {% endif %}
     </header>
     <main class="site-main">
       {% comment %}

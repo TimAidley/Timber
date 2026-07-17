@@ -55,6 +55,20 @@ export interface RenderPageInput {
   /** Optional per-page derived data (e.g. SEO) exposed as `{{ seo }}` (SPEC §13). */
   seo?: Record<string, unknown>;
   /**
+   * Optional resolved language of this page (SPEC §5 → Multilingual), merged into the
+   * page context as `{{ page.lang }}` (winning over any front-matter `lang`). Supplied
+   * by the caller — the generator core stays language-agnostic. Omit for a single-
+   * language site (then `{{ page.lang }}` is simply empty).
+   */
+  lang?: string;
+  /**
+   * Optional sibling translations (SPEC §5 → Multilingual), merged into the page context
+   * as `{{ page.translations }}` — each a `{ lang, url, title }` record — for a language
+   * switcher. Assembled by `@timber/content`'s `translationsOf`; kept loose here so the
+   * core needn't know the content model.
+   */
+  translations?: Array<Record<string, unknown>>;
+  /**
    * Optional temporal context (SPEC §6): the build/preview instant, exposed at the top
    * level as `{{ now }}` (ISO-8601) and `{{ today }}` (`YYYY-MM-DD`). Supplied by the
    * caller (never read from the clock here, so preview ≡ build) — see {@link buildClock}.

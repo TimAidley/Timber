@@ -3,7 +3,9 @@ import {
   assembleCollections,
   siteContext,
   pageSeo,
+  hreflangAlternates,
   loadNavigation,
+  translationsOf,
   urlFor,
   type ContentModel,
   type ContentObject,
@@ -87,7 +89,15 @@ export async function renderSitePage(input: RenderSitePageInput): Promise<string
   const liveObject: ContentObject = { ...object, data };
   const seo = pageSeo(liveObject, schema, site);
 
-  let html = await renderPage({
+  // Multilingual (SPEC §5 → Multilingual): mirror the CLI build so the previewed page
+  // shows the language switcher + hreflang exactly as the deployed page will (preview ≡ build).
+  const translations = translationsOf(model, liveObject, effectiveUrl);
+  const defaultLanguage =
+    typeof site.defaultLanguage === 'string' ? site.defaultLanguage : undefined;
+  const alternates = hreflangAlternates(translations, site, defaultLanguage);
+  if (alternates.length > 0) seo.alternates = alternates;
+
+  const renderInput: Parameters<typeof renderPage>[0] = {
     markdown: reassembleDocument(data, body),
     template,
     templates,
@@ -96,7 +106,10 @@ export async function renderSitePage(input: RenderSitePageInput): Promise<string
     seo,
     now: clock.now,
     today: clock.today,
-  });
+  };
+  if (liveObject.lang !== undefined) renderInput.lang = liveObject.lang;
+  if (translations.length > 0) renderInput.translations = translations;
+  let html = await renderPage(renderInput);
 
   // Inline the theme stylesheet in place of its (unreachable) `<link>`.
   if (theme.css) {
