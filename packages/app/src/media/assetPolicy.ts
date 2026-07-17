@@ -7,7 +7,7 @@
  * set of known-safe binaries, and everything else rejected.
  *
  * Classification is by **file extension**, deliberately — it's what the committed path and
- * the served site rely on (GitHub Pages serves by extension), and it's stabler than a
+ * the served site rely on (static Pages hosts serve by extension), and it's stabler than a
  * browser-supplied MIME (which is often empty or wrong for fonts). Kept pure (no DOM, no
  * I/O) so the whole policy is unit-testable, mirroring `plan.ts`.
  */

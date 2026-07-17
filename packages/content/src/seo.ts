@@ -40,10 +40,11 @@ export function siteContext(settings?: ContentObject): SiteContext {
   const site: SiteContext = { ...data };
   const baseUrl = str(data.baseUrl);
   if (baseUrl) site.baseUrl = trimTrailingSlash(baseUrl);
-  // The path portion of the base URL, so in-page links work when the site is served
-  // from a subpath — e.g. a GitHub *project* Pages site at `/<repo>/` (SPEC §3, §13).
-  // `/repo` for `https://you.github.io/repo`; `''` for a root site / custom domain /
-  // no baseUrl. Templates prefix root-absolute links with it: `{{ site.basePath }}/...`.
+  // The path portion of the base URL, so in-page links work when the site is served from
+  // a subpath — any project-Pages-style host (GitHub `you.github.io/<repo>`, Codeberg
+  // `you.codeberg.page/<repo>`, GitLab `you.gitlab.io/<repo>`) at `/<repo>/` (SPEC §3, §13).
+  // `/repo` for those; `''` for a root site / custom domain / no baseUrl. Host-neutral: it's
+  // derived from the configured `baseUrl`. Templates prefix root-absolute links: `{{ site.basePath }}/...`.
   site.basePath = basePathOf(baseUrl);
   return site;
 }

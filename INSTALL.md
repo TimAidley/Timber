@@ -177,3 +177,26 @@ Prefer a classic OAuth App to a GitHub App? It works with the same template and 
 same callback URL, skip the install step (OAuth Apps aren't "installed"), and grant the
 `repo` scope at first sign-in. The trade-off: that scope is **account-wide**, which is
 exactly what a GitHub App avoids. Deeper reference: **[`docs/auth-github-app.md`](docs/auth-github-app.md)**.
+
+---
+
+## Alternative: host on Codeberg (Gitea / Forgejo)
+
+Timber's git host is a swappable adapter (ARCHITECTURE → "The git host — the `HostProvider`
+seam"), and **Codeberg** (Forgejo) is a supported second host. The differences from GitHub:
+
+1. **Deploy is branch-based.** Codeberg Pages serves from a `pages` branch, not an artifact.
+   The template ships **`.forgejo/workflows/deploy.yml`** for this — it builds your site and
+   force-pushes the output to `pages`, served at `https://<owner>.codeberg.page/<repo>/`.
+   (It sits alongside the GitHub workflow; Forgejo reads `.forgejo/`, GitHub ignores it.)
+   Enable **Settings → Actions** on your repo; the workflow's header lists the one-time steps.
+2. **Base URL.** Set `baseUrl: https://<owner>.codeberg.page/<repo>` in
+   `content/settings/index.md` (same subpath idea as GitHub project Pages).
+3. **Editor config.** The editor is co-hosted at `/<repo>/edit/` and pointed at Codeberg via
+   `host: gitea` + `apiBaseUrl: https://codeberg.org` — the `deploy.yml` sets these build
+   vars for you. In a hand-written `config.js` they are `host` and `apiBaseUrl`.
+4. **Sign-in.** Use **paste-a-PAT** (create a token under **Settings → Applications** on
+   Codeberg with contents read/write). Full "Sign in with Codeberg" OAuth needs a
+   Codeberg-aware broker — a follow-up; PAT works end-to-end today.
+
+Self-hosted Gitea/Forgejo works the same way — set `apiBaseUrl` to your instance origin.

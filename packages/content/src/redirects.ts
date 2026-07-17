@@ -2,9 +2,10 @@ import { urlFor } from './references.js';
 import type { ContentObject, ContentTypeSchema } from './types.js';
 
 /**
- * A minimal client-side redirect stub (SPEC §5). GitHub Pages has no server-side
- * redirects, so a renamed object's OLD url gets a static page that meta-refreshes
- * (and links) to its current url — emitted by the build from the object's `aliases`.
+ * A minimal client-side redirect stub (SPEC §5). Static Pages hosts (GitHub, Codeberg,
+ * GitLab, …) have no server-side redirects, so a renamed object's OLD url gets a static
+ * page that meta-refreshes (and links) to its current url — emitted by the build from the
+ * object's `aliases`. Host-neutral: meta-refresh works on any static host.
  * `<link rel="canonical">` tells crawlers the real destination.
  */
 export function redirectStubHtml(toUrl: string): string {

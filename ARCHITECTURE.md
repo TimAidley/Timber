@@ -98,12 +98,15 @@ The port is split by capability so a host provides what it can:
 | Who is signed in | `HostIdentity` | `getAuthenticatedLogin()` drives the per-user `<login>_wip` branch (SPEC §11). |
 | Trigger/observe a build | `DeployBackend` (**optional**) | `getLatestDeploy()` / `triggerDeploy()`. A host with **no CI** omits it, and the editor degrades — no publish-status morph, no out-of-date banner — instead of assuming GitHub Actions + Pages. GitHub maps it onto the site-template's `deploy.yml` workflow. |
 
-Two GitHub *hosting assumptions* still live in generated output rather than the port and
-would move under `DeployBackend` when a second host lands: the project-Pages **base path**
-(`you.github.io/<repo>/`, `@timber/content` `seo.ts`) and the **meta-refresh redirect
-stubs** emitted because GitHub Pages has no server-side redirects (`redirects.ts`). A host
-with different base-path/redirect semantics (e.g. Codeberg/GitLab Pages, which are
-branch-based) would declare them there.
+**Page hosting is host-neutral in the generator.** It turned out nothing GitHub-specific
+had to move: the **base path** is derived from the site's configured `baseUrl`
+(`@timber/content` `seo.ts`) — `you.github.io/<repo>`, `you.codeberg.page/<repo>`, a custom
+domain, all just work — and the **meta-refresh redirect stubs** (`redirects.ts`) work on any
+static host. Only the *deploy mechanism* is per-host, and it lives entirely in the
+site-template, not the app or generator: `.github/workflows/deploy.yml` uploads a Pages
+artifact (GitHub), while `.forgejo/workflows/deploy.yml` builds and force-pushes to the
+`pages` branch that **Codeberg** Pages serves. Both co-host the editor at `/<repo>/edit/`;
+they coexist in one template (GitHub ignores `.forgejo/`, Forgejo ignores `.github/`).
 
 ## Authentication — the `getToken()` seam
 

@@ -1,0 +1,111 @@
+name: Build & deploy site (Codeberg)
+
+# Copy this file into your CONTENT repo at .forgejo/workflows/deploy.yml.
+#
+# This is the Codeberg / Forgejo counterpart to .github/workflows/deploy.yml. It builds
+# your site with the Timber generator and publishes it to the `pages` branch, which
+# Codeberg Pages serves at https://<owner>.codeberg.page/<repo>/ (SPEC §12). Codeberg Pages
+# is BRANCH-based: unlike GitHub's artifact deploy, the built HTML is force-pushed to a
+# dedicated `pages` branch. `main` still holds source only — the HTML lives on `pages`,
+# never on main. (Forgejo reads .forgejo/workflows AND .gitea/workflows; GitHub ignores
+# both, so this can sit alongside the GitHub workflow in one template.)
+#
+# One-time setup in your content repo (on Codeberg):
+#   1. Settings → Actions → enable Actions for this repo.
+#   2. Set your site's baseUrl (content/settings) to https://<owner>.codeberg.page/<repo>
+#      so in-page links resolve under the /<repo>/ subpath (basePath). Custom domain? Use it.
+#   3. The workflow pushes with the built-in Actions token; if your instance restricts it,
+#      add a repo secret DEPLOY_TOKEN (a PAT with contents:write) and it will be used instead.
+#   4. Pin TIMBER_REF below to a Timber release tag so preview ≡ production.
+#
+# The editor is co-hosted at /<repo>/edit/ and configured for Codeberg (host: gitea,
+# apiBaseUrl: https://codeberg.org), signing in via paste-a-PAT (SPEC §9 / §16: Gitea OAuth
+# through the broker is a follow-up).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+  schedule:
+    - cron: '0 4 * * *' # daily rebuild (SPEC §15)
+
+# Let the built-in token push the pages branch (used when DEPLOY_TOKEN isn't set).
+permissions:
+  contents: write
+
+env:
+  TIMBER_REPO: TimAidley/Timber
+  TIMBER_REF: main # pin to a Timber release tag
+  CODEBERG_BASE: https://codeberg.org # your Forgejo instance origin (for the editor's host config)
+
+jobs:
+  build-and-deploy:
+    runs-on: docker
+    container:
+      image: node:22-bookworm
+    steps:
+      - name: Check out this content repo
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        run: npm install -g pnpm@10
+
+      # Timber lives on GitHub; clone it directly (cross-host) rather than via the
+      # checkout action, so this doesn't depend on how the instance resolves actions.
+      - name: Check out Timber (pinned)
+        run: git clone --depth 1 --branch "$TIMBER_REF" "https://github.com/$TIMBER_REPO" .timber
+
+      - name: Install Timber deps
+        working-directory: .timber
+        run: pnpm install --frozen-lockfile
+
+      - name: Build the Timber CLI (generator)
+        working-directory: .timber
+        run: pnpm --filter "@timber/cli..." build
+
+      - name: Build the site
+        run: node .timber/packages/cli/dist/index.js build . _site
+
+      # Co-host the editor at /<repo>/edit/, configured for this Codeberg repo. It ships
+      # always and signs in via paste-a-PAT (host-neutral). Override the path with the
+      # TIMBER_EDITOR_PATH repo variable if /edit/ collides with a content page.
+      - name: Build the editor (/<repo>/edit/)
+        run: |
+          REPO='${{ github.event.repository.name }}'
+          OWNER='${{ github.repository_owner }}'
+          EDITOR_PATH='${{ vars.TIMBER_EDITOR_PATH }}'
+          EDITOR_PATH="${EDITOR_PATH:-edit}"
+          EDITOR_PATH="${EDITOR_PATH#/}"; EDITOR_PATH="${EDITOR_PATH%/}"
+          export TIMBER_BASE="/$REPO/$EDITOR_PATH/"
+          export VITE_TIMBER_HOST='gitea'
+          export VITE_TIMBER_API_BASE_URL="$CODEBERG_BASE"
+          export VITE_TIMBER_OWNER="$OWNER"
+          export VITE_TIMBER_REPO="$REPO"
+          export VITE_TIMBER_UPSTREAM_REPO="$TIMBER_REPO"
+          export VITE_TIMBER_UPSTREAM_REF="$TIMBER_REF"
+          VITE_TIMBER_BUILD_SHA="$(git -C .timber rev-parse HEAD)"
+          export VITE_TIMBER_BUILD_SHA
+          ( cd .timber && pnpm --filter "@timber/app..." build )
+          mkdir -p "_site/$EDITOR_PATH"
+          cp -r .timber/packages/app/dist/. "_site/$EDITOR_PATH/"
+
+      # Publish _site to the `pages` branch (Codeberg Pages serves it). Force-push: the
+      # branch is a rolling snapshot of built output, not history. Prefer a DEPLOY_TOKEN
+      # secret (a PAT with contents:write); fall back to the built-in Actions token.
+      - name: Publish to the pages branch
+        env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN || github.token }}
+        run: |
+          REPO='${{ github.event.repository.name }}'
+          OWNER='${{ github.repository_owner }}'
+          SERVER='${{ github.server_url }}'
+          SERVER="${SERVER#https://}"
+          cd _site
+          touch .nojekyll
+          git init -q
+          git config user.name 'Forgejo Actions'
+          git config user.email 'actions@noreply.codeberg.org'
+          git add -A
+          git commit -q -m "Deploy site ($(git -C "$GITHUB_WORKSPACE" rev-parse --short HEAD 2>/dev/null || echo build))"
+          git branch -M pages
+          git push -f "https://x-access-token:${DEPLOY_TOKEN}@${SERVER}/${OWNER}/${REPO}.git" pages
