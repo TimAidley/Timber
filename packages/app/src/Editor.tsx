@@ -72,6 +72,7 @@ import { canAccessAdvanced } from './host/access.js';
 import { newObject } from './content/newObject.js';
 import { newTranslation } from './content/newTranslation.js';
 import { AddTranslationDialog } from './components/AddTranslationDialog.js';
+import { HeaderActions } from './components/HeaderActions.js';
 import { useBackNavigationGuard } from './editor/backNavGuard.js';
 
 interface EditState {
@@ -1234,57 +1235,16 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
                 {edit.data.public === true ? 'Public' : 'Draft'}
               </button>
             ) : null}
-            {canDiscard || selected.kind === 'collection' ? (
-              <details className="overflow-menu">
-                <summary
-                  className="overflow-menu__toggle"
-                  aria-label="More actions"
-                  title="More actions"
-                >
-                  ⋯
-                </summary>
-                <div className="overflow-menu__items">
-                  {canDiscard ? (
-                    <button
-                      type="button"
-                      className="editor-header__discard"
-                      onClick={() => setDiscardTarget(selected)}
-                      title="Discard this page's unpublished changes — revert it to the published version."
-                    >
-                      Discard changes
-                    </button>
-                  ) : null}
-                  {selected.kind === 'collection' ? (
-                    <>
-                      {canAddTranslation ? (
-                        <button
-                          type="button"
-                          className="editor-header__translate"
-                          onClick={() => setShowAddTranslation(true)}
-                          title="Create a draft copy of this page in another language."
-                        >
-                          Add translation
-                        </button>
-                      ) : null}
-                      <button
-                        type="button"
-                        className="editor-header__rename"
-                        onClick={() => setShowRename(true)}
-                      >
-                        Rename
-                      </button>
-                      <button
-                        type="button"
-                        className="editor-header__delete"
-                        onClick={() => setDeleteTarget(selected)}
-                      >
-                        Delete
-                      </button>
-                    </>
-                  ) : null}
-                </div>
-              </details>
-            ) : null}
+            <HeaderActions
+              mobile={layout.isMobile}
+              canDiscard={canDiscard}
+              isCollection={selected.kind === 'collection'}
+              canAddTranslation={canAddTranslation}
+              onDiscard={() => setDiscardTarget(selected)}
+              onAddTranslation={() => setShowAddTranslation(true)}
+              onRename={() => setShowRename(true)}
+              onDelete={() => setDeleteTarget(selected)}
+            />
           </div>
         </header>
 
