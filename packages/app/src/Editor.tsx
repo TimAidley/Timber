@@ -65,6 +65,8 @@ import { Wordmark } from './components/Wordmark.js';
 import { schemaNameFromPath } from './advanced/schemaTemplate.js';
 import { canAccessAdvanced } from './host/access.js';
 import { newObject } from './content/newObject.js';
+import { newTranslation } from './content/newTranslation.js';
+import { AddTranslationDialog } from './components/AddTranslationDialog.js';
 import { useBackNavigationGuard } from './editor/backNavGuard.js';
 
 interface EditState {
@@ -96,14 +98,39 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
     ...model.objects,
     ...session.deletedObjects.map((d) => d.object),
   ]);
-  const workingModel: ContentModel = useMemo(
-    () => ({
+  const workingModel: ContentModel = useMemo(() => {
+    // Rebuild the translation index over the live objects too, so a translation created
+    // this session immediately links its siblings (preview switcher, hreflang) — the same
+    // reactive-working-model principle as the id index (SPEC §5 → Multilingual).
+    const byTranslation = new Map<string, Map<string, ContentObject>>();
+    for (const o of objects) {
+      if (!o.translationKey) continue;
+      const group = byTranslation.get(o.translationKey) ?? new Map<string, ContentObject>();
+      const lang = o.lang ?? '';
+      if (!group.has(lang)) group.set(lang, o);
+      byTranslation.set(o.translationKey, group);
+    }
+    return {
       ...model,
       objects,
       byId: new Map(objects.filter((o) => o.id).map((o) => [o.id as string, o] as const)),
-    }),
-    [model, objects],
-  );
+      byTranslation,
+    };
+  }, [model, objects]);
+
+  // Site language config (SPEC §5 → Multilingual): read from the settings singleton (the
+  // `page: false` type). i18n is opt-in — empty `languages` means single-language, so the
+  // language badges + "Add translation" affordance simply don't appear.
+  const siteI18n = useMemo(() => {
+    const settings = model.objects.find((o) => model.schemas.get(o.type)?.page === false);
+    const languages = Array.isArray(settings?.data.languages)
+      ? settings.data.languages.filter((l): l is string => typeof l === 'string' && l.length > 0)
+      : [];
+    const declared = settings?.data.defaultLanguage;
+    const defaultLanguage =
+      typeof declared === 'string' && declared.length > 0 ? declared : (languages[0] ?? '');
+    return { languages, defaultLanguage, enabled: languages.length > 0 };
+  }, [model]);
   const [showNew, setShowNew] = useState(false);
   const [showNewType, setShowNewType] = useState(false);
   const [showNewFile, setShowNewFile] = useState(false);
@@ -111,6 +138,7 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   const [discardTarget, setDiscardTarget] = useState<ContentObject | null>(null);
   const [discarding, setDiscarding] = useState(false);
   const [showRename, setShowRename] = useState(false);
+  const [showAddTranslation, setShowAddTranslation] = useState(false);
   // Objects marked for deletion: kept in the list (struck-through, restorable) rather
   // than vanishing, so a pending delete reads as the reversible change it is (SPEC §5).
   // Seeded from the branch (prior-session deletions), then updated as you delete/restore.
@@ -347,16 +375,94 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   // matter, staged as an unsaved edit + IndexedDB draft; autosave commits its
   // index.md to the WIP branch like any other edit.
   function createObject(schema: ContentTypeSchema, title: string): void {
+    // On an i18n site a new collection object gets the default language (front matter +
+    // lang-prefixed path); singletons and single-language sites get none (SPEC §5 → ML).
+    const lang =
+      siteI18n.enabled && schema.kind === 'collection' ? siteI18n.defaultLanguage : undefined;
     const taken = new Set(
-      objects.filter((o) => o.type === schema.name).map((o) => o.slug),
+      objects
+        .filter((o) => o.type === schema.name && (!lang || o.lang === lang))
+        .map((o) => o.slug),
     );
-    const created = newObject(schema.name, title, schema, taken);
+    const created = newObject(schema.name, title, schema, taken, lang);
     setObjects((prev) => [...prev, created]);
     setSelectedPath(created.path);
     autosave.markObjectDirty(created.path, created.data, created.body);
     void draftStore.current?.put(repoKey, created.path, created.data, created.body);
     setShowNew(false);
   }
+
+  // Add a translation of the selected object (SPEC §5 → Multilingual): duplicate it as a
+  // draft in the target language (fresh id, shared translationKey, body + fields copied,
+  // assets copied by blob-SHA re-add — the same primitive as restore, no source deletion),
+  // then select it to translate in place. If the source had no translationKey yet, backfill
+  // the freshly-minted one onto it (via its live edit buffer) so both sides of the group link.
+  function addTranslation(targetLang: string): void {
+    if (!selected) return;
+    const liveSource: ContentObject = { ...selected, data: edit.data, body: edit.body };
+    const taken = new Set(
+      objects
+        .filter((o) => o.type === selected.type && o.lang === targetLang)
+        .map((o) => o.slug),
+    );
+    const { translation, translationKey, mintedKey } = newTranslation(
+      liveSource,
+      targetLang,
+      taken,
+    );
+
+    // Copy colocated assets by re-adding each blob at the NEW path (from === to, no
+    // deletion — the source keeps its assets).
+    const oldDir = selected.path.replace(/\/index\.md$/, '');
+    const newDir = translation.path.replace(/\/index\.md$/, '');
+    const moves = session.treeEntries
+      .filter(
+        (e) => e.type === 'blob' && e.path.startsWith(`${oldDir}/`) && e.path !== selected.path,
+      )
+      .map((e) => {
+        const to = `${newDir}/${e.path.slice(oldDir.length + 1)}`;
+        return { from: to, to, sha: e.sha };
+      });
+
+    autosave.markObjectCreated(translation.path, translation.data, translation.body, moves);
+    void draftStore.current?.put(repoKey, translation.path, translation.data, translation.body);
+
+    // Backfill the shared key onto the source (in its live buffer, so the selection-change
+    // fold carries it into `objects`, and mark it dirty so the link is committed too).
+    if (mintedKey) {
+      const srcData = { ...edit.data, translationKey };
+      setEdit((e) => ({ ...e, data: srcData }));
+      autosave.markObjectDirty(selected.path, srcData, edit.body);
+      void draftStore.current?.put(repoKey, selected.path, srcData, edit.body);
+    }
+
+    setObjects((prev) => [...prev, translation]);
+    setSelectedPath(translation.path);
+    setShowAddTranslation(false);
+  }
+
+  // The translation coverage of the selected object: which languages exist in its group,
+  // and which of the site's languages are still missing (the "Add translation" choices).
+  const selectedTranslationKey = selected
+    ? (typeof edit.data.translationKey === 'string' && edit.data.translationKey) ||
+      selected.translationKey
+    : undefined;
+  const existingLanguages = useMemo(() => {
+    if (!selected) return [];
+    const langs = new Set<string>();
+    if (selected.lang) langs.add(selected.lang);
+    if (selectedTranslationKey) {
+      for (const o of objects) {
+        if (o.translationKey === selectedTranslationKey && o.lang) langs.add(o.lang);
+      }
+    }
+    return [...langs];
+  }, [selected, selectedTranslationKey, objects]);
+  const missingLanguages = siteI18n.languages.filter((l) => !existingLanguages.includes(l));
+  // "Add translation" applies to a language-bearing collection page with a language still
+  // to fill (so single-language sites and lang-less objects never see it).
+  const canAddTranslation =
+    siteI18n.enabled && !!selected?.lang && missingLanguages.length > 0;
 
   // The colocated asset paths of an object's bundle (everything under its dir except
   // index.md), from the tree loaded at session start. Powers delete (remove them all)
@@ -941,6 +1047,16 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
                   ) : null}
                   {selected.kind === 'collection' ? (
                     <>
+                      {canAddTranslation ? (
+                        <button
+                          type="button"
+                          className="editor-header__translate"
+                          onClick={() => setShowAddTranslation(true)}
+                          title="Create a draft copy of this page in another language."
+                        >
+                          Add translation
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         className="editor-header__rename"
@@ -1357,6 +1473,16 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
           }
           onClose={() => setShowRename(false)}
           onRename={renameObject}
+        />
+      ) : null}
+
+      {showAddTranslation && selected ? (
+        <AddTranslationDialog
+          object={selected}
+          missingLanguages={missingLanguages}
+          existingLanguages={existingLanguages}
+          onClose={() => setShowAddTranslation(false)}
+          onAdd={addTranslation}
         />
       ) : null}
 

@@ -158,6 +158,21 @@ export class Autosaver {
   }
 
   /**
+   * Stage a newly-created object plus any colocated assets copied by **reusing existing
+   * blob SHAs** (SPEC §5 → Multilingual "Add translation"). The moves are `from === to`
+   * re-adds at the new bundle's paths, so the source bundle's assets are copied, not
+   * moved — no deletion. The `index.md` write + the copies land in the next coalesced
+   * WIP commit. (A create with no assets is just {@link markObjectDirty}.)
+   */
+  markObjectCreated(path: string, data: FrontMatter, body: string, moves: MoveEntry[]): void {
+    this.dirtyObjects.set(path, { data, body });
+    for (const move of moves) this.dirtyMoves.set(move.to, move);
+    this.notifyDirtyObjects();
+    this.deps.onState('dirty');
+    this.schedule();
+  }
+
+  /**
    * Undo a pending/committed delete (SPEC §5 restore). Cancels any pending deletions
    * for the bundle, then re-adds it: rewrites `index.md` and re-attaches colocated
    * assets by **reusing their blob SHAs** (self-moves — `from === to`, so no deletion).
@@ -344,6 +359,7 @@ export interface Autosave {
   markFileDirty: (path: string, content: string) => void;
   markAssetDirty: (path: string) => void;
   markPathsDeleted: (paths: string[]) => void;
+  markObjectCreated: (path: string, data: FrontMatter, body: string, moves: MoveEntry[]) => void;
   markObjectRenamed: (oldPath: string, newPath: string, data: FrontMatter, body: string, moves: MoveEntry[]) => void;
   markObjectRestored: (path: string, data: FrontMatter, body: string, moves: MoveEntry[]) => void;
   forgetBundle: (bundleDir: string) => void;
@@ -398,6 +414,7 @@ export function useAutosave(session: RepoSession, assetStore: AssetStore): Autos
     markFileDirty: (path, content) => saver.markFileDirty(path, content),
     markAssetDirty: (path) => saver.markAssetDirty(path),
     markPathsDeleted: (paths) => saver.markPathsDeleted(paths),
+    markObjectCreated: (path, data, body, moves) => saver.markObjectCreated(path, data, body, moves),
     markObjectRenamed: (oldPath, newPath, data, body, moves) =>
       saver.markObjectRenamed(oldPath, newPath, data, body, moves),
     markObjectRestored: (path, data, body, moves) => saver.markObjectRestored(path, data, body, moves),

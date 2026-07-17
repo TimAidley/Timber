@@ -21,6 +21,7 @@ export function newObject(
   title: string,
   schema: ContentTypeSchema,
   takenSlugs: Set<string>,
+  lang?: string,
 ): ContentObject {
   const id = crypto.randomUUID();
   const slug = uniqueSlug(slugify(title), takenSlugs);
@@ -29,14 +30,21 @@ export function newObject(
     title: title.trim() || 'Untitled',
     created: new Date().toISOString(),
   };
-  return {
+  // On an i18n-enabled site every collection object belongs to a language (SPEC §5 →
+  // Multilingual): stamp the (default) language into front matter and the bundle path
+  // (content/<type>/<lang>/<slug>/) so its URL is prefixed like every other variant.
+  if (lang) data.lang = lang;
+  const dir = lang ? `content/${type}/${lang}/${slug}` : `content/${type}/${slug}`;
+  const object: ContentObject = {
     type,
     kind: schema.kind,
     id,
     slug,
-    path: `content/${type}/${slug}/index.md`,
+    path: `${dir}/index.md`,
     data,
     body: '',
     public: false,
   };
+  if (lang) object.lang = lang;
+  return object;
 }

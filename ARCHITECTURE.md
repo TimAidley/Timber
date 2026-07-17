@@ -224,6 +224,17 @@ Cross-cutting things and every file they touch:
   optional `DeployBackend` capability (absent host — e.g. Gitea/Codeberg — ⇒ no stop).
   Storage level is **device-local metadata**
   (IndexedDB), publication is **front matter** — keep the two in their separate homes.
+- **Multilingual / i18n** (SPEC §5 → Multilingual) → the model side is `@timber/content`
+  (`assemble.ts` lang/path parsing + translation index, `references.ts` `urlFor`/
+  `translationsOf`, `collections.ts` per-entry `lang`, `seo.ts` `hreflangAlternates`);
+  the render side threads `lang`/`translations` through `@timber/generator` `renderPage`
+  into **both** callers — `packages/cli/src/build.node.ts` and
+  `packages/app/src/preview/renderSitePage.ts` (keep them in lockstep for preview ≡ build)
+  — plus `site-template/templates/default.liquid` (`<html lang>`, hreflang, switcher). The
+  editor side is `packages/app` (`content/newObject.ts` + `content/newTranslation.ts`,
+  `state/autosave.ts` `markObjectCreated`, `Editor.tsx` add-translation flow +
+  `byTranslation` rebuild, `components/AddTranslationDialog.tsx`, `components/ContentList.tsx`
+  language chip). A site opts in via `languages`/`defaultLanguage` in its settings singleton.
 - **The site scaffold** (theme, schemas, sample content, workflows) → edit **`site-template/`**
   only; the mirror regenerates the template repo. Never edit `Timber-site-template` directly.
 - **Setup instructions** → **`INSTALL.md`** only (canonical); the template's README is a stub.

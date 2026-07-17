@@ -681,6 +681,21 @@ body {
   color: var(--text-muted);
 }
 
+/* Language chip on a translated object's list row (SPEC §5 → Multilingual). */
+.object-list__lang {
+  display: inline-block;
+  margin-right: 0.35rem;
+  padding: 0.02rem 0.35rem;
+  border-radius: var(--radius-full);
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  vertical-align: 0.05em;
+}
+
 .object-list__search {
   margin-bottom: 0.7rem;
 }

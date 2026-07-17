@@ -161,6 +161,11 @@ export function ContentList({
                       {objectName(o)}
                     </span>
                     <span className="object-list__type">
+                      {o.lang ? (
+                        <span className="object-list__lang" title={`Language: ${o.lang}`}>
+                          {o.lang}
+                        </span>
+                      ) : null}
                       {(schemas.get(o.type)?.page ?? true) ? (
                         <VisibilityBadge isPublic={o.public} />
                       ) : null}

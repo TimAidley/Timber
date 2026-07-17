@@ -57,6 +57,39 @@ describe('Autosaver', () => {
     expect('content' in files[0]! && files[0]!.content).toContain('v2');
   });
 
+  it('stages a created object plus asset copies (blob-SHA re-adds, no deletion)', async () => {
+    const commit = vi.fn<CommitFn>(async () => undefined);
+    const { saver } = setup(commit);
+
+    // Add-translation: a new index.md + colocated assets copied by re-adding each blob at
+    // the NEW path (from === to → no deletion, so the source keeps its assets).
+    saver.markObjectCreated(
+      'content/posts/fr/hello/index.md',
+      { title: 'Bonjour', lang: 'fr', translationKey: 'G' },
+      'body',
+      [
+        {
+          from: 'content/posts/fr/hello/hero.webp',
+          to: 'content/posts/fr/hello/hero.webp',
+          sha: 'blobsha',
+        },
+      ],
+    );
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect(commit).toHaveBeenCalledTimes(1);
+    const [files, , deletions, moves] = commit.mock.calls[0]!;
+    expect(files.map((f) => f.path)).toEqual(['content/posts/fr/hello/index.md']);
+    expect(deletions).toEqual([]); // a copy never deletes the source
+    expect(moves).toEqual([
+      {
+        from: 'content/posts/fr/hello/hero.webp',
+        to: 'content/posts/fr/hello/hero.webp',
+        sha: 'blobsha',
+      },
+    ]);
+  });
+
   it('commits staged asset bytes alongside the object', async () => {
     const commit = vi.fn<CommitFn>(async () => undefined);
     const { saver } = setup(commit);
