@@ -39,6 +39,11 @@ export class AssetStore {
     return this.assets.get(path)?.url;
   }
 
+  /** The staged Blob for a path, for local persistence (device-only bundles, SPEC §5/§8). */
+  blobFor(path: string): Blob | undefined {
+    return this.assets.get(path)?.blob;
+  }
+
   /**
    * Resolve a path to a displayable object URL, lazily fetching committed bytes via the
    * loader when they aren't already in memory. Concurrent calls for the same path share

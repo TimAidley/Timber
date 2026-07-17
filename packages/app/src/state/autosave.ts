@@ -288,7 +288,8 @@ export class Autosaver {
     const isDeviceOnly = this.deps.isDeviceOnly ?? (() => false);
     const objects = [...this.dirtyObjects.entries()].filter(([path]) => !isDeviceOnly(path));
     const rawFiles = [...this.dirtyFiles.entries()];
-    const assets = [...this.dirtyAssets];
+    // Colocated assets of a device-only bundle are dropped too — same rule as its index.md.
+    const assets = [...this.dirtyAssets].filter((path) => !isDeviceOnly(path));
     const deletions = [...this.dirtyDeletions];
     const moves = [...this.dirtyMoves.values()];
     const renames = new Map(this.dirtyRenames);

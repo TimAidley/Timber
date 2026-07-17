@@ -95,7 +95,16 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   // of the WIP commit, their sole copy the IndexedDB draft. Loaded from the draft store on
   // mount; the autosaver reads this (via a ref) to filter its commit.
   const [deviceOnlyPaths, setDeviceOnlyPaths] = useState<ReadonlySet<string>>(new Set());
-  const autosave = useAutosave(session, assetStore, (path) => deviceOnlyPaths.has(path));
+  // True for a device-only object's `index.md` **or any path in its bundle** (a colocated
+  // asset), so the autosaver keeps a device-only object's images out of the WIP commit too.
+  const isDeviceOnlyPath = (path: string): boolean => {
+    if (deviceOnlyPaths.has(path)) return true;
+    for (const idx of deviceOnlyPaths) {
+      if (path.startsWith(idx.slice(0, -'index.md'.length))) return true; // bundle dir + '/'
+    }
+    return false;
+  };
+  const autosave = useAutosave(session, assetStore, isDeviceOnlyPath);
   // Repo visibility (SPEC §5), for the honest "backed up = visible to whom" wording. Read
   // once through the host port; `unknown` (the default) stays conservative if it can't tell.
   const [repoVisibility, setRepoVisibility] = useState<RepoVisibility>('unknown');
@@ -367,16 +376,15 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
         const drafts = await store.allForRepo(repoKey);
         if (cancelled) return;
 
-        // Device-only objects live **only** in IndexedDB (never on the branch), so their
-        // draft is the sole copy — reconstruct them into the working model through the
-        // same assembler the branch load uses (SPEC §5/§8). Skip any that somehow also
-        // exist on the branch (a demoted-then-reloaded edge) — the branch copy wins.
-        const deviceDrafts = drafts.filter(
-          (d) => devicePaths.has(d.path) && !model.objects.some((o) => o.path === d.path),
-        );
-        if (deviceDrafts.length > 0) {
+        // Drafts with no copy on the branch are reconstructed into the working model via the
+        // same assembler the branch load uses (SPEC §5/§8): device-only objects (their sole
+        // copy is local) and — the reload-safety case — a create/promote whose commit hadn't
+        // landed yet. A non-device orphan is then re-queued so it reaches WIP; a device-only
+        // one stays local. (An orphan already on the branch is skipped — the branch wins.)
+        const orphanDrafts = drafts.filter((d) => !model.objects.some((o) => o.path === d.path));
+        if (orphanDrafts.length > 0) {
           const snapshot = new Map(
-            deviceDrafts.map((d) => [d.path, reassembleDocument(d.data, d.body)] as const),
+            orphanDrafts.map((d) => [d.path, reassembleDocument(d.data, d.body)] as const),
           );
           const assembled = assembleContent(snapshot, model.schemas);
           if (assembled.objects.length > 0) {
@@ -385,10 +393,21 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
               return [...prev, ...assembled.objects.filter((o) => !have.has(o.path))];
             });
           }
+          for (const d of orphanDrafts) {
+            if (!devicePaths.has(d.path)) autosave.markObjectDirty(d.path, d.data, d.body);
+          }
         }
 
-        // Recover backed-up drafts as unsaved edits; autosave re-commits them to WIP.
-        // Device-only drafts are not WIP edits, so they're excluded from recovery.
+        // Re-stage device-only bundles' persisted asset bytes into memory (SPEC §5/§8), so a
+        // colocated image an on-device object references renders again after a reload — the
+        // local counterpart to the branch AssetLoader that backed-up objects rely on.
+        for (const asset of await store.allAssetsForRepo(repoKey)) {
+          if (cancelled) return;
+          assetStore.stage(asset.path, asset.blob);
+        }
+
+        // Recover backed-up drafts (already on the branch) as unsaved edits; autosave
+        // re-commits them to WIP. Device-only and orphan drafts are handled above.
         for (const draft of drafts) {
           if (devicePaths.has(draft.path)) continue;
           const committed = model.objects.find((o) => o.path === draft.path);
@@ -421,6 +440,26 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
       autosave.markObjectDirty(selectedPath, next.data, next.body);
     }
     void draftStore.current?.put(repoKey, selectedPath, next.data, next.body);
+  }
+
+  // A colocated image was staged for the selected object. For a device-only object the
+  // bytes must NOT go to the branch — persist the Blob to IndexedDB so it survives a
+  // reload (re-staged on load); for a backed-up object it rides the WIP commit as usual.
+  function onContentAssetStaged(path: string): void {
+    if (deviceOnlyPaths.has(selectedPath)) {
+      void persistDeviceAsset(path, path);
+    } else {
+      autosave.markAssetDirty(path);
+    }
+  }
+
+  // Persist a staged asset's bytes locally (device-only bundles, SPEC §5/§8), optionally at
+  // a different path (for rename). Reads bytes from the in-memory staged Blob.
+  async function persistDeviceAsset(fromPath: string, toPath: string): Promise<void> {
+    const blob = assetStore.blobFor(fromPath);
+    if (!blob) return;
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    await draftStore.current?.putAsset(repoKey, toPath, bytes, blob.type);
   }
 
   function updateField(key: string, value: unknown): void {
@@ -561,6 +600,11 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
       });
       void draftStore.current?.delete(repoKey, target.path);
       void draftStore.current?.deleteStorage(repoKey, target.path);
+      // Drop the bundle's locally-persisted images too — nothing on the host to schedule.
+      const bundleDir = target.path.replace(/\/index\.md$/, '') + '/';
+      for (const asset of assetStore.all()) {
+        if (asset.path.startsWith(bundleDir)) void draftStore.current?.deleteAsset(repoKey, asset.path);
+      }
       if (selectedPath === target.path) setSelectedPath('');
       setDeleteTarget(null);
       return;
@@ -589,6 +633,13 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
     void draftStore.current?.setStorage(repoKey, path, 'backed-up');
     autosave.markObjectDirty(path, data, body);
     void draftStore.current?.put(repoKey, path, data, body);
+    // Re-queue the bundle's colocated images (persisted locally while device-only) so they
+    // ride the WIP commit now. Their IndexedDB copies are left as a safety net until the
+    // object is confirmed on the branch — harmless if redundant.
+    const bundleDir = path.replace(/\/index\.md$/, '') + '/';
+    for (const asset of assetStore.all()) {
+      if (asset.path.startsWith(bundleDir)) autosave.markAssetDirty(asset.path);
+    }
     setBackupTarget(null);
   }
 
@@ -732,6 +783,17 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
       void draftStore.current?.put(repoKey, newPath, data, edit.body);
       void draftStore.current?.deleteStorage(repoKey, oldPath);
       void draftStore.current?.setStorage(repoKey, newPath, 'device');
+      // Move the bundle's locally-persisted images to the new path (in memory + IndexedDB),
+      // so the repointed field values still resolve.
+      for (const asset of assetStore.all()) {
+        if (!asset.path.startsWith(`${oldDir}/`)) continue;
+        const movedPath = `${newDir}/${asset.path.slice(oldDir.length + 1)}`;
+        assetStore.stage(movedPath, asset.blob);
+        const oldAssetPath = asset.path;
+        void persistDeviceAsset(movedPath, movedPath).then(() =>
+          draftStore.current?.deleteAsset(repoKey, oldAssetPath),
+        );
+      }
       setDeviceOnlyPaths((prev) => {
         const next = new Set(prev);
         next.delete(oldPath);
@@ -1246,7 +1308,7 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
             model={workingModel}
             assetStore={assetStore}
             bundleDir={selected.path.replace(/\/index\.md$/, '')}
-            onAssetStaged={autosave.markAssetDirty}
+            onAssetStaged={onContentAssetStaged}
             onChange={updateField}
           />
         </section>
@@ -1260,7 +1322,7 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
               onChange={(body) => applyEdit({ ...edit, body })}
               assetStore={assetStore}
               bundleDir={selected.path.replace(/\/index\.md$/, '')}
-              onStaged={autosave.markAssetDirty}
+              onStaged={onContentAssetStaged}
               diffWorkingText={reassembleDocument(edit.data, edit.body)}
               getPublishedText={getPublishedText}
               onRevert={canDiscard ? () => setDiscardTarget(selected) : undefined}

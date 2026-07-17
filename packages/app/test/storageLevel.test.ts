@@ -43,3 +43,35 @@ describe('LocalDraftStore storage levels', () => {
     expect(await store.devicePaths('x/repo')).toEqual(new Set());
   });
 });
+
+/**
+ * Device-only asset persistence (SPEC §5/§8): an on-device object's colocated images
+ * live only locally, so their bytes must survive a reload — kept as Blobs, scoped per
+ * repo, and droppable on delete/back-up.
+ */
+describe('LocalDraftStore device-only assets', () => {
+  it('persists and lists asset bytes + type scoped per repo', async () => {
+    const store = await LocalDraftStore.open();
+    await store.putAsset('a/repo', 'content/e/x/images/hero.webp', new Uint8Array([1, 2, 3]), 'image/webp');
+    await store.putAsset('other/repo', 'content/e/y/images/z.webp', new Uint8Array([9]), 'image/webp');
+
+    const assets = await store.allAssetsForRepo('a/repo');
+    expect(assets.map((a) => a.path)).toEqual(['content/e/x/images/hero.webp']);
+    // Reconstructed as a Blob carrying the original bytes and MIME type.
+    expect(assets[0]!.blob.size).toBe(3);
+    expect(assets[0]!.blob.type).toBe('image/webp');
+  });
+
+  it('survives a reopen and drops on deleteAsset', async () => {
+    const first = await LocalDraftStore.open();
+    await first.putAsset('r/repo', 'content/e/x/images/a.webp', new Uint8Array([7]), 'image/png');
+
+    const reopened = await LocalDraftStore.open();
+    expect((await reopened.allAssetsForRepo('r/repo')).map((a) => a.path)).toEqual([
+      'content/e/x/images/a.webp',
+    ]);
+
+    await reopened.deleteAsset('r/repo', 'content/e/x/images/a.webp');
+    expect(await reopened.allAssetsForRepo('r/repo')).toEqual([]);
+  });
+});
