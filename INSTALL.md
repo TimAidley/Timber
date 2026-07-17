@@ -54,6 +54,13 @@ Edit **`content/settings/index.md`** → `baseUrl: https://<you>.github.io/<repo
 trailing slash) and commit. This makes links, canonical URLs, and the sitemap correct
 under the repo's subpath. (Committing it also kicks off the first deploy.)
 
+### 2.4 (Optional) Multiple languages
+Timber is single-language unless you opt in. To run the site in more than one language,
+add a `languages` list (and a `defaultLanguage`) to **`content/settings/index.md`** — this
+turns on per-language URLs (`/<lang>/…`), an **Add translation** action in the editor, and a
+theme language switcher. It's a deliberate step (it moves existing page URLs under a
+language prefix), so read **[docs/multilingual.md](docs/multilingual.md)** before enabling.
+
 That's all three methods share. Now follow **the one section below** for your choice.
 
 ---

@@ -34,3 +34,12 @@ fields:
     type: enum
     label: Content width
     options: [narrow, normal, wide]
+  # Multiple languages (optional). Leave `languages` empty for a single-language site.
+  # Listing 2+ codes turns on i18n: per-language URLs (/<lang>/…), an "Add translation"
+  # action, and a theme language switcher. See docs/multilingual.md.
+  languages:
+    type: tags
+    label: Languages (BCP-47 codes, e.g. en, fr)
+  defaultLanguage:
+    type: text
+    label: Default language
