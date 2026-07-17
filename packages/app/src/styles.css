@@ -681,11 +681,19 @@ body {
   color: var(--text-muted);
 }
 
-/* Language chip on a translated object's list row (SPEC §5 → Multilingual). */
+/* Language chip strip on a translation cluster's list row (SPEC §5 → Multilingual):
+   one chip per site language — present languages are buttons, missing ones muted gaps. */
+.object-list__langs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0.1rem 0.6rem 0.35rem;
+}
+
 .object-list__lang {
   display: inline-block;
-  margin-right: 0.35rem;
   padding: 0.02rem 0.35rem;
+  border: 1px solid transparent;
   border-radius: var(--radius-full);
   background: var(--surface-sunken);
   color: var(--text-muted);
@@ -693,7 +701,42 @@ body {
   font-weight: 700;
   letter-spacing: 0.03em;
   text-transform: uppercase;
-  vertical-align: 0.05em;
+  line-height: 1.5;
+}
+
+/* Present-language chips are clickable buttons that jump to that variant. */
+button.object-list__lang {
+  cursor: pointer;
+}
+button.object-list__lang:hover {
+  color: var(--text);
+  border-color: var(--border);
+}
+.object-list__lang.is-active {
+  background: var(--accent-soft, var(--surface-raised));
+  color: var(--text);
+  border-color: var(--accent, var(--border));
+}
+/* A draft variant reads as an outline; a missing language as a faint dashed gap. */
+.object-list__lang.is-draft {
+  background: transparent;
+  border-color: var(--border);
+}
+.object-list__lang.is-missing {
+  background: transparent;
+  border: 1px dashed var(--border);
+  opacity: 0.6;
+}
+
+/* "Needs translation" coverage filter, beside the search box. */
+.object-list__filter {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.45rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  cursor: pointer;
 }
 
 .object-list__search {

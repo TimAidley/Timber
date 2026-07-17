@@ -145,3 +145,78 @@ describe('ContentList (rendered)', () => {
     expect(titlesIn(0)).toEqual(['Gala', 'Auction', 'Meetup']);
   });
 });
+
+describe('ContentList (i18n clustering)', () => {
+  const posts: ContentTypeSchema = {
+    name: 'posts',
+    kind: 'collection',
+    fields: { title: { type: 'text' } },
+  };
+  const i18nSchemas = new Map<string, ContentTypeSchema>([['posts', posts]]);
+  // One fully-translated group (en/fr/de) + one that only exists in English.
+  const I18N_OBJECTS: ContentObject[] = [
+    obj({ type: 'posts', slug: 'hello', lang: 'en', translationKey: 'G', public: true, data: { title: 'Hello' } }),
+    obj({ type: 'posts', slug: 'bonjour', lang: 'fr', translationKey: 'G', public: false, data: { title: 'Bonjour' } }),
+    obj({ type: 'posts', slug: 'hallo', lang: 'de', translationKey: 'G', public: true, data: { title: 'Hallo' } }),
+    obj({ type: 'posts', slug: 'solo', lang: 'en', public: true, data: { title: 'Solo' } }),
+  ];
+
+  function mountI18n(): void {
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    root.render(
+      React.createElement(ContentList, {
+        objects: I18N_OBJECTS,
+        schemas: i18nSchemas,
+        selectedPath: '',
+        editingPaths: new Set<string>(),
+        savedPaths: new Set<string>(),
+        deletedPaths: new Set<string>(),
+        onSelect: () => undefined,
+        languages: ['en', 'fr', 'de'],
+        defaultLanguage: 'en',
+      }),
+    );
+  }
+
+  const rowByTitle = (title: string): Element =>
+    [...document.querySelectorAll('.object-list > li')].find((li) =>
+      li.querySelector('.object-list__title')?.textContent?.includes(title),
+    )!;
+
+  it('collapses a translation set into one row and reads by the default language', async () => {
+    mountI18n();
+    await waitFor(() => document.querySelector('.object-group'));
+    // Two rows: the en/fr/de group (rep = English "Hello") and the English-only "Solo".
+    expect(titlesIn(0)).toEqual(['Hello', 'Solo']);
+  });
+
+  it('renders a chip per language — present as buttons, missing as muted gaps', async () => {
+    mountI18n();
+    await waitFor(() => document.querySelector('.object-list__langs'));
+
+    const hello = rowByTitle('Hello');
+    expect(hello.querySelectorAll('button.object-list__lang')).toHaveLength(3); // en, fr, de present
+    expect(hello.querySelectorAll('.object-list__lang.is-missing')).toHaveLength(0);
+    // The draft French variant is marked as such.
+    expect(hello.querySelector('.object-list__lang.is-draft')?.textContent).toBe('fr');
+
+    const solo = rowByTitle('Solo');
+    expect(solo.querySelectorAll('button.object-list__lang')).toHaveLength(1); // en only
+    expect([...solo.querySelectorAll('.object-list__lang.is-missing')].map((c) => c.textContent)).toEqual(
+      ['fr', 'de'],
+    );
+  });
+
+  it('“Needs translation” filter narrows to clusters with gaps', async () => {
+    mountI18n();
+    const filter = await waitFor(() =>
+      document.querySelector<HTMLInputElement>('.object-list__filter input'),
+    );
+    filter.click();
+    await tick();
+    // "Hello" is fully translated → hidden; only the incomplete "Solo" remains.
+    expect(titlesIn(0)).toEqual(['Solo']);
+  });
+});

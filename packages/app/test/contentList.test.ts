@@ -3,9 +3,13 @@ import type { ContentObject, ContentTypeSchema } from '@timber/content';
 import {
   CREATED_SORT,
   NAME_SORT,
+  clusterMissingLanguages,
+  clusterTranslations,
   filterByName,
+  filterClusters,
   groupByType,
   objectName,
+  sortClusters,
   sortObjects,
   sortOptions,
 } from '../src/content/contentList.js';
@@ -146,5 +150,60 @@ describe('sortObjects', () => {
     const before = list.map((o) => o.slug);
     sortObjects(list, { key: NAME_SORT, dir: 'asc' }, events);
     expect(list.map((o) => o.slug)).toEqual(before);
+  });
+});
+
+describe('clusterTranslations', () => {
+  const langs = ['en', 'fr', 'de'];
+  const en = obj({
+    type: 'posts',
+    slug: 'hello',
+    lang: 'en',
+    translationKey: 'G',
+    data: { title: 'Hello' },
+  });
+  const fr = obj({
+    type: 'posts',
+    slug: 'bonjour',
+    lang: 'fr',
+    translationKey: 'G',
+    data: { title: 'Bonjour' },
+  });
+  const lone = obj({ type: 'posts', slug: 'solo', lang: 'en', data: { title: 'Solo' } });
+
+  it('groups variants sharing a translationKey into one cluster', () => {
+    const clusters = clusterTranslations([en, fr, lone], langs, 'en');
+    expect(clusters).toHaveLength(2);
+    const group = clusters.find((c) => c.key === 'G')!;
+    expect([...group.variants.keys()].sort()).toEqual(['en', 'fr']);
+    // An untranslated object is its own singleton cluster.
+    expect(clusters.some((c) => c.key.startsWith('__lone:'))).toBe(true);
+  });
+
+  it('picks the default-language variant as representative', () => {
+    const clusters = clusterTranslations([fr, en], langs, 'en');
+    expect(clusters[0]!.representative).toBe(en);
+  });
+
+  it('falls back to the lowest site-language rank when the default is absent', () => {
+    const clusters = clusterTranslations([fr], langs, 'en'); // no en variant
+    expect(clusters[0]!.representative).toBe(fr);
+  });
+
+  it('reports the missing languages of a cluster', () => {
+    const clusters = clusterTranslations([en, fr], langs, 'en');
+    expect(clusterMissingLanguages(clusters[0]!, langs)).toEqual(['de']);
+    // A fully-covered object has no gaps.
+    expect(clusterMissingLanguages(clusterTranslations([lone], ['en'], 'en')[0]!, ['en'])).toEqual([]);
+  });
+
+  it('filters clusters by any variant name, and sorts by representative', () => {
+    const clusters = clusterTranslations([en, fr, lone], langs, 'en');
+    // "bonjour" only matches the French variant, but keeps its whole cluster.
+    expect(filterClusters(clusters, 'bonjour').map((c) => c.key)).toEqual(['G']);
+
+    const sorted = sortClusters(clusters, { key: NAME_SORT, dir: 'asc' }, undefined);
+    // Representatives are "Hello" (G) and "Solo" (lone) → alphabetical.
+    expect(sorted.map((c) => objectName(c.representative))).toEqual(['Hello', 'Solo']);
   });
 });

@@ -1312,6 +1312,8 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
                       setSelectedPath(path);
                       if (layout.isMobile) layout.setSidebarOpen(false);
                     }}
+                    languages={siteI18n.languages}
+                    defaultLanguage={siteI18n.defaultLanguage}
                   />
                 </nav>
               ) : (

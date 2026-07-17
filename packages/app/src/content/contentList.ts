@@ -36,6 +36,94 @@ export function objectName(o: ContentObject): string {
   return String(title ?? o.slug);
 }
 
+/**
+ * A translation cluster (SPEC §5 → Multilingual): all the language variants of one
+ * logical object, keyed by their shared `translationKey`. An object with no key is its
+ * own singleton cluster. The `representative` drives the row's title, sort, and secondary
+ * text so the sidebar reads by a primary language.
+ */
+export interface TranslationCluster {
+  /** The shared translationKey, or `__lone:<path>` for an untranslated object. */
+  key: string;
+  /** The variant that drives display/sort: default-language if present, else lowest site-language rank. */
+  representative: ContentObject;
+  /** lang → object for each present variant (`''` for a language-less object). */
+  variants: Map<string, ContentObject>;
+}
+
+/**
+ * Collapse a type group's objects into translation clusters. Objects sharing a
+ * `translationKey` become one cluster; the representative is the default-language variant
+ * when present, else the variant whose language comes first in `siteLanguages` (path as a
+ * stable tiebreak). Group order follows the representatives (the caller sorts).
+ */
+export function clusterTranslations(
+  objects: readonly ContentObject[],
+  siteLanguages: readonly string[],
+  defaultLanguage: string,
+): TranslationCluster[] {
+  const groups = new Map<string, ContentObject[]>();
+  for (const o of objects) {
+    const key = o.translationKey ?? `__lone:${o.path}`;
+    const arr = groups.get(key);
+    if (arr) arr.push(o);
+    else groups.set(key, [o]);
+  }
+  const rank = new Map(siteLanguages.map((l, i) => [l, i] as const));
+  const rankOf = (o: ContentObject): number =>
+    o.lang && rank.has(o.lang) ? (rank.get(o.lang) as number) : Number.MAX_SAFE_INTEGER;
+
+  const clusters: TranslationCluster[] = [];
+  for (const [key, objs] of groups) {
+    const variants = new Map<string, ContentObject>();
+    for (const o of objs) {
+      const lang = o.lang ?? '';
+      if (!variants.has(lang)) variants.set(lang, o); // first-seen wins on a stray duplicate
+    }
+    const representative =
+      variants.get(defaultLanguage) ??
+      [...variants.values()].sort(
+        (a, b) => rankOf(a) - rankOf(b) || (a.path < b.path ? -1 : 1),
+      )[0]!;
+    clusters.push({ key, representative, variants });
+  }
+  return clusters;
+}
+
+/** The site languages a cluster has no variant for — its translation gaps. */
+export function clusterMissingLanguages(
+  cluster: TranslationCluster,
+  siteLanguages: readonly string[],
+): string[] {
+  return siteLanguages.filter((l) => !cluster.variants.has(l));
+}
+
+/** Filter clusters by name across **all** variants (so searching "bonjour" finds the group). */
+export function filterClusters(
+  clusters: readonly TranslationCluster[],
+  query: string,
+): TranslationCluster[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [...clusters];
+  return clusters.filter((c) =>
+    [...c.variants.values()].some((o) => objectName(o).toLowerCase().includes(q)),
+  );
+}
+
+/** Sort clusters by their representative, reusing the object sort rules. */
+export function sortClusters(
+  clusters: readonly TranslationCluster[],
+  sort: SortState,
+  schema: ContentTypeSchema | undefined,
+): TranslationCluster[] {
+  const byRep = new Map(clusters.map((c) => [c.representative, c] as const));
+  return sortObjects(
+    clusters.map((c) => c.representative),
+    sort,
+    schema,
+  ).map((rep) => byRep.get(rep) as TranslationCluster);
+}
+
 /** Group objects by content type, groups ordered alphabetically by type name. */
 export function groupByType(objects: readonly ContentObject[]): TypeGroup[] {
   const groups = new Map<string, ContentObject[]>();

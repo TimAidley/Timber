@@ -59,7 +59,8 @@ describe('newTranslation', () => {
   });
 
   it('mints a shared key when the source lacks one, and flags it for backfill', () => {
-    const noKey = source({ translationKey: undefined });
+    const noKey = source();
+    delete (noKey as { translationKey?: string }).translationKey;
     delete noKey.data.translationKey;
     const { translation, translationKey, mintedKey } = newTranslation(noKey, 'fr', new Set());
     expect(mintedKey).toBe(true);
