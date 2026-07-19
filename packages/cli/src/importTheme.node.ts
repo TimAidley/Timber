@@ -1,36 +1,27 @@
 import { readdir, readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join, dirname, relative, sep } from 'node:path';
-import { importJekyllTheme } from '@timber/jekyll-compat';
+import {
+  planThemeImport,
+  type PlanThemeOptions,
+  type ThemeFiles,
+} from '@timber/jekyll-compat';
 
 /**
  * **Adopt-once** import of a Jekyll theme into a Timber content repo (SPEC §2 → Tier A). A
- * Jekyll theme is transformed **once** into native Timber `templates/*.liquid` + compiled
- * `assets/…`, committed to the repo — after which the site is an ordinary Timber site with no
- * runtime Jekyll dependency. Re-run against an upstream theme update to re-adopt.
+ * Jekyll theme is transformed **once** into native Timber `templates/*.liquid` + its assets
+ * (incl. SCSS source), written to the repo — after which the site is an ordinary Timber site.
+ * Re-run against an upstream theme update to re-adopt.
  *
- * The transform is light and localized (layout chaining, include syntax, `include.*`, escape
- * reconciliation — see `@timber/jekyll-compat`), so the written templates read as the original
- * theme lightly adapted, not machine-mangled output.
+ * The theme→repo mapping is the pure, isomorphic {@link planThemeImport} (shared with the
+ * browser import path); this module only reads the theme off disk and writes the plan out.
  */
 
-export interface ImportThemeOptions {
-  /** The base layout others chain to. Auto-detected (prefers `base`, then `default`) if unset. */
-  rootLayout?: string;
-  /** Which layout becomes `templates/default.liquid` (Timber's per-type fallback). Auto if unset. */
-  defaultLayout?: string;
-  /**
-   * Per-content-type layout wiring: `{ <type>: <layout> }`. For each entry, the Jekyll
-   * `<layout>` is written as `templates/<type>.liquid`, so Timber renders that content type
-   * through that layout (e.g. `{ posts: 'post' }` → a `posts` type uses the theme's `post`
-   * layout). Types not listed fall back to `templates/default.liquid`.
-   */
-  typeMap?: Record<string, string>;
-}
+export type ImportThemeOptions = PlanThemeOptions;
 
 export interface ImportThemeResult {
   /** Repo-relative template paths written. */
   templates: string[];
-  /** Repo-relative asset paths copied verbatim (incl. SCSS source + `_sass/` partials). */
+  /** Repo-relative asset paths written (incl. SCSS source + `_sass/` → `assets/_sass/`). */
   assets: string[];
   rootLayout: string;
   defaultLayout: string;
@@ -63,28 +54,6 @@ export function parseImportArgs(args: string[]): {
   return { positionals, typeMap };
 }
 
-/** All `*.html` in `<themeDir>/<sub>` as bare-name → source; `{}` if the dir is absent. */
-async function readHtmlDir(
-  themeDir: string,
-  sub: string,
-): Promise<Record<string, string>> {
-  const dir = join(themeDir, sub);
-  const entries = await readdir(dir).catch(() => null);
-  if (!entries) return {};
-  const out: Record<string, string> = {};
-  for (const file of entries) {
-    if (file.endsWith('.html'))
-      out[file.replace(/\.html$/, '')] = await readFile(join(dir, file), 'utf8');
-  }
-  return out;
-}
-
-/** True if a template's front matter declares a `layout:` (i.e. it chains to a parent). */
-function chainsToParent(source: string): boolean {
-  const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(source);
-  return fm ? /^layout:\s*\S/m.test(fm[1]!) : false;
-}
-
 /** All files (recursive, posix-relative) under `absDir`; [] if absent. */
 async function walk(absDir: string, base = absDir): Promise<string[]> {
   const entries = await readdir(absDir, { withFileTypes: true }).catch(() => null);
@@ -98,86 +67,63 @@ async function walk(absDir: string, base = absDir): Promise<string[]> {
   return out;
 }
 
+/** Files that are text (read as UTF-8); everything else (images, fonts) is read as bytes. */
+const TEXT_EXT =
+  /\.(html|liquid|scss|sass|css|js|mjs|json|ya?ml|txt|md|markdown|svg|xml)$/i;
+
+/** Read the theme's `_layouts`/`_includes`/`assets`/`_sass` into an in-memory {@link ThemeFiles}. */
+async function readThemeFiles(themeDir: string): Promise<ThemeFiles> {
+  const text: Record<string, string> = {};
+  const binary: Record<string, Uint8Array> = {};
+  for (const sub of ['_layouts', '_includes', 'assets', '_sass']) {
+    for (const rel of await walk(join(themeDir, sub))) {
+      const themePath = `${sub}/${rel}`;
+      const abs = join(themeDir, sub, rel);
+      if (TEXT_EXT.test(rel)) text[themePath] = await readFile(abs, 'utf8');
+      else binary[themePath] = new Uint8Array(await readFile(abs));
+    }
+  }
+  return { text, binary };
+}
+
 /**
- * Import the theme at `themeDir` into the Timber repo at `repoDir`. Writes
- * `templates/<name>.liquid` for every layout + include, ensures a `templates/default.liquid`
- * fallback, compiles any front-matter SCSS under `assets/` (dart-sass, resolving the skin
- * `@import` via the generator engine) to a sibling `.css`, and copies the rest of `assets/`
- * verbatim. Returns a manifest of what it wrote.
+ * Import the theme at `themeDir` into the Timber repo at `repoDir`: read it into memory, run
+ * the shared {@link planThemeImport}, and write the resulting `templates/*.liquid` + assets.
+ * SCSS is NOT compiled here — the build and the browser preview compile it isomorphically
+ * (@timber/sass), so the repo carries the SCSS source and stays editable.
  */
 export async function importThemeToRepo(
   themeDir: string,
   repoDir: string,
   options: ImportThemeOptions = {},
 ): Promise<ImportThemeResult> {
-  const layouts = await readHtmlDir(themeDir, '_layouts');
-  const includes = await readHtmlDir(themeDir, '_includes');
-  if (Object.keys(layouts).length === 0) {
-    throw new Error(`no _layouts found in ${themeDir} — is this a Jekyll theme?`);
+  const plan = planThemeImport(await readThemeFiles(themeDir), options);
+
+  async function write(repoPath: string, data: string | Uint8Array): Promise<void> {
+    await mkdir(dirname(join(repoDir, repoPath)), { recursive: true });
+    await writeFile(join(repoDir, repoPath), data);
   }
 
-  // Root layout: the one others chain to (no `layout:` of its own), preferring base|default.
-  const roots = Object.keys(layouts).filter((n) => !chainsToParent(layouts[n]!));
-  const rootLayout =
-    options.rootLayout ??
-    (roots.includes('base') ? 'base' : roots.includes('default') ? 'default' : roots[0]);
-  if (!rootLayout)
-    throw new Error('could not determine a root layout (all layouts chain to a parent?)');
-
-  const { templates } = importJekyllTheme({ ...layouts, ...includes }, rootLayout);
-
-  // Default fallback layout (templates/default.liquid): explicit → a `default` layout → `page`
-  // → the root. Every content type with no `templates/<type>.liquid` renders through this.
-  const layoutNames = Object.keys(layouts);
-  const defaultLayout =
-    options.defaultLayout ??
-    (layoutNames.includes('default')
-      ? 'default'
-      : layoutNames.includes('page')
-        ? 'page'
-        : rootLayout);
-
-  // Write templates.
-  const written: string[] = [];
-  async function writeTemplate(name: string, source: string): Promise<void> {
-    const rel = `templates/${name}.liquid`;
-    await mkdir(dirname(join(repoDir, rel)), { recursive: true });
-    await writeFile(join(repoDir, rel), source, 'utf8');
-    written.push(rel);
+  const templates: string[] = [];
+  for (const [path, source] of Object.entries(plan.templates)) {
+    await write(path, source);
+    templates.push(path);
   }
-  for (const [name, source] of Object.entries(templates))
-    await writeTemplate(name, source);
-  if (!templates['default']) await writeTemplate('default', templates[defaultLayout]!);
-
-  // Per-type wiring (`--map <type>=<layout>`): write templates/<type>.liquid so Timber renders
-  // that content type through the named layout instead of the default fallback.
-  const mapped: Record<string, string> = {};
-  for (const [type, layout] of Object.entries(options.typeMap ?? {})) {
-    const source = templates[layout];
-    if (source === undefined) {
-      throw new Error(
-        `--map ${type}=${layout}: no layout "${layout}" in the theme (have: ${layoutNames.join(', ')})`,
-      );
-    }
-    await writeTemplate(type, source);
-    mapped[type] = layout;
-  }
-
-  // Assets: copy the theme's `assets/**` (including any `.scss` source) verbatim, plus its
-  // `_sass/` partials into `assets/_sass/` (Timber's Sass load path). SCSS is NOT compiled
-  // here — the build and the browser preview compile it isomorphically (@timber/sass), so the
-  // repo carries the SCSS *source* and stays editable. Bytes are copied (images, fonts, …).
   const assets: string[] = [];
-  async function copyTree(fromDir: string, toRelBase: string): Promise<void> {
-    for (const rel of await walk(fromDir)) {
-      const outRel = toRelBase ? `${toRelBase}/${rel}` : rel;
-      await mkdir(dirname(join(repoDir, outRel)), { recursive: true });
-      await writeFile(join(repoDir, outRel), await readFile(join(fromDir, rel)));
-      assets.push(outRel);
-    }
+  for (const [path, source] of Object.entries(plan.textFiles)) {
+    await write(path, source);
+    assets.push(path);
   }
-  await copyTree(join(themeDir, 'assets'), 'assets');
-  await copyTree(join(themeDir, '_sass'), 'assets/_sass');
+  for (const [path, bytes] of Object.entries(plan.binaryFiles)) {
+    await write(path, bytes);
+    assets.push(path);
+  }
 
-  return { templates: written, assets, rootLayout, defaultLayout, mapped };
+  return {
+    templates,
+    assets,
+    rootLayout: plan.rootLayout,
+    defaultLayout: plan.defaultLayout,
+    mapped: plan.mapped,
+  };
 }

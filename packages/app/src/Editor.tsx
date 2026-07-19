@@ -66,6 +66,7 @@ import { AssetManager } from './advanced/AssetManager.js';
 import { listSiteAssets } from './media/siteAssets.js';
 import { NewTypeDialog } from './components/NewTypeDialog.js';
 import { NewFileDialog } from './components/NewFileDialog.js';
+import { ImportThemeDialog } from './components/ImportThemeDialog.js';
 import { Wordmark } from './components/Wordmark.js';
 import { schemaNameFromPath } from './advanced/schemaTemplate.js';
 import { canAccessAdvanced } from './host/access.js';
@@ -170,6 +171,7 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   const [showNew, setShowNew] = useState(false);
   const [showNewType, setShowNewType] = useState(false);
   const [showNewFile, setShowNewFile] = useState(false);
+  const [showImportTheme, setShowImportTheme] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ContentObject | null>(null);
   const [discardTarget, setDiscardTarget] = useState<ContentObject | null>(null);
   // The device-only object awaiting "Back up to the repo" confirmation (SPEC §5/§8).
@@ -1520,6 +1522,13 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
                       >
                         ＋ New type
                       </button>
+                      <button
+                        type="button"
+                        className="object-list__new"
+                        onClick={() => setShowImportTheme(true)}
+                      >
+                        ↓ Import theme
+                      </button>
                     </div>
                   </div>
                   {advanced.loadError ? (
@@ -1637,6 +1646,10 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
           onClose={() => setShowNewFile(false)}
           onCreate={(opts) => advanced.createFile(opts)}
         />
+      ) : null}
+
+      {showImportTheme ? (
+        <ImportThemeDialog session={session} onClose={() => setShowImportTheme(false)} />
       ) : null}
 
       {deleteTarget ? (

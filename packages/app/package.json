@@ -37,7 +37,8 @@
     "unist-util-visit": "^5.1.0",
     "yaml": "^2.6.1",
     "@timber/jekyll-compat": "workspace:*",
-    "@timber/sass": "workspace:*"
+    "@timber/sass": "workspace:*",
+    "fflate": "^0.8.2"
   },
   "devDependencies": {
     "@types/react": "^18.3.12",

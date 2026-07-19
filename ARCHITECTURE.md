@@ -252,9 +252,13 @@ Cross-cutting things and every file they touch:
   **isomorphically** by `@timber/sass` (`compileScss`, in-memory importer) in BOTH
   `build.node.ts` (`assets/**/*.scss` → `.css`, load path `assets/_sass`) and the app preview
   (`siteTheme.ts`) — keep the two in lockstep (same load path + main-vs-partial rule) for
-  preview ≡ build. The **adopt-once** flow is `@timber/cli`'s `import-theme` command
-  (`packages/cli/src/importTheme.node.ts`): transform → write `templates/*.liquid`, copy assets
-  + the SCSS source (`_sass/` → `assets/_sass/`). `buildSite` (`build.node.ts`) auto-passes
+  preview ≡ build. The **adopt-once** flow shares one isomorphic core — `planThemeImport`
+  (`packages/jekyll-compat/src/planImport.ts`, theme files → repo write-set) — driven from two
+  edges: the CLI (`packages/cli/src/importTheme.node.ts`, fs → files) and the **browser**
+  (`packages/app/src/theme/importTheme.ts`: `fflate` unzip → plan → `commitFiles`; UI in
+  `components/ImportThemeDialog.tsx`, opened from the Advanced list in `Editor.tsx`). Both write
+  `templates/*.liquid` + assets incl. the SCSS source (`_sass/` → `assets/_sass/`). `buildSite`
+  (`build.node.ts`) auto-passes
   `extend: registerJekyllCompat` so an adopted theme's `{% seo %}`/`date_to_xmlschema`/… build
   with plain `timber build`
   (the layer is additive — no built-in overrides — so native sites are unaffected). The **app

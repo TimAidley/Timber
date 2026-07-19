@@ -9,9 +9,20 @@ running Jekyll. This is the **Tier-A** compatibility path (SPEC §2). A theme is
 See also: SPEC §2 (the tiered decision), SPEC §6 (the template contract), ARCHITECTURE.md
 (where each piece lives).
 
-## Quick start — `timber import-theme`
+## Quick start
 
-The **adopt-once** path. Point the CLI at a Jekyll theme and your content repo:
+The **adopt-once** import runs two ways — both do the same transform (they share the
+isomorphic `planThemeImport` core), so pick whichever fits.
+
+### From the browser (no terminal)
+
+In the editor, open **Advanced → ↓ Import theme**, upload a theme `.zip` (e.g. a repo's
+"Download ZIP"), and click **Import**. It transforms the theme and commits
+`templates/*.liquid` + assets to your working branch in one commit; reload to pick it up. The
+build (and the in-editor preview) compile the theme's SCSS isomorphically — nothing to run
+locally.
+
+### From the CLI
 
 ```sh
 timber import-theme path/to/jekyll-theme  path/to/my-site
