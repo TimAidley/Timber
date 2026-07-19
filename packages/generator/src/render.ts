@@ -11,13 +11,39 @@ import type { RenderPageInput, TemplateMap } from './types.js';
  * its map. Without a map, the shared `engine` singleton (no partials/layouts) is used.
  */
 const engineByTemplates = new WeakMap<TemplateMap, Liquid>();
+// When an `extend` hook is supplied (a compat layer registering extra filters/tags), cache
+// per (templates, extend) pair — a whole build reuses one of each, so this stays a single
+// engine per build, same as the no-extend path.
+const engineByTemplatesExtended = new WeakMap<
+  TemplateMap,
+  WeakMap<(engine: Liquid) => void, Liquid>
+>();
 
-function engineFor(templates: TemplateMap | undefined): Liquid {
-  if (!templates) return engine;
-  let bound = engineByTemplates.get(templates);
+function engineFor(
+  templates: TemplateMap | undefined,
+  extend?: (engine: Liquid) => void,
+): Liquid {
+  if (!extend) {
+    if (!templates) return engine;
+    let bound = engineByTemplates.get(templates);
+    if (!bound) {
+      bound = createEngine(templates);
+      engineByTemplates.set(templates, bound);
+    }
+    return bound;
+  }
+  // With an extend hook. No template map is a rare edge (a self-contained template that
+  // still wants extensions) — build an uncached engine for it.
+  if (!templates) return createEngine(undefined, extend);
+  let byExtend = engineByTemplatesExtended.get(templates);
+  if (!byExtend) {
+    byExtend = new WeakMap();
+    engineByTemplatesExtended.set(templates, byExtend);
+  }
+  let bound = byExtend.get(extend);
   if (!bound) {
-    bound = createEngine(templates);
-    engineByTemplates.set(templates, bound);
+    bound = createEngine(templates, extend);
+    byExtend.set(extend, bound);
   }
   return bound;
 }
@@ -44,35 +70,38 @@ export async function renderPage(input: RenderPageInput): Promise<string> {
   const { data, body } = parseFrontMatter(input.markdown);
   const content = await renderMarkdown(body);
 
-  const html = await engineFor(input.templates).parseAndRender(input.template, {
-    // Computed language/translations (SPEC §5 → Multilingual) win over any same-named
-    // front-matter key, mirroring the model where the path is authoritative for `lang`.
-    page: {
-      ...data,
-      ...(input.lang !== undefined ? { lang: input.lang } : {}),
-      ...(input.translations !== undefined ? { translations: input.translations } : {}),
-      // Computed page fields (Tier-1). `page.url` is the object's resolved URL — useful for
-      // canonical/self links and active-nav in Timber's own themes, and the single most
-      // common thing a ported theme reads off `page`. `page.collection` names the owning
-      // collection type. `page.content` mirrors the rendered body so a theme that reads
-      // `page.content` (as well as the bare `{{ content }}`) works. All are caller-supplied
-      // or derived here — never read from fs/DOM — so preview ≡ build. Computed keys win
-      // over same-named front matter, matching `lang`/`translations` above.
-      ...(input.url !== undefined ? { url: input.url } : {}),
-      ...(input.collection !== undefined ? { collection: input.collection } : {}),
+  const html = await engineFor(input.templates, input.extend).parseAndRender(
+    input.template,
+    {
+      // Computed language/translations (SPEC §5 → Multilingual) win over any same-named
+      // front-matter key, mirroring the model where the path is authoritative for `lang`.
+      page: {
+        ...data,
+        ...(input.lang !== undefined ? { lang: input.lang } : {}),
+        ...(input.translations !== undefined ? { translations: input.translations } : {}),
+        // Computed page fields (Tier-1). `page.url` is the object's resolved URL — useful for
+        // canonical/self links and active-nav in Timber's own themes, and the single most
+        // common thing a ported theme reads off `page`. `page.collection` names the owning
+        // collection type. `page.content` mirrors the rendered body so a theme that reads
+        // `page.content` (as well as the bare `{{ content }}`) works. All are caller-supplied
+        // or derived here — never read from fs/DOM — so preview ≡ build. Computed keys win
+        // over same-named front matter, matching `lang`/`translations` above.
+        ...(input.url !== undefined ? { url: input.url } : {}),
+        ...(input.collection !== undefined ? { collection: input.collection } : {}),
+        content: new SafeHtml(content),
+      },
+      // The body is already rendered + sanitized HTML — mark it trusted so `{{ content }}`
+      // emits it raw while every other output is auto-escaped (see liquid.ts).
       content: new SafeHtml(content),
+      site: input.site ?? {},
+      collections: input.collections ?? {},
+      seo: input.seo ?? {},
+      // Temporal context (SPEC §6): top-level so `where_exp`/comparison filters can read
+      // `today`/`now` directly. Omitted keys simply render as empty.
+      now: input.now,
+      today: input.today,
     },
-    // The body is already rendered + sanitized HTML — mark it trusted so `{{ content }}`
-    // emits it raw while every other output is auto-escaped (see liquid.ts).
-    content: new SafeHtml(content),
-    site: input.site ?? {},
-    collections: input.collections ?? {},
-    seo: input.seo ?? {},
-    // Temporal context (SPEC §6): top-level so `where_exp`/comparison filters can read
-    // `today`/`now` directly. Omitted keys simply render as empty.
-    now: input.now,
-    today: input.today,
-  });
+  );
 
   return html;
 }

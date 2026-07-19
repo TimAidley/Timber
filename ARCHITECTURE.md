@@ -20,6 +20,7 @@ a site* see **`INSTALL.md`**.
 |---|---|---|
 | `@timber/generator` | remark/rehype → LiquidJS render core (one page) | browser **and** Node (isomorphic) |
 | `@timber/content` | Content model: schemas, id→object index, reference resolution, validation, SEO, navigation, redirects, video allowlist, visibility | browser and Node |
+| `@timber/jekyll-compat` | **Jekyll-theme import layer** (SPEC §2 → Tier A): the `importJekyllTheme` transform + `registerJekyllCompat` ecosystem filters/tags, plugged into the generator via its `extend` seam. Lets Tier-A (Liquid+CSS) Jekyll themes be imported and rendered by Timber's own generator | browser and Node |
 | `@timber/cli` | `timber build . _site` — builds the whole static site | Node (CI) |
 | `@timber/app` | The browser editor SPA (React): auth, editor, preview, media pipeline | browser |
 | `@timber/host` | The **host-provider port**: host-neutral types + the `HostProvider` interface (`HostRepo` + `HostIdentity` + optional `DeployBackend`) the editor depends on, so a git host is a swappable adapter | browser and Node |
@@ -238,6 +239,16 @@ Cross-cutting things and every file they touch:
   `state/autosave.ts` `markObjectCreated`, `Editor.tsx` add-translation flow +
   `byTranslation` rebuild, `components/AddTranslationDialog.tsx`, `components/ContentList.tsx`
   language chip). A site opts in via `languages`/`defaultLanguage` in its settings singleton.
+- **Jekyll theme compatibility** (SPEC §2 → Tier A) → the native template-contract pieces are
+  in `@timber/generator` (`urlFilters.ts` `relative_url`/`absolute_url`; `render.ts`
+  `page.url`/`page.collection`/`page.content`; the `createEngine`/`renderPage` `extend` seam)
+  and `@timber/content` (`collections.ts` `withCollectionAliases`); the compat layer proper is
+  `@timber/jekyll-compat` (`importTheme.ts` transform + `filters.ts`/`tags.ts` +
+  `register.ts`). A consumer renders an imported theme with
+  `renderPage({ …, templates: importJekyllTheme(files, root), extend: registerJekyllCompat })`.
+  Escaping reconciliation (drop redundant `escape`/`xml_escape`) lives in the transform; keep
+  it in lockstep with the generator's auto-escape default (SPEC §6). Guide:
+  `docs/importing-jekyll-themes.md`.
 - **The site scaffold** (theme, schemas, sample content, workflows) → edit **`site-template/`**
   only; the mirror regenerates the template repo. Never edit `Timber-site-template` directly.
 - **Setup instructions** → **`INSTALL.md`** only (canonical); the template's README is a stub.

@@ -1,4 +1,2 @@
 packages:
   - 'packages/*'
-  # Throwaway proof-of-concept spike (Jekyll-theme compatibility). Not shipped.
-  - 'spike/*'

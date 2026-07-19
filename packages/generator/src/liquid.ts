@@ -59,7 +59,10 @@ function outputEscape(value: unknown): string {
  * `{% include %}` against this in-memory map — no filesystem, so the same engine works
  * in the browser and Node (preview ≡ build). Omit it for a single self-contained template.
  */
-export function createEngine(templates?: TemplateMap): Liquid {
+export function createEngine(
+  templates?: TemplateMap,
+  extend?: (engine: Liquid) => void,
+): Liquid {
   const engine = new Liquid({
     jsTruthy: true,
     outputEscape,
@@ -72,6 +75,11 @@ export function createEngine(templates?: TemplateMap): Liquid {
   // URL filters: `relative_url` / `absolute_url` (prefix `site.basePath` / `site.baseUrl`).
   // A cleaner link idiom for Timber's own themes, and the highest-frequency Jekyll filters.
   registerUrlFilters(engine);
+  // Extension seam: an optional hook to register extra filters/tags on the engine — the
+  // clean plug-in point a compatibility layer (e.g. @timber/jekyll-compat) uses to add its
+  // ecosystem filters/tags without the core depending on it. Applied last so an extension
+  // can override a built-in if it deliberately needs to.
+  extend?.(engine);
   return engine;
 }
 

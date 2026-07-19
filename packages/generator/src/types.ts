@@ -39,6 +39,13 @@ export type CollectionsContext = Record<string, Array<Record<string, unknown>>>;
 
 /** Input to {@link renderPage}. */
 export interface RenderPageInput {
+  /**
+   * Optional engine-extension hook (a compat layer registering extra filters/tags — e.g.
+   * `@timber/jekyll-compat`'s `registerJekyllCompat`). Applied when the engine is built;
+   * engines are cached per (templates, extend) pair so a whole build still builds one
+   * engine. The core never depends on any specific extension — this is just the seam.
+   */
+  extend?: (engine: import('liquidjs').Liquid) => void;
   /** Raw `index.md` contents (YAML front matter + Markdown body). */
   markdown: string;
   /** The Liquid template source to render the page with (the layout-inheritance "child"). */

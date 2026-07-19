@@ -1,0 +1,27 @@
+{
+  "name": "@timber/jekyll-compat",
+  "version": "0.0.0",
+  "description": "Timber's Jekyll-theme compatibility layer: ecosystem Liquid filters/tags + a mechanical import transform, so Tier-A (Liquid+CSS) Jekyll themes can be imported and rendered by Timber's generator. Pure and isomorphic.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@timber/generator": "workspace:*",
+    "liquidjs": "^10.19.0"
+  },
+  "devDependencies": {
+    "@timber/content": "workspace:*",
+    "yaml": "^2.6.1"
+  }
+}

@@ -224,16 +224,23 @@ importers:
 
   packages/host: {}
 
-  packages/oauth-broker: {}
-
-  spike/jekyll-minima:
+  packages/jekyll-compat:
     dependencies:
-      '@timber/content':
-        specifier: workspace:*
-        version: link:../../packages/content
       '@timber/generator':
         specifier: workspace:*
-        version: link:../../packages/generator
+        version: link:../generator
+      liquidjs:
+        specifier: ^10.19.0
+        version: 10.27.1
+    devDependencies:
+      '@timber/content':
+        specifier: workspace:*
+        version: link:../content
+      yaml:
+        specifier: ^2.6.1
+        version: 2.9.0
+
+  packages/oauth-broker: {}
 
 packages:
 
