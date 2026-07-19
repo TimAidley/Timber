@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, writeFile, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { importThemeToRepo } from '../src/importTheme.node.js';
+import { importThemeToRepo, parseImportArgs } from '../src/importTheme.node.js';
 import { buildSite } from '../src/build.node.js';
 
 /**
@@ -94,5 +94,72 @@ describe('importThemeToRepo (adopt-once)', () => {
     expect(html).toContain('About'); // the page title
     expect(html).toContain('<strong>tree nerd</strong>'); // markdown body rendered
     expect(html).not.toContain('{%'); // no unresolved Liquid
+  });
+
+  it('wires a content type to a specific layout via --map, and builds through it', async () => {
+    const repo2 = await mkdtemp(join(tmpdir(), 'timber-map-'));
+    const r = await importThemeToRepo(THEME, repo2, { typeMap: { posts: 'post' } });
+    expect(r.mapped).toEqual({ posts: 'post' });
+    expect(r.templates).toContain('templates/posts.liquid');
+    // posts.liquid IS the post layout (article wrapper) chained to base.
+    const postsTemplate = await readFile(join(repo2, 'templates/posts.liquid'), 'utf8');
+    expect(postsTemplate).toContain('class="post h-entry"');
+
+    const w = async (rel: string, content: string): Promise<void> => {
+      await mkdir(dirname(join(repo2, rel)), { recursive: true });
+      await writeFile(join(repo2, rel), content, 'utf8');
+    };
+    await w(
+      'config/schemas/settings.yml',
+      'kind: singleton\npage: false\nhasBody: false\nfields:\n  title: { type: text }\n  baseUrl: { type: text }\n',
+    );
+    await w(
+      'config/schemas/posts.yml',
+      'kind: collection\nhasBody: true\nfields:\n  title:\n    type: text\n    required: true\n  date:\n    type: datetime\n',
+    );
+    await w(
+      'content/settings/index.md',
+      '---\ntitle: T\nbaseUrl: https://ex.test/mysite\n---\n',
+    );
+    await w(
+      'content/posts/hi/index.md',
+      '---\ntitle: Hi There\ndate: 2026-05-02T09:00:00Z\npublic: true\n---\n\nBody.\n',
+    );
+
+    const out = await mkdtemp(join(tmpdir(), 'timber-map-out-'));
+    await buildSite(repo2, out);
+    const html = await readFile(join(out, 'posts', 'hi', 'index.html'), 'utf8');
+    expect(html).toContain('class="post h-entry"'); // rendered through the post layout, not default
+    expect(html).toContain('Hi There');
+    expect(html).not.toContain('{%');
+  });
+
+  it('rejects a --map to a non-existent layout', async () => {
+    const repo3 = await mkdtemp(join(tmpdir(), 'timber-map-bad-'));
+    await expect(
+      importThemeToRepo(THEME, repo3, { typeMap: { posts: 'nope' } }),
+    ).rejects.toThrow(/no layout "nope"/);
+  });
+});
+
+describe('parseImportArgs', () => {
+  it('parses repeatable and comma-separated --map into a type→layout map', () => {
+    expect(
+      parseImportArgs(['theme', 'repo', '--map', 'posts=post', '--map', 'events=event']),
+    ).toEqual({
+      positionals: ['theme', 'repo'],
+      typeMap: { posts: 'post', events: 'event' },
+    });
+    expect(parseImportArgs(['--map=posts=post,events=event', 'theme', 'repo'])).toEqual({
+      positionals: ['theme', 'repo'],
+      typeMap: { posts: 'post', events: 'event' },
+    });
+  });
+
+  it('returns an empty typeMap when no --map is given', () => {
+    expect(parseImportArgs(['theme', 'repo'])).toEqual({
+      positionals: ['theme', 'repo'],
+      typeMap: {},
+    });
   });
 });

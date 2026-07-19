@@ -10,7 +10,7 @@ import {
 import { NodeFileSource, NodeOutputSink } from './fileSource.node.js';
 import { buildSnapshotFromDir } from './snapshot.node.js';
 import { buildSite, BuildError } from './build.node.js';
-import { importThemeToRepo } from './importTheme.node.js';
+import { importThemeToRepo, parseImportArgs } from './importTheme.node.js';
 
 const USAGE = `timber — Timber static-site generator CLI
 
@@ -18,7 +18,7 @@ Usage:
   timber render <contentDir> <templateFile> <outFile>
   timber validate <repoDir>
   timber build <repoDir> <outDir>
-  timber import-theme <themeDir> <repoDir>
+  timber import-theme <themeDir> <repoDir> [--map <type>=<layout> ...]
 
 render   — reads <contentDir>/index.md and <templateFile>, renders the page
            through the shared generator, and writes the HTML to <outFile>.
@@ -30,7 +30,9 @@ build    — renders the whole site: every public object through its
            public object is invalid, so a broken site never deploys.
 import-theme — adopt-once import of a Jekyll theme (Tier A): transforms its
            _layouts/_includes into native templates/*.liquid, compiles its SCSS,
-           and copies its assets into <repoDir>. See docs/importing-jekyll-themes.md.
+           and copies its assets into <repoDir>. Use --map <type>=<layout>
+           (repeatable) to render a content type through a specific layout, e.g.
+           --map posts=post. See docs/importing-jekyll-themes.md.
 
 This is the Node/CI entry point; preview ≡ build.`;
 
@@ -107,18 +109,28 @@ async function buildCommand(repoDir: string, outDir: string): Promise<number> {
 }
 
 /** Adopt-once import of a Jekyll theme into a Timber repo; returns an exit code. */
-async function importThemeCommand(themeDir: string, repoDir: string): Promise<number> {
-  const r = await importThemeToRepo(themeDir, repoDir);
+async function importThemeCommand(
+  themeDir: string,
+  repoDir: string,
+  typeMap: Record<string, string>,
+): Promise<number> {
+  const r = await importThemeToRepo(themeDir, repoDir, { typeMap });
   const out = process.stdout;
+  const mappedCount = Object.keys(r.mapped).length;
   out.write(
     `Imported ${themeDir} → ${repoDir}\n` +
       `  ${r.templates.length} template(s) (root: ${r.rootLayout}, default: ${r.defaultLayout})\n` +
       `  ${r.compiled.length} stylesheet(s) compiled, ${r.assets.length} asset(s) copied\n`,
   );
+  if (mappedCount > 0) {
+    const pairs = Object.entries(r.mapped)
+      .map(([t, l]) => `${t}→${l}`)
+      .join(', ');
+    out.write(`  ${mappedCount} type(s) wired: ${pairs}\n`);
+  }
   out.write(
-    `\nEvery content type now renders through templates/default.liquid (the theme's ` +
-      `${r.defaultLayout} layout). To use a specific layout for a type, add ` +
-      `templates/<type>.liquid — e.g. copy templates/post.liquid → templates/posts.liquid.\n`,
+    `\nContent types without a templates/<type>.liquid render through templates/default.liquid ` +
+      `(the theme's ${r.defaultLayout} layout). Wire more with --map <type>=<layout>.\n`,
   );
   return 0;
 }
@@ -162,14 +174,15 @@ async function main(argv: string[]): Promise<number> {
   }
 
   if (command === 'import-theme') {
-    const [themeDir, repoDir] = rest;
+    const { positionals, typeMap } = parseImportArgs(rest);
+    const [themeDir, repoDir] = positionals;
     if (!themeDir || !repoDir) {
       process.stderr.write(
         `error: import-theme needs <themeDir> <repoDir>\n\n${USAGE}\n`,
       );
       return 1;
     }
-    return importThemeCommand(themeDir, repoDir);
+    return importThemeCommand(themeDir, repoDir, typeMap);
   }
 
   process.stderr.write(`error: unknown command "${command}"\n\n${USAGE}\n`);

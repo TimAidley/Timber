@@ -43,10 +43,12 @@ export async function compileThemeStylesheet(
   const result = compileString(scss, {
     loadPaths: options.loadPaths ?? [],
     style: options.style ?? 'compressed',
-    // Jekyll themes universally use `@import` (which dart-sass now deprecates in favour of
-    // `@use`). That's the theme's code, not something a site owner can fix, so silence the
-    // expected noise rather than flood the build log.
+    // A Jekyll theme's SCSS is not something the site owner can fix, so silence its (advisory)
+    // deprecation noise rather than flood the build log: `@import` (which the theme universally
+    // uses, now deprecated in favour of `@use`) on the main file, and `quietDeps` for the same
+    // plus legacy color-function/division warnings inside the theme's `_sass` partials.
     silenceDeprecations: ['import'],
+    quietDeps: true,
   });
   return result.css;
 }

@@ -23,8 +23,11 @@ its SCSS (dart-sass), copies its other assets, and prints a summary — e.g. *"1
 Timber site**: `timber build` renders it, styled by the theme, with no further Jekyll step.
 
 - **Per-type layouts.** Every content type falls back to `templates/default.liquid` (the
-  theme's generic single-content layout). To use a specific layout for a type, add
-  `templates/<type>.liquid` — e.g. copy `templates/post.liquid` → `templates/posts.liquid`.
+  theme's generic single-content layout). To render a type through a specific layout, pass
+  `--map <type>=<layout>` (repeatable, or comma-separated) — e.g.
+  `timber import-theme theme site --map posts=post --map events=event` writes
+  `templates/posts.liquid` from the theme's `post` layout, and so on. You can also add a
+  `templates/<type>.liquid` by hand later.
 - **The build auto-registers the Jekyll ecosystem filters/tags** (`{% seo %}`,
   `date_to_xmlschema`, …) — they're additive (no built-in overrides), so nothing extra is
   needed and native sites are unaffected.

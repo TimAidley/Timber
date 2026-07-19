@@ -20,6 +20,13 @@ export interface ImportThemeOptions {
   rootLayout?: string;
   /** Which layout becomes `templates/default.liquid` (Timber's per-type fallback). Auto if unset. */
   defaultLayout?: string;
+  /**
+   * Per-content-type layout wiring: `{ <type>: <layout> }`. For each entry, the Jekyll
+   * `<layout>` is written as `templates/<type>.liquid`, so Timber renders that content type
+   * through that layout (e.g. `{ posts: 'post' }` → a `posts` type uses the theme's `post`
+   * layout). Types not listed fall back to `templates/default.liquid`.
+   */
+  typeMap?: Record<string, string>;
 }
 
 export interface ImportThemeResult {
@@ -31,6 +38,33 @@ export interface ImportThemeResult {
   compiled: string[];
   rootLayout: string;
   defaultLayout: string;
+  /** The `type → layout` wiring applied (from `typeMap`). */
+  mapped: Record<string, string>;
+}
+
+/**
+ * Parse `--map <type>=<layout>` occurrences (repeatable, and comma-separated values allowed)
+ * from an arg list into `{ type: layout }`, returning the map + the remaining positionals.
+ * Lives here (not in the bin entry) so it's unit-testable — the CLI index runs on import.
+ */
+export function parseImportArgs(args: string[]): {
+  positionals: string[];
+  typeMap: Record<string, string>;
+} {
+  const positionals: string[] = [];
+  const typeMap: Record<string, string> = {};
+  const addPair = (pair: string): void => {
+    const [type, layout] = pair.split('=');
+    if (type && layout) typeMap[type.trim()] = layout.trim();
+  };
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!;
+    if (arg === '--map') args[++i]?.split(',').forEach(addPair);
+    else if (arg.startsWith('--map='))
+      arg.slice('--map='.length).split(',').forEach(addPair);
+    else positionals.push(arg);
+  }
+  return { positionals, typeMap };
 }
 
 /** All `*.html` in `<themeDir>/<sub>` as bare-name → source; `{}` if the dir is absent. */
@@ -119,6 +153,20 @@ export async function importThemeToRepo(
     await writeTemplate(name, source);
   if (!templates['default']) await writeTemplate('default', templates[defaultLayout]!);
 
+  // Per-type wiring (`--map <type>=<layout>`): write templates/<type>.liquid so Timber renders
+  // that content type through the named layout instead of the default fallback.
+  const mapped: Record<string, string> = {};
+  for (const [type, layout] of Object.entries(options.typeMap ?? {})) {
+    const source = templates[layout];
+    if (source === undefined) {
+      throw new Error(
+        `--map ${type}=${layout}: no layout "${layout}" in the theme (have: ${layoutNames.join(', ')})`,
+      );
+    }
+    await writeTemplate(type, source);
+    mapped[type] = layout;
+  }
+
   // Assets: compile front-matter SCSS (resolve the skin @import via the engine → the theme's
   // `default:` skin), copy everything else verbatim.
   const engine = createEngine();
@@ -153,5 +201,5 @@ export async function importThemeToRepo(
     }
   }
 
-  return { templates: written, assets, compiled, rootLayout, defaultLayout };
+  return { templates: written, assets, compiled, rootLayout, defaultLayout, mapped };
 }
