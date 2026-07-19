@@ -130,10 +130,14 @@ export function ContentList({
     const rep = cluster.representative;
     const activeInCluster = [...cluster.variants.values()].some((v) => v.path === selectedPath);
     return (
-      <li key={cluster.key}>
+      <li key={cluster.key} className={`object-cluster${activeInCluster ? ' is-active' : ''}`}>
         <button
           type="button"
-          className={[activeInCluster ? 'is-active' : '', deletedPaths.has(rep.path) ? 'is-deleting' : '']
+          className={[
+            'object-cluster__main',
+            activeInCluster ? 'is-active' : '',
+            deletedPaths.has(rep.path) ? 'is-deleting' : '',
+          ]
             .filter(Boolean)
             .join(' ')}
           onClick={() => onSelect(rep.path)}
