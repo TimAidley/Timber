@@ -9,6 +9,30 @@ running Jekyll. This is the **Tier-A** compatibility path (SPEC §2). A theme is
 See also: SPEC §2 (the tiered decision), SPEC §6 (the template contract), ARCHITECTURE.md
 (where each piece lives).
 
+## Quick start — `timber import-theme`
+
+The **adopt-once** path. Point the CLI at a Jekyll theme and your content repo:
+
+```sh
+timber import-theme path/to/jekyll-theme  path/to/my-site
+```
+
+It transforms the theme's `_layouts` + `_includes` into native `templates/*.liquid`, compiles
+its SCSS (dart-sass), copies its other assets, and prints a summary — e.g. *"14 templates
+(root: base, default: page), 1 stylesheet compiled."* After that your repo is an **ordinary
+Timber site**: `timber build` renders it, styled by the theme, with no further Jekyll step.
+
+- **Per-type layouts.** Every content type falls back to `templates/default.liquid` (the
+  theme's generic single-content layout). To use a specific layout for a type, add
+  `templates/<type>.liquid` — e.g. copy `templates/post.liquid` → `templates/posts.liquid`.
+- **The build auto-registers the Jekyll ecosystem filters/tags** (`{% seo %}`,
+  `date_to_xmlschema`, …) — they're additive (no built-in overrides), so nothing extra is
+  needed and native sites are unaffected.
+- **Re-adopting** an upstream update: re-run `import-theme`; the transform is deterministic, so
+  the diff is clean.
+
+The rest of this doc covers the **programmatic** API underneath the command.
+
 ## What "importing" means
 
 `@timber/jekyll-compat` gives you two things:
@@ -28,10 +52,12 @@ See also: SPEC §2 (the tiered decision), SPEC §6 (the template contract), ARCH
   `layout: layoutData[rootLayout]` to `renderPage` so `layout.common-css` etc. resolve.
 - **`registerJekyllCompat(engine)`** — the Jekyll *ecosystem* Liquid filters and tags Timber
   doesn't ship natively: `date_to_xmlschema`, `date_to_string`, `slugify`, `jsonify`,
-  `number_of_words`, a Ruby-`strftime` `date`, and `{% seo %}` / `{% feed_meta %}` (the former
-  emits `<head>` metadata from Timber's computed `seo` bag; the latter is a no-op, RSS being
-  deferred). The high-frequency `relative_url` / `absolute_url` are **native** to the
-  generator, not here.
+  `number_of_words`, `xml_escape`, and `{% seo %}` / `{% feed_meta %}` (the former emits
+  `<head>` metadata from Timber's computed `seo` bag; the latter is a no-op, RSS being
+  deferred). All **additive** — nothing overrides a LiquidJS built-in (the `date` filter's
+  built-in already handles Jekyll's strftime, incl. `%-d`), which is why the CLI build can
+  register it for every site safely. The high-frequency `relative_url` / `absolute_url` are
+  **native** to the generator, not here.
 
 ## Rendering an imported theme
 
@@ -89,6 +115,11 @@ Known limits (the "mainly compatible, not 100%" residue):
   This mirrors the responsive-image precedent (SPEC §7 → `sharp`): heavy asset processing runs
   at build time, and the browser **preview falls back to committed CSS** — the one styling
   concern where preview isn't byte-identical to the build.
+- **In-editor preview** — the CLI `build` auto-registers the Jekyll ecosystem filters/tags, but
+  the browser editor's live preview does not yet, so an adopted theme using `{% seo %}` etc.
+  won't preview until the app registers `registerJekyllCompat` too (a small follow-up; the
+  built site is correct meanwhile). SCSS also isn't compiled in-browser — preview falls back to
+  the committed CSS (the `sharp` precedent).
 - **Parenthesized conditions** — LiquidJS rejects `{% if a and (b != c) %}` (SPEC §6: no parens
   in conditions). Rare; a one-line manual edit per occurrence.
 - **Pagination, taxonomy/archive pages, `site.data` i18n, RSS/feeds** — Tier-B features Timber

@@ -138,6 +138,9 @@ importers:
       '@timber/generator':
         specifier: workspace:*
         version: link:../generator
+      '@timber/jekyll-compat':
+        specifier: workspace:*
+        version: link:../jekyll-compat
       sass:
         specifier: ^1.80.0
         version: 1.101.0

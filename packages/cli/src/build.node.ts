@@ -1,6 +1,7 @@
 import { readdir, readFile, writeFile, mkdir } from 'node:fs/promises';
 import { dirname, join, relative, sep } from 'node:path';
 import { renderPage, buildClock } from '@timber/generator';
+import { registerJekyllCompat } from '@timber/jekyll-compat';
 import {
   aliasUrls,
   assembleCollections,
@@ -195,6 +196,11 @@ export async function buildSite(repoDir: string, outDir: string): Promise<BuildR
       seo,
       now: clock.now,
       today: clock.today,
+      // Register the Jekyll ecosystem filters/tags (SPEC §2 → Tier A). They're purely additive
+      // (no built-in overrides), so a native Timber site is unaffected while an *adopted* Jekyll
+      // theme — whose templates still call `{% seo %}`, `date_to_xmlschema`, etc. — builds with
+      // plain `timber build`, no per-site config. The engine is cached per (templates, extend).
+      extend: registerJekyllCompat,
     };
     if (object.lang !== undefined) renderInput.lang = object.lang;
     if (translations.length > 0) renderInput.translations = translations;

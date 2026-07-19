@@ -12,7 +12,9 @@
       "default": "./dist/sass.node.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -b",
     "clean": "rm -rf dist *.tsbuildinfo",
@@ -21,7 +23,8 @@
   "dependencies": {
     "@timber/content": "workspace:*",
     "@timber/generator": "workspace:*",
-    "sass": "^1.80.0"
+    "sass": "^1.80.0",
+    "@timber/jekyll-compat": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.2"

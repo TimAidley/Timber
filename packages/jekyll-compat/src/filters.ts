@@ -44,10 +44,12 @@ function toDate(value: unknown): Date | null {
 }
 
 /**
- * Minimal Ruby-`strftime` covering the tokens real Jekyll themes use (Minima's default
- * `date_format` is `"%b %-d, %Y"`). UTC throughout, so it stays timezone-naive per SPEC §6
- * ("timezones are explicitly not a concern"). The no-pad variants (`%-d`, `%-m`) are the
- * main reason we override LiquidJS's built-in `date`, which doesn't support them.
+ * Minimal Ruby-`strftime` for the Jekyll date filters below (`date_to_string` etc.). UTC
+ * throughout, so it stays timezone-naive per SPEC §6 ("timezones are explicitly not a
+ * concern"). Note we do NOT override LiquidJS's built-in `date` filter — it already handles
+ * the strftime tokens real Jekyll themes use, including the no-pad `%-d` — so `registerJekyll*`
+ * stays purely additive (no built-in overrides), which is what lets the build register it for
+ * every site safely.
  */
 export function strftime(date: Date, fmt: string): string {
   const map: Record<string, string | number> = {
@@ -86,15 +88,10 @@ function xmlEscape(input: unknown): string {
   );
 }
 
-/** Register the Jekyll ecosystem filters on a LiquidJS engine. */
+/** Register the Jekyll ecosystem filters on a LiquidJS engine (all additive — no overrides). */
 export function registerJekyllFilters(engine: Liquid): void {
-  // `date` — Ruby strftime (handles `%-d` etc.). `"now"`/`"today"` resolve to the caller's
-  // clock via the render context is not available in a pure filter, so accept a Date/string.
-  engine.registerFilter('date', (input: unknown, fmt: unknown): string => {
-    const d = toDate(input);
-    if (!d) return '';
-    return typeof fmt === 'string' ? strftime(d, fmt) : d.toISOString();
-  });
+  // NB: `date` is intentionally NOT registered — LiquidJS's built-in already covers the Jekyll
+  // strftime tokens (incl. `%-d`), and leaving it untouched keeps this layer override-free.
   engine.registerFilter('date_to_xmlschema', (input: unknown): string => {
     const d = toDate(input);
     return d ? d.toISOString() : '';

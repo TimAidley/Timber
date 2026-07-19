@@ -251,7 +251,13 @@ Cross-cutting things and every file they touch:
   compiled by a **Node/CI-side** helper — `@timber/cli`'s `compileThemeStylesheet`
   (`packages/cli/src/sass.node.ts`, dart-sass, exposed at `@timber/cli/sass`) — kept out of the
   browser bundle exactly like `sharp` (SPEC §7); the browser preview falls back to committed
-  CSS. Guide: `docs/importing-jekyll-themes.md`.
+  CSS. The **adopt-once** flow is `@timber/cli`'s `import-theme` command
+  (`packages/cli/src/importTheme.node.ts`): transform → write `templates/*.liquid`, compile
+  SCSS, copy assets. `buildSite` (`build.node.ts`) auto-passes `extend: registerJekyllCompat`
+  so an adopted theme's `{% seo %}`/`date_to_xmlschema`/… build with plain `timber build`
+  (the layer is additive — no built-in overrides — so native sites are unaffected). Follow-up:
+  the **app preview** (`packages/app/src/preview/renderSitePage.ts`) should register the same
+  for preview ≡ build on adopted themes. Guide: `docs/importing-jekyll-themes.md`.
 - **The site scaffold** (theme, schemas, sample content, workflows) → edit **`site-template/`**
   only; the mirror regenerates the template repo. Never edit `Timber-site-template` directly.
 - **Setup instructions** → **`INSTALL.md`** only (canonical); the template's README is a stub.
