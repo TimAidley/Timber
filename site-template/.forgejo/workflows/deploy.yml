@@ -66,9 +66,11 @@ jobs:
       - name: Build the site
         run: node .timber/packages/cli/dist/index.js build . _site
 
-      # Co-host the editor at /<repo>/edit/, configured for this Codeberg repo. It ships
-      # always and signs in via paste-a-PAT (host-neutral). Override the path with the
-      # TIMBER_EDITOR_PATH repo variable if /edit/ collides with a content page.
+      # Co-host the editor at /<repo>/edit/, configured for this Codeberg repo. Sign-in
+      # adapts to config: with an OAuth client id + a broker URL (committed by the "Setup
+      # OAuth broker (Codeberg)" workflow as .timber-broker-url) it shows "Sign in with
+      # Codeberg"; otherwise it falls back to paste-a-PAT (no setup). Override the path
+      # with the TIMBER_EDITOR_PATH repo variable if /edit/ collides with a content page.
       - name: Build the editor (/<repo>/edit/)
         run: |
           REPO='${{ github.event.repository.name }}'
@@ -85,6 +87,14 @@ jobs:
           export VITE_TIMBER_UPSTREAM_REF="$TIMBER_REF"
           VITE_TIMBER_BUILD_SHA="$(git -C .timber rev-parse HEAD)"
           export VITE_TIMBER_BUILD_SHA
+          # OAuth "Sign in with Codeberg" (optional): activated once the OAUTH_CLIENT_ID
+          # variable is set and the broker URL has been recorded. Absent ⇒ paste-a-PAT.
+          export VITE_TIMBER_OAUTH_CLIENT_ID='${{ vars.OAUTH_CLIENT_ID }}'
+          export VITE_TIMBER_OAUTH_SCOPE='${{ vars.TIMBER_OAUTH_SCOPE }}'
+          if [ -f .timber-broker-url ]; then
+            VITE_TIMBER_OAUTH_BROKER_URL="$(cat .timber-broker-url)"
+            export VITE_TIMBER_OAUTH_BROKER_URL
+          fi
           ( cd .timber && pnpm --filter "@timber/app..." build )
           mkdir -p "_site/$EDITOR_PATH"
           cp -r .timber/packages/app/dist/. "_site/$EDITOR_PATH/"

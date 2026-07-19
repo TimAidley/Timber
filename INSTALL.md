@@ -205,14 +205,18 @@ seam"), and **Codeberg** (Forgejo) is a supported second host. The differences f
 4. **Sign-in.** Two options:
    - **Paste-a-PAT** — zero extra infrastructure. Create a token under **Settings →
      Applications** on Codeberg with contents read/write.
-   - **"Sign in with Codeberg" (OAuth).** Register an OAuth2 app (**Settings → Applications
-     → Create OAuth2 Application**) as a **public client** (no secret), redirect URI =
-     your editor URL (`https://<owner>.codeberg.page/<repo>/edit/`). Deploy Timber's
-     broker with `GITEA_BASE_URL=https://codeberg.org` (+ `OAUTH_CLIENT_ID`,
-     `ALLOWED_ORIGINS=https://<owner>.codeberg.page`; **no secret needed**), and set the
-     editor's `oauth.clientId` + `oauth.brokerUrl`. The broker is required only because
-     Codeberg's token endpoint sends no CORS — it holds no secret (Gitea is a public
-     client). Set `oauth.scope` to what your token needs (e.g. `write:repository`).
+   - **"Sign in with Codeberg" (OAuth), automated.** Register an OAuth2 app (**Settings →
+     Applications → Create OAuth2 Application**) as a **public client** (leave "Confidential
+     Client" unchecked — no secret), redirect URI = `https://<owner>.codeberg.page/<repo>/edit/`.
+     Then add these under **Settings → Actions → Secrets and variables** — Variables
+     `OAUTH_CLIENT_ID` and `TIMBER_OAUTH_SCOPE` (e.g. `write:repository`); Secrets
+     `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, and `DEPLOY_TOKEN` (a PAT with
+     contents:write) — and run **Actions → "Setup OAuth broker (Codeberg)"**. It deploys the
+     broker (Gitea mode, **no secret** — Gitea is a public client; the broker is needed only
+     because Codeberg's token endpoint sends no CORS), records its URL, and redeploys the
+     editor with sign-in active. (The broker's `GITEA_BASE_URL` and the editor's
+     `oauth.clientId`/`brokerUrl`/`scope` are all wired for you.)
 
-Self-hosted Gitea/Forgejo works the same way — set `apiBaseUrl` to your instance origin
-(and `GITEA_BASE_URL` on the broker).
+Self-hosted Gitea/Forgejo works the same way — set `apiBaseUrl` to your instance origin;
+the workflows derive `GITEA_BASE_URL` from the instance, and `TIMBER_EDITOR_ORIGIN` overrides
+the editor origin if your Pages domain isn't `<owner>.codeberg.page`.

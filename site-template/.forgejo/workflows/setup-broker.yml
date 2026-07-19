@@ -1,0 +1,111 @@
+name: Setup OAuth broker (Codeberg)
+
+# Run this ONCE (Actions → "Setup OAuth broker (Codeberg)" → Run workflow) to deploy the
+# Cloudflare Worker that lets the /edit/ editor sign you in with Codeberg/Gitea. It:
+#   1. deploys the broker (packages/oauth-broker) from a pinned Timber checkout, in
+#      Gitea mode (GITEA_BASE_URL = this instance) as a PUBLIC client — no secret,
+#   2. records the deployed worker URL in .timber-broker-url (committed — it's public),
+#   3. pushing that file triggers the deploy workflow, so the /edit/ editor rebuilds with
+#      "Sign in with <host>" active.
+#
+# Why a broker at all if there's no secret? Gitea/Forgejo allows public OAuth clients
+# (PKCE, no secret), but its token endpoint sends no CORS — so a tiny relay is still
+# needed for the browser's code→token step. It holds nothing sensitive.
+#
+# One-time prerequisites:
+#   1. Register an OAuth2 app on your instance (Settings → Applications → Create OAuth2
+#      Application) as a PUBLIC client (leave "Confidential Client" unchecked). Redirect
+#      URI: https://<owner>.codeberg.page/<repo>/edit/ (your editor URL).
+#   2. Repo → Settings → Actions → Secrets and variables:
+#        Variable  OAUTH_CLIENT_ID       the app's client id (public)
+#        Variable  TIMBER_OAUTH_SCOPE    e.g. write:repository (what your token needs)
+#        Secret    CLOUDFLARE_API_TOKEN  (Workers Scripts: Edit)
+#        Secret    CLOUDFLARE_ACCOUNT_ID
+#        Secret    DEPLOY_TOKEN          a PAT with contents:write (also used by deploy.yml)
+#      Confidential client instead? also add Secret OAUTH_CLIENT_SECRET (optional).
+#   3. Self-hosted Forgejo whose Pages domain isn't <owner>.codeberg.page? set Variable
+#      TIMBER_EDITOR_ORIGIN to your editor's exact origin (scheme + host, no path).
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: write # commit .timber-broker-url
+
+env:
+  TIMBER_REPO: TimAidley/Timber
+  TIMBER_REF: main # pin to a Timber release tag
+
+jobs:
+  setup:
+    runs-on: docker
+    container:
+      image: node:22-bookworm
+    steps:
+      - name: Check out this content repo
+        uses: actions/checkout@v4
+
+      - name: Install jq
+        run: apt-get update -qq && apt-get install -y -qq jq
+
+      - name: Check out Timber (pinned, for the broker source)
+        run: git clone --depth 1 --branch "$TIMBER_REF" "https://github.com/$TIMBER_REPO" .timber
+
+      # Deploy the broker in Gitea mode. GITEA_BASE_URL is this instance (github.server_url
+      # resolves to it on Forgejo), so the broker relays the code→token exchange to your
+      # instance as a public client. No client secret unless you registered a confidential
+      # app (then OAUTH_CLIENT_SECRET is set and pushed as a Worker secret).
+      - name: Deploy the broker to Cloudflare (Gitea mode)
+        working-directory: .timber/packages/oauth-broker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          OAUTH_CLIENT_SECRET: ${{ secrets.OAUTH_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+          OWNER='${{ github.repository_owner }}'
+          EDITOR_ORIGIN='${{ vars.TIMBER_EDITOR_ORIGIN }}'
+          EDITOR_ORIGIN="${EDITOR_ORIGIN:-https://${OWNER}.codeberg.page}"
+          # Confidential client? store the secret. Public client (recommended): skip it.
+          if [ -n "${OAUTH_CLIENT_SECRET:-}" ]; then
+            printf '%s' "$OAUTH_CLIENT_SECRET" | npx --yes wrangler@3 secret put OAUTH_CLIENT_SECRET
+          fi
+          npx --yes wrangler@3 deploy \
+            --var GITEA_BASE_URL:'${{ github.server_url }}' \
+            --var OAUTH_CLIENT_ID:'${{ vars.OAUTH_CLIENT_ID }}' \
+            --var ALLOWED_ORIGINS:"$EDITOR_ORIGIN"
+
+      # The worker's URL is https://timber-oauth-broker.<account-subdomain>.workers.dev.
+      # Record it and push; that push (with a real DEPLOY_TOKEN) triggers the deploy
+      # workflow, which rebuilds the editor with OAuth active.
+      - name: Record the broker URL and trigger a deploy
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN || github.token }}
+        run: |
+          set -euo pipefail
+          SUBDOMAIN="$(curl -fsS \
+            -H "Authorization: Bearer $CF_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/workers/subdomain" \
+            | jq -r '.result.subdomain')"
+          if [ -z "$SUBDOMAIN" ] || [ "$SUBDOMAIN" = "null" ]; then
+            echo "Could not read your workers.dev subdomain. Enable workers.dev for your account, then re-run." >&2
+            exit 1
+          fi
+          URL="https://timber-oauth-broker.$SUBDOMAIN.workers.dev"
+          echo "Broker URL: $URL"
+          echo "$URL" > .timber-broker-url
+
+          OWNER='${{ github.repository_owner }}'
+          REPO='${{ github.event.repository.name }}'
+          SERVER='${{ github.server_url }}'; SERVER="${SERVER#https://}"
+          git config user.name 'Forgejo Actions'
+          git config user.email 'actions@noreply.codeberg.org'
+          git add .timber-broker-url
+          if git diff --cached --quiet; then
+            echo "Broker URL unchanged — trigger a deploy manually if the editor isn't yet OAuth-enabled."
+          else
+            git commit -m 'chore: record OAuth broker URL'
+            git push "https://x-access-token:${DEPLOY_TOKEN}@${SERVER}/${OWNER}/${REPO}.git" HEAD:main
+          fi
