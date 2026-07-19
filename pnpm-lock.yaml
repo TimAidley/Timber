@@ -226,6 +226,15 @@ importers:
 
   packages/oauth-broker: {}
 
+  spike/jekyll-minima:
+    dependencies:
+      '@timber/content':
+        specifier: workspace:*
+        version: link:../../packages/content
+      '@timber/generator':
+        specifier: workspace:*
+        version: link:../../packages/generator
+
 packages:
 
   '@asamuzakjp/css-color@3.2.0':

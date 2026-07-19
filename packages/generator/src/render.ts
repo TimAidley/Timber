@@ -51,6 +51,16 @@ export async function renderPage(input: RenderPageInput): Promise<string> {
       ...data,
       ...(input.lang !== undefined ? { lang: input.lang } : {}),
       ...(input.translations !== undefined ? { translations: input.translations } : {}),
+      // Computed page fields (Tier-1). `page.url` is the object's resolved URL — useful for
+      // canonical/self links and active-nav in Timber's own themes, and the single most
+      // common thing a ported theme reads off `page`. `page.collection` names the owning
+      // collection type. `page.content` mirrors the rendered body so a theme that reads
+      // `page.content` (as well as the bare `{{ content }}`) works. All are caller-supplied
+      // or derived here — never read from fs/DOM — so preview ≡ build. Computed keys win
+      // over same-named front matter, matching `lang`/`translations` above.
+      ...(input.url !== undefined ? { url: input.url } : {}),
+      ...(input.collection !== undefined ? { collection: input.collection } : {}),
+      content: new SafeHtml(content),
     },
     // The body is already rendered + sanitized HTML — mark it trusted so `{{ content }}`
     // emits it raw while every other output is auto-escaped (see liquid.ts).

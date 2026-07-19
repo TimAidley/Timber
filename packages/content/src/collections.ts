@@ -1,4 +1,5 @@
 import type { FrontMatter } from '@timber/generator';
+import type { SiteContext } from './seo.js';
 import type { ContentModel, ContentObject, ContentTypeSchema } from './types.js';
 import { isPublic } from './visibility.js';
 
@@ -103,4 +104,28 @@ export function assembleCollections(
   }
 
   return collections;
+}
+
+/**
+ * Expose each collection type on the `site` object as well (Tier-1) — so `site.posts`
+ * resolves the same array as `collections.posts`. Timber keeps `collections.<type>` as
+ * the **canonical, collision-safe** name (a user-defined type can be called anything, so
+ * walling the type namespace off from the settings namespace is deliberate); this adds a
+ * Jekyll-shaped alias for compatibility, **without ever clobbering a real settings key**:
+ * if the settings singleton already defines `site.<type>` (e.g. a type literally named
+ * `title`), that identity wins and the alias is skipped — `collections.<type>` stays the
+ * unambiguous escape hatch. Also mirrors the build/preview instant onto `site.time`
+ * (Jekyll's site-wide clock) when supplied. Returns a new object; the input is untouched.
+ */
+export function withCollectionAliases(
+  site: SiteContext,
+  collections: Collections,
+  now?: string,
+): SiteContext {
+  const merged: SiteContext = { ...site };
+  for (const [type, entries] of Object.entries(collections)) {
+    if (!(type in merged)) merged[type] = entries; // settings identity wins over the alias
+  }
+  if (now !== undefined && !('time' in merged)) merged.time = now;
+  return merged;
 }

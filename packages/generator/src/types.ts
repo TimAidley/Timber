@@ -55,6 +55,18 @@ export interface RenderPageInput {
   /** Optional per-page derived data (e.g. SEO) exposed as `{{ seo }}` (SPEC §13). */
   seo?: Record<string, unknown>;
   /**
+   * Optional resolved URL of this page, merged into the page context as `{{ page.url }}`
+   * (Tier-1). Supplied by the caller (which owns routing — homepage-at-root, base paths),
+   * so the core stays pure. Powers canonical/self links, active-nav highlighting, and the
+   * `page.url` a ported theme expects. Omit and `{{ page.url }}` is simply empty.
+   */
+  url?: string;
+  /**
+   * Optional owning collection-type name, merged into the page context as
+   * `{{ page.collection }}` (Tier-1) — the analogue of Jekyll's `page.collection`.
+   */
+  collection?: string;
+  /**
    * Optional resolved language of this page (SPEC §5 → Multilingual), merged into the
    * page context as `{{ page.lang }}` (winning over any front-matter `lang`). Supplied
    * by the caller — the generator core stays language-agnostic. Omit for a single-

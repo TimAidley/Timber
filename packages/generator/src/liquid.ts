@@ -1,5 +1,6 @@
 import { Liquid } from 'liquidjs';
 import { registerComparisonFilters } from './filters.js';
+import { registerUrlFilters } from './urlFilters.js';
 import type { TemplateMap } from './types.js';
 
 /**
@@ -68,6 +69,9 @@ export function createEngine(templates?: TemplateMap): Liquid {
   // Comparison query filters (SPEC §6) — `where` is equality-only, so these add
   // `where_gt`/`where_gte`/`where_lt`/`where_lte`/`where_ne`/`where_between` + `days_between`.
   registerComparisonFilters(engine);
+  // URL filters: `relative_url` / `absolute_url` (prefix `site.basePath` / `site.baseUrl`).
+  // A cleaner link idiom for Timber's own themes, and the highest-frequency Jekyll filters.
+  registerUrlFilters(engine);
   return engine;
 }
 

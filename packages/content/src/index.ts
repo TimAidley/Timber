@@ -17,7 +17,7 @@ export {
   translationsOf,
 } from './references.js';
 export type { Translation } from './references.js';
-export { assembleCollections } from './collections.js';
+export { assembleCollections, withCollectionAliases } from './collections.js';
 export type { Collections, CollectionEntry } from './collections.js';
 export { slugify, uniqueSlug } from './identity.js';
 export { redirectStubHtml, aliasUrls } from './redirects.js';
@@ -26,7 +26,13 @@ export { FIELD_KINDS, isFieldKind, fieldToJsonSchema } from './fields.js';
 export { parseVideoUrl } from './video.js';
 export type { VideoRef } from './video.js';
 export { validateFigureBlocks } from './figures.js';
-export { siteContext, pageSeo, buildSitemap, buildRobots, hreflangAlternates } from './seo.js';
+export {
+  siteContext,
+  pageSeo,
+  buildSitemap,
+  buildRobots,
+  hreflangAlternates,
+} from './seo.js';
 export type { SiteContext, PageSeo, HreflangAlternate } from './seo.js';
 export { themeStyle } from './theme.js';
 export { loadNavigation } from './navigation.js';
