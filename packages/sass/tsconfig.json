@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    // `URL` (required by dart-sass's importer API) lives in the WebWorker lib — available in
+    // both the browser and Node, without pulling in full DOM. `types: []` keeps Node globals out.
+    "lib": ["ES2022", "WebWorker"],
+    "types": []
+  },
+  "include": ["src/**/*.ts"]
+}

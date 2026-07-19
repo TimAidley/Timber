@@ -9,6 +9,7 @@
   "references": [
     { "path": "../generator" },
     { "path": "../content" },
-    { "path": "../jekyll-compat" }
+    { "path": "../jekyll-compat" },
+    { "path": "../sass" }
   ]
 }

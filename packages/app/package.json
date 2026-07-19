@@ -36,7 +36,8 @@
     "remark-stringify": "^11.0.0",
     "unist-util-visit": "^5.1.0",
     "yaml": "^2.6.1",
-    "@timber/jekyll-compat": "workspace:*"
+    "@timber/jekyll-compat": "workspace:*",
+    "@timber/sass": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "^18.3.12",

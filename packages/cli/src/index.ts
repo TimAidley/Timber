@@ -120,7 +120,7 @@ async function importThemeCommand(
   out.write(
     `Imported ${themeDir} → ${repoDir}\n` +
       `  ${r.templates.length} template(s) (root: ${r.rootLayout}, default: ${r.defaultLayout})\n` +
-      `  ${r.compiled.length} stylesheet(s) compiled, ${r.assets.length} asset(s) copied\n`,
+      `  ${r.assets.length} asset(s) copied (SCSS compiled at build/preview time)\n`,
   );
   if (mappedCount > 0) {
     const pairs = Object.entries(r.mapped)

@@ -6,12 +6,6 @@
   "bin": {
     "timber": "./dist/index.js"
   },
-  "exports": {
-    "./sass": {
-      "types": "./dist/sass.node.d.ts",
-      "default": "./dist/sass.node.js"
-    }
-  },
   "files": [
     "dist"
   ],
@@ -23,8 +17,8 @@
   "dependencies": {
     "@timber/content": "workspace:*",
     "@timber/generator": "workspace:*",
-    "sass": "^1.80.0",
-    "@timber/jekyll-compat": "workspace:*"
+    "@timber/jekyll-compat": "workspace:*",
+    "@timber/sass": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.2"

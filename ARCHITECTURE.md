@@ -21,6 +21,7 @@ a site* see **`INSTALL.md`**.
 | `@timber/generator` | remark/rehype → LiquidJS render core (one page) | browser **and** Node (isomorphic) |
 | `@timber/content` | Content model: schemas, id→object index, reference resolution, validation, SEO, navigation, redirects, video allowlist, visibility | browser and Node |
 | `@timber/jekyll-compat` | **Jekyll-theme import layer** (SPEC §2 → Tier A): the `importJekyllTheme` transform + `registerJekyllCompat` ecosystem filters/tags, plugged into the generator via its `extend` seam. Lets Tier-A (Liquid+CSS) Jekyll themes be imported and rendered by Timber's own generator | browser and Node |
+| `@timber/sass` | **Isomorphic SCSS compiler** (SPEC §6): `compileScss` — dart-sass driven by an **in-memory importer** over the repo snapshot, so the browser preview and the Node build compile stylesheets identically (preview ≡ build). dart-sass is pure JS; lazy-loaded in the browser | browser and Node |
 | `@timber/cli` | `timber build . _site` — builds the whole static site | Node (CI) |
 | `@timber/app` | The browser editor SPA (React): auth, editor, preview, media pipeline | browser |
 | `@timber/host` | The **host-provider port**: host-neutral types + the `HostProvider` interface (`HostRepo` + `HostIdentity` + optional `DeployBackend`) the editor depends on, so a git host is a swappable adapter | browser and Node |
@@ -247,14 +248,15 @@ Cross-cutting things and every file they touch:
   `register.ts`). A consumer renders an imported theme with
   `renderPage({ …, templates: importJekyllTheme(files, root), extend: registerJekyllCompat })`.
   Escaping reconciliation (drop redundant `escape`/`xml_escape`) lives in the transform; keep
-  it in lockstep with the generator's auto-escape default (SPEC §6). A theme's **SCSS** is
-  compiled by a **Node/CI-side** helper — `@timber/cli`'s `compileThemeStylesheet`
-  (`packages/cli/src/sass.node.ts`, dart-sass, exposed at `@timber/cli/sass`) — kept out of the
-  browser bundle exactly like `sharp` (SPEC §7); the browser preview falls back to committed
-  CSS. The **adopt-once** flow is `@timber/cli`'s `import-theme` command
-  (`packages/cli/src/importTheme.node.ts`): transform → write `templates/*.liquid`, compile
-  SCSS, copy assets. `buildSite` (`build.node.ts`) auto-passes `extend: registerJekyllCompat`
-  so an adopted theme's `{% seo %}`/`date_to_xmlschema`/… build with plain `timber build`
+  it in lockstep with the generator's auto-escape default (SPEC §6). **SCSS** is compiled
+  **isomorphically** by `@timber/sass` (`compileScss`, in-memory importer) in BOTH
+  `build.node.ts` (`assets/**/*.scss` → `.css`, load path `assets/_sass`) and the app preview
+  (`siteTheme.ts`) — keep the two in lockstep (same load path + main-vs-partial rule) for
+  preview ≡ build. The **adopt-once** flow is `@timber/cli`'s `import-theme` command
+  (`packages/cli/src/importTheme.node.ts`): transform → write `templates/*.liquid`, copy assets
+  + the SCSS source (`_sass/` → `assets/_sass/`). `buildSite` (`build.node.ts`) auto-passes
+  `extend: registerJekyllCompat` so an adopted theme's `{% seo %}`/`date_to_xmlschema`/… build
+  with plain `timber build`
   (the layer is additive — no built-in overrides — so native sites are unaffected). The **app
   preview** (`packages/app/src/preview/renderSitePage.ts`) registers the same and inlines
   whichever committed stylesheet the page `<link>`s (`siteTheme.ts` loads all `assets/**/*.css`),

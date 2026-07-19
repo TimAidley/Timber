@@ -101,30 +101,17 @@ Proven end-to-end against **Minima** (renders + compiles its SCSS) and **Beautif
 
 Known limits (the "mainly compatible, not 100%" residue):
 
-- **CSS/Sass** is a **Node/CI-side build step**, not part of the browser render. Use
-  `@timber/cli`'s `compileThemeStylesheet` (dart-sass) — it strips the SCSS front matter,
-  resolves any Liquid (e.g. a `{{ site.…skin }}` `@import`) through the generator engine, and
-  compiles against the theme's `_sass` load path:
-
-  ```ts
-  import { compileThemeStylesheet } from '@timber/cli/sass';
-  const css = await compileThemeStylesheet({
-    source: styleScss,
-    loadPaths: [themeSassDir],
-    resolve: (scss) => engine.parseAndRender(scss, { site }), // resolves the skin @import
-  });
-  ```
-
-  This mirrors the responsive-image precedent (SPEC §7 → `sharp`): heavy asset processing runs
-  at build time, and the browser **preview falls back to committed CSS** — the one styling
-  concern where preview isn't byte-identical to the build.
+- **CSS/Sass is compiled isomorphically** — the import just commits the theme's SCSS *source*
+  (its `assets/**/*.scss` + its `_sass/` partials, placed under `assets/_sass/`), and both the
+  Node build and the browser preview compile it via `@timber/sass` (`compileScss`, dart-sass +
+  an in-memory importer). A **main** stylesheet is a `.scss` with a `---` front-matter fence
+  (compiled to a sibling `.css`); partials (no fence) are pulled in via `@import`. So **preview
+  ≡ build for styling** — no committed-CSS fallback. (SCSS is a general Timber feature now, not
+  import-only: any site can author `assets/*.scss`.)
 - **In-editor preview** — the editor's live preview registers the same ecosystem filters/tags
-  as the build, so an adopted theme using `{% seo %}` etc. previews correctly (preview ≡ build),
-  and it inlines whichever committed stylesheet the page `<link>`s (any `assets/**/*.css` path,
-  base-path aware) — so an adopted theme with its compiled CSS committed (as `import-theme`
-  writes) previews **styled**. The remaining gap is SCSS: it isn't compiled in-browser, so if
-  you edit a theme's `.scss` in the editor the preview shows the last *committed* CSS until you
-  re-run `import-theme` (the `sharp` precedent — heavy asset work stays build-side).
+  as the build *and* compiles SCSS in-browser (isomorphic dart-sass), so an adopted theme using
+  `{% seo %}` and shipping `.scss` previews exactly as it builds (preview ≡ build), edits to a
+  theme's `.scss` included.
 - **Parenthesized conditions** — LiquidJS rejects `{% if a and (b != c) %}` (SPEC §6: no parens
   in conditions). Rare; a one-line manual edit per occurrence.
 - **Pagination, taxonomy/archive pages, `site.data` i18n, RSS/feeds** — Tier-B features Timber

@@ -1,0 +1,22 @@
+{
+  "name": "@timber/sass",
+  "version": "0.0.0",
+  "description": "Isomorphic SCSS compilation (dart-sass) with an in-memory importer, so the browser preview and the Node build compile stylesheets identically (preview ≡ build).",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "sass": "^1.80.0"
+  }
+}

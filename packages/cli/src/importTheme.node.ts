@@ -1,8 +1,6 @@
 import { readdir, readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join, dirname, relative, sep } from 'node:path';
-import { createEngine } from '@timber/generator';
 import { importJekyllTheme } from '@timber/jekyll-compat';
-import { compileThemeStylesheet } from './sass.node.js';
 
 /**
  * **Adopt-once** import of a Jekyll theme into a Timber content repo (SPEC §2 → Tier A). A
@@ -32,10 +30,8 @@ export interface ImportThemeOptions {
 export interface ImportThemeResult {
   /** Repo-relative template paths written. */
   templates: string[];
-  /** Repo-relative asset paths copied verbatim. */
+  /** Repo-relative asset paths copied verbatim (incl. SCSS source + `_sass/` partials). */
   assets: string[];
-  /** Repo-relative CSS paths compiled from SCSS. */
-  compiled: string[];
   rootLayout: string;
   defaultLayout: string;
   /** The `type → layout` wiring applied (from `typeMap`). */
@@ -167,39 +163,21 @@ export async function importThemeToRepo(
     mapped[type] = layout;
   }
 
-  // Assets: compile front-matter SCSS (resolve the skin @import via the engine → the theme's
-  // `default:` skin), copy everything else verbatim.
-  const engine = createEngine();
-  const resolve = (scss: string): Promise<string> =>
-    engine.parseAndRender(scss, { site: {} });
-  const sassLoadPath = join(themeDir, '_sass');
+  // Assets: copy the theme's `assets/**` (including any `.scss` source) verbatim, plus its
+  // `_sass/` partials into `assets/_sass/` (Timber's Sass load path). SCSS is NOT compiled
+  // here — the build and the browser preview compile it isomorphically (@timber/sass), so the
+  // repo carries the SCSS *source* and stays editable. Bytes are copied (images, fonts, …).
   const assets: string[] = [];
-  const compiled: string[] = [];
-  for (const rel of await walk(join(themeDir, 'assets'))) {
-    const from = join(themeDir, 'assets', rel);
-    // A Jekyll main stylesheet is `.scss` carrying a `---` front-matter fence; only those are
-    // Liquid-processed + compiled. Partial `.scss` (no fence) are pulled in via @import, and
-    // everything else (committed CSS, JS, images) copies verbatim.
-    const isMainScss =
-      rel.endsWith('.scss') && /^---\r?\n/.test(await readFile(from, 'utf8'));
-    if (isMainScss) {
-      const css = await compileThemeStylesheet({
-        source: await readFile(from, 'utf8'),
-        loadPaths: [sassLoadPath],
-        resolve,
-      });
-      const outRel = `assets/${rel.replace(/\.scss$/, '.css')}`;
+  async function copyTree(fromDir: string, toRelBase: string): Promise<void> {
+    for (const rel of await walk(fromDir)) {
+      const outRel = toRelBase ? `${toRelBase}/${rel}` : rel;
       await mkdir(dirname(join(repoDir, outRel)), { recursive: true });
-      await writeFile(join(repoDir, outRel), css, 'utf8');
-      compiled.push(outRel);
-    } else if (!rel.endsWith('.scss')) {
-      // Skip partial .scss (consumed by @import); copy other assets verbatim.
-      const outRel = `assets/${rel}`;
-      await mkdir(dirname(join(repoDir, outRel)), { recursive: true });
-      await writeFile(join(repoDir, outRel), await readFile(from), 'utf8');
+      await writeFile(join(repoDir, outRel), await readFile(join(fromDir, rel)));
       assets.push(outRel);
     }
   }
+  await copyTree(join(themeDir, 'assets'), 'assets');
+  await copyTree(join(themeDir, '_sass'), 'assets/_sass');
 
-  return { templates: written, assets, compiled, rootLayout, defaultLayout, mapped };
+  return { templates: written, assets, rootLayout, defaultLayout, mapped };
 }

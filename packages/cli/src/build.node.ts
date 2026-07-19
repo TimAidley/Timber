@@ -1,7 +1,8 @@
 import { readdir, readFile, writeFile, mkdir } from 'node:fs/promises';
 import { dirname, join, relative, sep } from 'node:path';
-import { renderPage, buildClock } from '@timber/generator';
+import { renderPage, buildClock, createEngine } from '@timber/generator';
 import { registerJekyllCompat } from '@timber/jekyll-compat';
+import { compileScss } from '@timber/sass';
 import {
   aliasUrls,
   assembleCollections,
@@ -154,9 +155,39 @@ export async function buildSite(repoDir: string, outDir: string): Promise<BuildR
   let redirects = 0;
   const sitemapUrls: string[] = [];
 
-  // Site-wide assets: /assets/** → <out>/assets/**
-  for (const rel of await walkFiles(join(repoDir, 'assets'))) {
-    await copyFile(join(repoDir, 'assets', rel), join(outDir, 'assets', rel));
+  // Site-wide assets: /assets/** → <out>/assets/**. SCSS is compiled (isomorphic dart-sass —
+  // same as the browser preview, SPEC §6); a *main* stylesheet (a `.scss` carrying a `---`
+  // front-matter fence, the Jekyll convention) becomes a sibling `.css`, partials (no fence,
+  // e.g. under `assets/_sass/`) are consumed via `@import` and not emitted, everything else
+  // copies verbatim. `@import`/`@use` resolve against `assets/_sass` + the file's own dir.
+  const assetRels = await walkFiles(join(repoDir, 'assets'));
+  const scssFiles: Record<string, string> = {};
+  for (const rel of assetRels) {
+    if (rel.endsWith('.scss')) {
+      scssFiles[`assets/${rel}`] = await readFile(join(repoDir, 'assets', rel), 'utf8');
+    }
+  }
+  const scssEngine = createEngine();
+  const scssResolve = (scss: string): Promise<string> =>
+    scssEngine.parseAndRender(scss, { site });
+  for (const rel of assetRels) {
+    const repoPath = `assets/${rel}`;
+    if (rel.endsWith('.scss')) {
+      const source = scssFiles[repoPath]!;
+      if (!/^---\r?\n/.test(source)) continue; // a partial — pulled in via @import, not emitted
+      const css = await compileScss({
+        source,
+        entryPath: repoPath,
+        files: scssFiles,
+        loadPaths: ['assets/_sass'],
+        resolve: scssResolve,
+      });
+      const outRel = rel.replace(/\.scss$/, '.css');
+      await mkdir(join(outDir, 'assets', dirname(outRel)), { recursive: true });
+      await writeFile(join(outDir, 'assets', outRel), css, 'utf8');
+    } else {
+      await copyFile(join(repoDir, 'assets', rel), join(outDir, 'assets', rel));
+    }
     assets += 1;
   }
 

@@ -75,22 +75,26 @@ describe('importThemeToRepo (adopt-once)', () => {
     expect(post).toContain('class="post h-entry"'); // real Minima markup, untouched
   });
 
-  it('compiles the theme SCSS to CSS (skin @import resolved, no Liquid left)', async () => {
-    expect(result.compiled).toContain('assets/css/style.css');
-    const css = await readFile(join(repo, 'assets/css/style.css'), 'utf8');
-    expect(css).toContain('.site-header');
-    expect(css).not.toContain('@import');
-    expect(css).not.toContain('{{');
+  it('copies the theme SCSS source + _sass partials (compiled at build time, not import)', async () => {
+    expect(result.assets).toContain('assets/css/style.scss'); // source copied, NOT pre-compiled
+    expect(result.assets.some((a) => a.startsWith('assets/_sass/minima/'))).toBe(true);
+    expect(result.assets).not.toContain('assets/css/style.css'); // no compiled CSS in the repo
   });
 
-  it('timber build produces a page styled by the imported theme', async () => {
+  it('timber build compiles the SCSS and produces a page styled by the imported theme', async () => {
     const out = await mkdtemp(join(tmpdir(), 'timber-out-'));
     const built = await buildSite(repo, out);
     expect(built.pages).toBeGreaterThanOrEqual(1);
 
+    // The build compiled assets/css/style.scss → assets/css/style.css.
+    const css = await readFile(join(out, 'assets', 'css', 'style.css'), 'utf8');
+    expect(css).toContain('.site-header');
+    expect(css).not.toContain('@import'); // partials inlined
+    expect(css).not.toContain('{{'); // skin interpolation resolved
+
     const html = await readFile(join(out, 'pages', 'about', 'index.html'), 'utf8');
     expect(html).toContain('class="site-header"'); // theme chrome (base → header include)
-    expect(html).toContain('/mysite/assets/css/style.css'); // compiled stylesheet, base-pathed
+    expect(html).toContain('/mysite/assets/css/style.css'); // stylesheet link, base-pathed
     expect(html).toContain('About'); // the page title
     expect(html).toContain('<strong>tree nerd</strong>'); // markdown body rendered
     expect(html).not.toContain('{%'); // no unresolved Liquid

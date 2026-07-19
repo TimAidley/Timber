@@ -1,3 +1,5 @@
+import { createEngine } from '@timber/generator';
+import { compileScss } from '@timber/sass';
 import type { HostProvider } from '@timber/host';
 
 /**
@@ -26,6 +28,7 @@ export interface SiteTheme {
 
 const TEMPLATE_RE = /^templates\/.+\.liquid$/;
 const STYLESHEET_RE = /^assets\/.*\.css$/;
+const SCSS_RE = /^assets\/.*\.scss$/;
 const CSS_URL_RE = /url\(\s*(['"]?)([^'")]+)\1\s*\)/g;
 
 /** Resolve a CSS-relative ref (e.g. `fonts/x.woff2` inside `assets/theme.css`) to a
@@ -125,6 +128,41 @@ export async function loadSiteTheme(
         );
       }),
   );
+
+  // Compile SCSS the same way the build does (isomorphic dart-sass, SPEC §6) so preview ≡ build
+  // for styling. Load every `.scss` into a map for the in-memory importer, compile each MAIN
+  // stylesheet (one carrying a `---` front-matter fence) to CSS under its `.css` path — so the
+  // page's `<link>` to that `.css` inlines the compiled result — resolving `@import`/`@use`
+  // against `assets/_sass`. Partials (no fence) are pulled in, not emitted.
+  const scssFiles: Record<string, string> = {};
+  await Promise.all(
+    [...shaByPath]
+      .filter(([path]) => SCSS_RE.test(path))
+      .map(async ([path, sha]) => {
+        scssFiles[path] = await client.readBlob(sha);
+      }),
+  );
+  if (Object.keys(scssFiles).length > 0) {
+    const engine = createEngine();
+    const resolve = (scss: string): Promise<string> =>
+      engine.parseAndRender(scss, { site: {} });
+    for (const [path, source] of Object.entries(scssFiles)) {
+      if (!/^---\r?\n/.test(source)) continue; // a partial — not a rendered stylesheet
+      const css = await compileScss({
+        source,
+        entryPath: path,
+        files: scssFiles,
+        loadPaths: ['assets/_sass'],
+        resolve,
+      });
+      const cssPath = path.replace(/\.scss$/, '.css');
+      const baseDir = cssPath.slice(0, cssPath.lastIndexOf('/'));
+      stylesheets.set(
+        cssPath,
+        await inlineCssAssets(css, baseDir, client, shaByPath, objectUrls),
+      );
+    }
+  }
 
   const navSha =
     shaByPath.get('config/navigation.yml') ?? shaByPath.get('config/navigation.yaml');
