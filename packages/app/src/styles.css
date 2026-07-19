@@ -681,13 +681,44 @@ body {
   color: var(--text-muted);
 }
 
-/* Language chip strip on a translation cluster's list row (SPEC §5 → Multilingual):
-   one chip per site language — present languages are buttons, missing ones muted gaps. */
-.object-list__langs {
+/* A translation cluster row (SPEC §5 → Multilingual): the title button grows and
+   truncates on the left; the language chips sit inline on the right, so each cluster is
+   one compact row instead of a title block plus a separate chip strip below. On a narrow
+   sidebar the chips wrap under the title rather than crushing it. */
+.object-cluster {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.25rem;
-  padding: 0.1rem 0.6rem 0.35rem;
+  align-items: center;
+  column-gap: 0.25rem;
+}
+/* Highlight the whole row (title + chips) when a variant in the cluster is selected,
+   so the accent doesn't stop halfway across at the title button's edge. */
+.object-cluster.is-active {
+  background: var(--accent-soft);
+  border-radius: var(--radius);
+}
+.object-cluster > .object-cluster__main {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto; /* override .object-list button's width: 100% so chips share the row */
+}
+.object-cluster > .object-cluster__main .object-list__title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Language chip strip: one chip per site language — present languages are buttons,
+   missing ones muted gaps. A fixed-width, single-line unit pushed to the row's right edge
+   (0.6rem inset); it stays intact and, only if the title leaves no room, wraps below as a
+   whole (via the row's flex-wrap) rather than stacking its chips one-per-line. */
+.object-list__langs {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  gap: 0.2rem;
+  margin-left: auto;
+  padding: 0 0.6rem 0 0;
 }
 
 .object-list__lang {
