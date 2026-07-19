@@ -115,11 +115,12 @@ Known limits (the "mainly compatible, not 100%" residue):
   This mirrors the responsive-image precedent (SPEC §7 → `sharp`): heavy asset processing runs
   at build time, and the browser **preview falls back to committed CSS** — the one styling
   concern where preview isn't byte-identical to the build.
-- **In-editor preview** — the CLI `build` auto-registers the Jekyll ecosystem filters/tags, but
-  the browser editor's live preview does not yet, so an adopted theme using `{% seo %}` etc.
-  won't preview until the app registers `registerJekyllCompat` too (a small follow-up; the
-  built site is correct meanwhile). SCSS also isn't compiled in-browser — preview falls back to
-  the committed CSS (the `sharp` precedent).
+- **In-editor preview** — the editor's live preview registers the same ecosystem filters/tags
+  as the build, so an adopted theme using `{% seo %}` etc. previews correctly (preview ≡ build).
+  The one preview gap is styling: SCSS isn't compiled in-browser, and the preview only inlines a
+  stylesheet committed at the conventional `assets/theme.css` path — a theme whose CSS lives
+  elsewhere (e.g. Minima's `assets/css/style.css`) previews unstyled, though the built site is
+  fully styled (the `sharp` precedent — preview falls back).
 - **Parenthesized conditions** — LiquidJS rejects `{% if a and (b != c) %}` (SPEC §6: no parens
   in conditions). Rare; a one-line manual edit per occurrence.
 - **Pagination, taxonomy/archive pages, `site.data` i18n, RSS/feeds** — Tier-B features Timber

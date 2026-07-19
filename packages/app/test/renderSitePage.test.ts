@@ -82,14 +82,23 @@ describe('renderSitePage', () => {
     // An inline two-language site, rendered through the shipped default theme, so the
     // preview exercises the same i18n path the CLI build does (SPEC §5 → Multilingual).
     const snapshot: RepoSnapshot = new Map([
-      ['config/schemas/posts.yml', 'kind: collection\nhasBody: true\nfields:\n  title:\n    type: text\n'],
+      [
+        'config/schemas/posts.yml',
+        'kind: collection\nhasBody: true\nfields:\n  title:\n    type: text\n',
+      ],
       ['config/schemas/settings.yml', read('config/schemas/settings.yml')],
       [
         'content/settings/index.md',
         '---\ntitle: Multi\nbaseUrl: https://ex.test\nlanguages:\n  - en\n  - fr\ndefaultLanguage: en\n---\n',
       ],
-      ['content/posts/en/hi/index.md', '---\nid: HI-EN\ntitle: Hi\ntranslationKey: T\npublic: true\n---\nHi.\n'],
-      ['content/posts/fr/salut/index.md', '---\nid: HI-FR\ntitle: Salut\ntranslationKey: T\npublic: true\n---\nSalut.\n'],
+      [
+        'content/posts/en/hi/index.md',
+        '---\nid: HI-EN\ntitle: Hi\ntranslationKey: T\npublic: true\n---\nHi.\n',
+      ],
+      [
+        'content/posts/fr/salut/index.md',
+        '---\nid: HI-FR\ntitle: Salut\ntranslationKey: T\npublic: true\n---\nSalut.\n',
+      ],
     ]);
     const model = assembleContent(snapshot, loadSchemas(snapshot));
     const theme: SiteTheme = {
@@ -120,7 +129,12 @@ describe('renderSitePage', () => {
   it('throws a helpful error when no template resolves', async () => {
     const { model } = fixture();
     const object = home(model);
-    const empty: SiteTheme = { templates: new Map(), css: '', navigationYml: null, objectUrls: [] };
+    const empty: SiteTheme = {
+      templates: new Map(),
+      css: '',
+      navigationYml: null,
+      objectUrls: [],
+    };
     await expect(
       renderSitePage({
         model,
@@ -132,5 +146,38 @@ describe('renderSitePage', () => {
         assetStore: new AssetStore(),
       }),
     ).rejects.toThrow(/default\.liquid/);
+  });
+
+  it('previews an imported-theme template using {% seo %} + Jekyll filters (preview ≡ build)', async () => {
+    // An adopted Jekyll theme's template still calls `{% seo %}` / `date_to_xmlschema`; the
+    // preview must register the same compat layer the CLI build does, or it would throw
+    // "tag seo not found". This proves the preview engine has them (SPEC §2 → Tier A).
+    const { model } = fixture();
+    const object = home(model);
+    const theme: SiteTheme = {
+      templates: new Map([
+        [
+          'default.liquid',
+          '<!doctype html><html><head>{% seo %}</head><body>' +
+            '<time datetime="{{ page.date | date_to_xmlschema }}">d</time>' +
+            '{% block main %}{{ content }}{% endblock %}</body></html>',
+        ],
+      ]),
+      css: '',
+      navigationYml: null,
+      objectUrls: [],
+    };
+    const html = await renderSitePage({
+      model,
+      object,
+      schema: model.schemas.get(object.type)!,
+      data: { ...object.data, date: '2026-05-02T09:00:00Z' },
+      body: object.body,
+      theme,
+      assetStore: new AssetStore(),
+    });
+    expect(html).toContain('<title>'); // {% seo %} emitted (would throw if unregistered)
+    expect(html).toContain('datetime="2026-05-02T09:00:00.000Z"'); // date_to_xmlschema
+    expect(html).not.toContain('{%'); // no unresolved Liquid
   });
 });
