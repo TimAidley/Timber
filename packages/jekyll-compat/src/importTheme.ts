@@ -1,4 +1,4 @@
-import type { TemplateMap } from '@timber/generator';
+import { parseFrontMatter, type TemplateMap } from '@timber/generator';
 
 /**
  * The mechanical "import a Jekyll template" transform. Rather than run Jekyll templates
@@ -104,20 +104,39 @@ export function importJekyllTemplate(source: string, opts: ImportOptions = {}): 
   return body;
 }
 
+/** The result of importing a whole Jekyll theme. */
+export interface ImportedTheme {
+  /** Bare name → Timber-compatible Liquid, ready to hand to `renderPage` as `templates`. */
+  templates: TemplateMap;
+  /**
+   * Per-layout front-matter data (minus the `layout:` key) — the analogue of Jekyll's
+   * `layout.*`. A theme whose root layout stashes asset lists in its front matter reads them
+   * back via `layout.common-css` etc.; pass `layoutData[rootLayout]` to `renderPage`'s
+   * `layout` option so those resolve. Only templates that HAD data appear here.
+   */
+  layoutData: Record<string, Record<string, unknown>>;
+}
+
 /**
  * Import a whole set of Jekyll theme templates (bare name → source) into a Timber
- * {@link TemplateMap} ready to hand to `renderPage`. `rootLayout` names the theme's base
- * layout (the one others chain to via front-matter `layout:`), which gets the parent-layout
- * `{{ content }}` → `{% block main %}` treatment; everything else is imported as a child
- * layout or a plain include.
+ * {@link TemplateMap} + per-layout data. `rootLayout` names the theme's base layout (the one
+ * others chain to via front-matter `layout:`), which gets the parent-layout `{{ content }}` →
+ * `{% block main %}` treatment; everything else is imported as a child layout or a plain
+ * include. Each template's front matter (beyond `layout:`) is collected into `layoutData`.
  */
 export function importJekyllTheme(
   files: Record<string, string>,
   rootLayout: string,
-): TemplateMap {
-  const map: TemplateMap = {};
+): ImportedTheme {
+  const templates: TemplateMap = {};
+  const layoutData: Record<string, Record<string, unknown>> = {};
   for (const [name, source] of Object.entries(files)) {
-    map[name] = importJekyllTemplate(source, { asParentLayout: name === rootLayout });
+    templates[name] = importJekyllTemplate(source, {
+      asParentLayout: name === rootLayout,
+    });
+    const data = { ...parseFrontMatter(source).data };
+    delete data.layout; // the chaining directive, not data
+    if (Object.keys(data).length > 0) layoutData[name] = data;
   }
-  return map;
+  return { templates, layoutData };
 }

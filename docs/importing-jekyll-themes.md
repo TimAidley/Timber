@@ -22,6 +22,10 @@ See also: SPEC §2 (the tiered decision), SPEC §6 (the template contract), ARCH
   - the Jekyll `include.foo` param namespace → bare `foo` locals;
   - dropping redundant `escape` / `escape_once` / `xml_escape` (Timber auto-escapes — see
     "Escaping" below).
+
+  It returns `{ templates, layoutData }` — `layoutData[<layout>]` holds that layout's
+  front-matter data (Jekyll's `layout.*`, e.g. a base layout's CSS/JS asset lists). Pass
+  `layout: layoutData[rootLayout]` to `renderPage` so `layout.common-css` etc. resolve.
 - **`registerJekyllCompat(engine)`** — the Jekyll *ecosystem* Liquid filters and tags Timber
   doesn't ship natively: `date_to_xmlschema`, `date_to_string`, `slugify`, `jsonify`,
   `number_of_words`, a Ruby-`strftime` `date`, and `{% seo %}` / `{% feed_meta %}` (the former
@@ -35,7 +39,7 @@ See also: SPEC §2 (the tiered decision), SPEC §6 (the template contract), ARCH
 import { renderPage } from '@timber/generator';
 import { importJekyllTheme, registerJekyllCompat } from '@timber/jekyll-compat';
 
-const templates = importJekyllTheme(
+const { templates, layoutData } = importJekyllTheme(
   { ...layouts, ...includes }, // bare name → source, e.g. { base: '…', post: '…', head: '…' }
   'base',                      // the theme's root layout
 );
@@ -45,6 +49,7 @@ const html = await renderPage({
   template: templates[entryTemplate], // e.g. templates.post
   templates,
   site, collections, seo, url, // from Timber's content APIs (siteContext / assembleCollections / …)
+  layout: layoutData['base'],  // Jekyll's layout.* — the root layout's front-matter data (asset lists, …)
   extend: registerJekyllCompat,
 });
 ```
@@ -69,9 +74,6 @@ Known limits (the "mainly compatible, not 100%" residue):
 
 - **CSS/Sass** is a separate step. Timber copies CSS verbatim and has no Sass compiler yet;
   compile a theme's SCSS to CSS on import (dart-sass — pure JS) or ship pre-compiled CSS.
-- **`layout.*` front-matter bag** — a theme that stashes asset lists in a layout's own front
-  matter and reads them via `layout.common-css` etc. is not yet supported (those `<link>`s
-  render empty). Tier-B-ish; deferred.
 - **Parenthesized conditions** — LiquidJS rejects `{% if a and (b != c) %}` (SPEC §6: no parens
   in conditions). Rare; a one-line manual edit per occurrence.
 - **Pagination, taxonomy/archive pages, `site.data` i18n, RSS/feeds** — Tier-B features Timber

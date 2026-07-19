@@ -74,6 +74,14 @@ export interface RenderPageInput {
    */
   collection?: string;
   /**
+   * Optional layout-scoped data exposed as top-level `{{ layout }}` — the analogue of
+   * Jekyll's `layout.*`, where a layout stashes data (e.g. asset lists) in its own front
+   * matter and reads it back. Timber's own layouts don't use this; it's supplied by the
+   * Jekyll import path (`@timber/jekyll-compat`) so an imported theme's `layout.common-css`
+   * etc. resolve. Absent for native pages, where `{{ layout.x }}` simply renders empty.
+   */
+  layout?: Record<string, unknown>;
+  /**
    * Optional resolved language of this page (SPEC §5 → Multilingual), merged into the
    * page context as `{{ page.lang }}` (winning over any front-matter `lang`). Supplied
    * by the caller — the generator core stays language-agnostic. Omit for a single-

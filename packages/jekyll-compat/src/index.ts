@@ -20,4 +20,4 @@ export { registerJekyllCompat } from './register.js';
 export { registerJekyllFilters, strftime } from './filters.js';
 export { registerJekyllTags } from './tags.js';
 export { importJekyllTemplate, importJekyllTheme } from './importTheme.js';
-export type { ImportOptions } from './importTheme.js';
+export type { ImportOptions, ImportedTheme } from './importTheme.js';

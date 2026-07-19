@@ -134,10 +134,10 @@ async function readDir(sub: string): Promise<Record<string, string>> {
 }
 
 beforeAll(async () => {
-  templates = importJekyllTheme(
+  ({ templates } = importJekyllTheme(
     { ...(await readDir('_layouts')), ...(await readDir('_includes')) },
     'base',
-  );
+  ));
   site = siteContext(settings);
   collections = assembleCollections(model, effectiveUrl);
   for (const entry of collections.pages ?? []) entry.path = entry.url; // header nav's site.pages | map:"path"

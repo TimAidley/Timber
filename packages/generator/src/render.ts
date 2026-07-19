@@ -96,6 +96,9 @@ export async function renderPage(input: RenderPageInput): Promise<string> {
       site: input.site ?? {},
       collections: input.collections ?? {},
       seo: input.seo ?? {},
+      // Layout-scoped data (Jekyll's `layout.*`), supplied by the import path. Omitted for
+      // native pages, where `{{ layout.x }}` is simply empty.
+      layout: input.layout ?? {},
       // Temporal context (SPEC §6): top-level so `where_exp`/comparison filters can read
       // `today`/`now` directly. Omitted keys simply render as empty.
       now: input.now,

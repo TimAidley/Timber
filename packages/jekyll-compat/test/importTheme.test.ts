@@ -68,7 +68,7 @@ describe('importJekyllTemplate', () => {
 
 describe('importJekyllTheme', () => {
   it('builds a TemplateMap, treating only the named root layout as parent', () => {
-    const map = importJekyllTheme(
+    const { templates: map } = importJekyllTheme(
       {
         base: '<main>{{ content }}</main>',
         post: '---\nlayout: base\n---\n<article>{{ content }}</article>',
@@ -80,5 +80,19 @@ describe('importJekyllTheme', () => {
     expect(map.post).toContain("{% layout 'base' %}"); // child chains up
     expect(map.post).toContain('<article>{{ content }}</article>'); // page content kept
     expect(map.head).toBe('<meta>'); // plain include untouched
+  });
+
+  it("collects each layout's front matter (minus layout:) as layoutData", () => {
+    const { layoutData } = importJekyllTheme(
+      {
+        base: '---\nlayout: null\ncommon-css:\n  - "/a.css"\n  - "/b.css"\n---\n<html></html>',
+        post: '---\nlayout: base\n---\nbody',
+        head: '<meta>',
+      },
+      'base',
+    );
+    expect(layoutData.base).toEqual({ 'common-css': ['/a.css', '/b.css'] });
+    expect(layoutData.post).toBeUndefined(); // only `layout:` → no data
+    expect(layoutData.head).toBeUndefined(); // no front matter
   });
 });

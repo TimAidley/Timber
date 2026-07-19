@@ -32,17 +32,17 @@ function applyManualFixes(templates: Record<string, string>): Record<string, str
  * under Timber's engine — that exercises the transform across 33 files of real-world idiom
  * variety (dynamic-name includes, `include.*` params, nested control flow, layout chains).
  *
- * Known scoped gap (audit's `layout.*` RED item, Tier-B): Beautiful-Jekyll's `base` layout
+ * The `layout.*` front-matter bag (audit's `layout.*` item): Beautiful-Jekyll's `base` layout
  * stashes its CSS/JS asset lists in its OWN front matter and reads them back via `layout.*`.
- * We don't surface a per-layout `layout` object, so those `<link>`/`<script>` lists render
- * empty — the reading experience (chrome, nav, content) is intact, the asset wiring is not.
- * That's a documented follow-up, not a transform failure.
+ * `importJekyllTheme` collects that into `layoutData`; passing `layout: layoutData.base` to
+ * `renderPage` resolves those references, so the `<head>` asset `<link>`s render too.
  */
 
 const here = dirname(fileURLToPath(import.meta.url));
 const BJ = join(here, 'fixtures', 'beautiful-jekyll');
 
 let templates: Record<string, string>;
+let layoutData: Record<string, Record<string, unknown>>;
 
 async function readDir(sub: string): Promise<Record<string, string>> {
   const out: Record<string, string> = {};
@@ -54,12 +54,12 @@ async function readDir(sub: string): Promise<Record<string, string>> {
 }
 
 beforeAll(async () => {
-  templates = applyManualFixes(
-    importJekyllTheme(
-      { ...(await readDir('_layouts')), ...(await readDir('_includes')) },
-      'base',
-    ),
+  const imported = importJekyllTheme(
+    { ...(await readDir('_layouts')), ...(await readDir('_includes')) },
+    'base',
   );
+  templates = applyManualFixes(imported.templates);
+  layoutData = imported.layoutData;
 });
 
 describe('Beautiful-Jekyll import transform generalizes', () => {
@@ -83,10 +83,10 @@ describe('Beautiful-Jekyll import transform generalizes', () => {
     }
   });
 
-  it('renders the core reading path (a post) end-to-end', async () => {
-    // Minimal site config + a post. Missing site.* keys render empty (jsTruthy guards),
-    // and the layout.* asset lists are absent (documented gap) — but the body, title, and
-    // date must render, proving the full base→post→includes chain executes.
+  it('renders the core reading path (a post) end-to-end, incl. layout.* head assets', async () => {
+    // Minimal site config + a post. Missing site.* keys render empty (jsTruthy guards). The
+    // base layout's front-matter asset lists reach the theme via `layout: layoutData.base`
+    // (Jekyll's layout.*), so the <head> CDN links render too.
     const site = {
       title: 'Timberline',
       basePath: '/mysite',
@@ -100,11 +100,15 @@ describe('Beautiful-Jekyll import transform generalizes', () => {
       site,
       url: '/2026/05/02/hello/',
       collection: 'posts',
+      layout: layoutData.base,
       extend: registerJekyllCompat,
     });
     expect(html).toContain('Hello Beautiful World'); // page.title in the post header
     expect(html).toContain('<strong>bold</strong>'); // markdown body → html
     expect(html).toContain('<!DOCTYPE html>'); // base layout chrome rendered
+    // layout.* bag: base's common-ext-css list now renders its CDN <link>s
+    expect(html).toContain('bootstrap');
+    expect(html).toContain('/mysite/assets/css/beautifuljekyll.css'); // layout.common-css, base-pathed
     expect(html).not.toContain('{%'); // no unresolved tags
     expect(html).not.toContain('{{'); // no unresolved outputs
   });
