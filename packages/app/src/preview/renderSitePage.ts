@@ -21,9 +21,8 @@ import { bareNameTemplates } from './templateMap.js';
 
 /** Content/site asset references the preview should resolve to loadable object URLs. */
 const ASSET_REF_RE = /(?:src|href)="([^"]+\.(?:webp|png|jpe?g|gif|svg|avif))"/gi;
-/** The `<link>` to the theme stylesheet that the build serves from `/assets/` — there's
- *  no server behind the preview, so we swap it for an inline `<style>`. */
-const THEME_LINK_RE = /<link\b[^>]*href="[^"]*assets\/theme\.css"[^>]*>/i;
+/** Any `<link>` tag (we filter to `rel="stylesheet"` and resolve its href per render). */
+const LINK_TAG_RE = /<link\b[^>]*>/gi;
 
 export interface RenderSitePageInput {
   /** The working content model (schemas + id index), for `{{ site }}` + nav resolution. */
@@ -117,13 +116,23 @@ export async function renderSitePage(input: RenderSitePageInput): Promise<string
   if (translations.length > 0) renderInput.translations = translations;
   let html = await renderPage(renderInput);
 
-  // Inline the theme stylesheet in place of its (unreachable) `<link>`.
-  if (theme.css) {
-    const style = `<style data-timber-theme>${theme.css}</style>`;
-    if (THEME_LINK_RE.test(html)) html = html.replace(THEME_LINK_RE, style);
-    else if (/<\/head>/i.test(html)) html = html.replace(/<\/head>/i, `${style}</head>`);
-    else html = style + html;
-  }
+  // Inline every committed stylesheet the page `<link>`s, in place of its (unreachable) href —
+  // the sandboxed frame can't fetch it. Resolve each href to a repo path (strip the site base
+  // path + leading slash), look it up among the loaded stylesheets, and swap the `<link>` for a
+  // `<style>`. This handles the default theme (`assets/theme.css`) and an imported Jekyll
+  // theme (`assets/css/style.css`) alike. External (CDN) stylesheets — and any we don't have —
+  // are left untouched.
+  const basePath = typeof site.basePath === 'string' ? site.basePath : '';
+  html = html.replace(LINK_TAG_RE, (tag) => {
+    if (!/\brel=(["'])stylesheet\1/i.test(tag)) return tag;
+    const href = /\bhref=(["'])([^"']+)\1/i.exec(tag)?.[2];
+    if (href === undefined) return tag;
+    let path = href;
+    if (basePath && path.startsWith(basePath)) path = path.slice(basePath.length);
+    path = path.replace(/^\//, '');
+    const css = theme.stylesheets.get(path);
+    return css !== undefined ? `<style data-timber-theme>${css}</style>` : tag;
+  });
 
   // Resolve committed/staged image paths to object URLs the frame can load.
   const paths = new Set<string>();

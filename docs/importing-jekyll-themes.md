@@ -116,11 +116,12 @@ Known limits (the "mainly compatible, not 100%" residue):
   at build time, and the browser **preview falls back to committed CSS** — the one styling
   concern where preview isn't byte-identical to the build.
 - **In-editor preview** — the editor's live preview registers the same ecosystem filters/tags
-  as the build, so an adopted theme using `{% seo %}` etc. previews correctly (preview ≡ build).
-  The one preview gap is styling: SCSS isn't compiled in-browser, and the preview only inlines a
-  stylesheet committed at the conventional `assets/theme.css` path — a theme whose CSS lives
-  elsewhere (e.g. Minima's `assets/css/style.css`) previews unstyled, though the built site is
-  fully styled (the `sharp` precedent — preview falls back).
+  as the build, so an adopted theme using `{% seo %}` etc. previews correctly (preview ≡ build),
+  and it inlines whichever committed stylesheet the page `<link>`s (any `assets/**/*.css` path,
+  base-path aware) — so an adopted theme with its compiled CSS committed (as `import-theme`
+  writes) previews **styled**. The remaining gap is SCSS: it isn't compiled in-browser, so if
+  you edit a theme's `.scss` in the editor the preview shows the last *committed* CSS until you
+  re-run `import-theme` (the `sharp` precedent — heavy asset work stays build-side).
 - **Parenthesized conditions** — LiquidJS rejects `{% if a and (b != c) %}` (SPEC §6: no parens
   in conditions). Rare; a one-line manual edit per occurrence.
 - **Pagination, taxonomy/archive pages, `site.data` i18n, RSS/feeds** — Tier-B features Timber

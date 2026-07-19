@@ -256,9 +256,10 @@ Cross-cutting things and every file they touch:
   SCSS, copy assets. `buildSite` (`build.node.ts`) auto-passes `extend: registerJekyllCompat`
   so an adopted theme's `{% seo %}`/`date_to_xmlschema`/… build with plain `timber build`
   (the layer is additive — no built-in overrides — so native sites are unaffected). The **app
-  preview** (`packages/app/src/preview/renderSitePage.ts`) registers the same, so an adopted
-  theme's `{% seo %}`/filters preview ≡ build (only in-browser SCSS + non-conventional CSS
-  paths fall back to committed CSS). Guide: `docs/importing-jekyll-themes.md`.
+  preview** (`packages/app/src/preview/renderSitePage.ts`) registers the same and inlines
+  whichever committed stylesheet the page `<link>`s (`siteTheme.ts` loads all `assets/**/*.css`),
+  so an adopted theme previews ≡ build — only in-browser SCSS isn't compiled (preview uses the
+  committed CSS). Guide: `docs/importing-jekyll-themes.md`.
 - **The site scaffold** (theme, schemas, sample content, workflows) → edit **`site-template/`**
   only; the mirror regenerates the template repo. Never edit `Timber-site-template` directly.
 - **Setup instructions** → **`INSTALL.md`** only (canonical); the template's README is a stub.

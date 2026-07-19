@@ -2,7 +2,12 @@ import { useEffect, useState } from 'react';
 import { loadSiteTheme, type SiteTheme } from './siteTheme.js';
 import type { RepoSession } from '../state/repoSession.js';
 
-const EMPTY: SiteTheme = { templates: new Map(), css: '', navigationYml: null, objectUrls: [] };
+const EMPTY: SiteTheme = {
+  templates: new Map(),
+  stylesheets: new Map(),
+  navigationYml: null,
+  objectUrls: [],
+};
 
 /**
  * Load the edited site's templates + theme once per branch, for the live preview

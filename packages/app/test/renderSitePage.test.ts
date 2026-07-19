@@ -25,7 +25,7 @@ function fixture(): { model: ReturnType<typeof assembleContent>; theme: SiteThem
   const model = assembleContent(snapshot, schemas);
   const theme: SiteTheme = {
     templates: new Map([['default.liquid', read('templates/default.liquid')]]),
-    css: read('assets/theme.css'),
+    stylesheets: new Map([['assets/theme.css', read('assets/theme.css')]]),
     navigationYml: read('config/navigation.yml'),
     objectUrls: [],
   };
@@ -103,7 +103,7 @@ describe('renderSitePage', () => {
     const model = assembleContent(snapshot, loadSchemas(snapshot));
     const theme: SiteTheme = {
       templates: new Map([['default.liquid', read('templates/default.liquid')]]),
-      css: read('assets/theme.css'),
+      stylesheets: new Map([['assets/theme.css', read('assets/theme.css')]]),
       navigationYml: null,
       objectUrls: [],
     };
@@ -131,7 +131,7 @@ describe('renderSitePage', () => {
     const object = home(model);
     const empty: SiteTheme = {
       templates: new Map(),
-      css: '',
+      stylesheets: new Map(),
       navigationYml: null,
       objectUrls: [],
     };
@@ -163,7 +163,7 @@ describe('renderSitePage', () => {
             '{% block main %}{{ content }}{% endblock %}</body></html>',
         ],
       ]),
-      css: '',
+      stylesheets: new Map(),
       navigationYml: null,
       objectUrls: [],
     };
@@ -179,5 +179,36 @@ describe('renderSitePage', () => {
     expect(html).toContain('<title>'); // {% seo %} emitted (would throw if unregistered)
     expect(html).toContain('datetime="2026-05-02T09:00:00.000Z"'); // date_to_xmlschema
     expect(html).not.toContain('{%'); // no unresolved Liquid
+  });
+
+  it('inlines a stylesheet at a non-conventional path (imported theme, e.g. assets/css/style.css)', async () => {
+    // Minima links its CSS at assets/css/style.css, not assets/theme.css. The preview must
+    // inline whichever stylesheet the page links, base-path-aware.
+    const { model } = fixture();
+    const object = home(model);
+    const theme: SiteTheme = {
+      templates: new Map([
+        [
+          'default.liquid',
+          '<!doctype html><html><head>' +
+            '<link rel="stylesheet" href="{{ site.basePath }}/assets/css/style.css">' +
+            '</head><body>{% block main %}{{ content }}{% endblock %}</body></html>',
+        ],
+      ]),
+      stylesheets: new Map([['assets/css/style.css', '.site-header{color:teal}']]),
+      navigationYml: null,
+      objectUrls: [],
+    };
+    const html = await renderSitePage({
+      model,
+      object,
+      schema: model.schemas.get(object.type)!,
+      data: object.data,
+      body: object.body,
+      theme,
+      assetStore: new AssetStore(),
+    });
+    expect(html).toContain('<style data-timber-theme>.site-header{color:teal}</style>');
+    expect(html).not.toContain('<link'); // the unreachable link was replaced
   });
 });

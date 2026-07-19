@@ -11,11 +11,13 @@ export interface SiteTheme {
   /** `templates/<name>.liquid` keyed by bare filename (e.g. `default.liquid`). */
   templates: Map<string, string>;
   /**
-   * `assets/theme.css` with its own `url(...)` refs (fonts, background images) rewritten
-   * to object URLs of the fetched bytes, so the theme's fonts load in the preview frame.
-   * Empty string when the site ships no theme stylesheet.
+   * Every committed stylesheet (`assets/**\/*.css`), keyed by **repo path** (e.g.
+   * `assets/theme.css` for the default theme, `assets/css/style.css` for an imported Jekyll
+   * theme), with each file's own `url(...)` refs (fonts, background images) rewritten to
+   * object URLs of the fetched bytes so they load in the sandboxed preview frame. The preview
+   * inlines whichever of these the page actually `<link>`s. Empty when the site ships no CSS.
    */
-  css: string;
+  stylesheets: Map<string, string>;
   /** Raw `config/navigation.yml`, or null — used to rebuild `{{ site.nav }}`. */
   navigationYml: string | null;
   /** Object URLs minted for theme assets, so callers can revoke them on reload. */
@@ -23,6 +25,7 @@ export interface SiteTheme {
 }
 
 const TEMPLATE_RE = /^templates\/.+\.liquid$/;
+const STYLESHEET_RE = /^assets\/.*\.css$/;
 const CSS_URL_RE = /url\(\s*(['"]?)([^'")]+)\1\s*\)/g;
 
 /** Resolve a CSS-relative ref (e.g. `fonts/x.woff2` inside `assets/theme.css`) to a
@@ -83,7 +86,10 @@ async function inlineCssAssets(
  * Load a branch's templates + theme stylesheet + navigation so the preview can render
  * a page exactly as the build would. One tree read, then the blobs concurrently.
  */
-export async function loadSiteTheme(client: HostProvider, ref: string): Promise<SiteTheme> {
+export async function loadSiteTheme(
+  client: HostProvider,
+  ref: string,
+): Promise<SiteTheme> {
   const tree = await client.loadTree(ref);
   const shaByPath = new Map(
     tree.entries.filter((e) => e.type === 'blob').map((e) => [e.path, e.sha] as const),
@@ -99,20 +105,30 @@ export async function loadSiteTheme(client: HostProvider, ref: string): Promise<
       }),
   );
 
-  let css = '';
-  const themeSha = shaByPath.get('assets/theme.css');
-  if (themeSha) {
-    css = await inlineCssAssets(
-      await client.readBlob(themeSha),
-      'assets',
-      client,
-      shaByPath,
-      objectUrls,
-    );
-  }
+  // Every committed stylesheet, each inlined against its OWN directory so a relative
+  // `url(fonts/x)` inside `assets/css/style.css` resolves to `assets/css/fonts/x`.
+  const stylesheets = new Map<string, string>();
+  await Promise.all(
+    [...shaByPath]
+      .filter(([path]) => STYLESHEET_RE.test(path))
+      .map(async ([path, sha]) => {
+        const baseDir = path.slice(0, path.lastIndexOf('/'));
+        stylesheets.set(
+          path,
+          await inlineCssAssets(
+            await client.readBlob(sha),
+            baseDir,
+            client,
+            shaByPath,
+            objectUrls,
+          ),
+        );
+      }),
+  );
 
-  const navSha = shaByPath.get('config/navigation.yml') ?? shaByPath.get('config/navigation.yaml');
+  const navSha =
+    shaByPath.get('config/navigation.yml') ?? shaByPath.get('config/navigation.yaml');
   const navigationYml = navSha ? await client.readBlob(navSha) : null;
 
-  return { templates, css, navigationYml, objectUrls };
+  return { templates, stylesheets, navigationYml, objectUrls };
 }
