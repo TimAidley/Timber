@@ -25,8 +25,22 @@
  *
  * Multiple sites can share one broker: `ALLOWED_ORIGINS` is a comma/space-separated
  * list, so one App + one broker can serve several content-repo deployments.
+ *
+ * **Gitea/Forgejo (Codeberg) mode:** set `GITEA_BASE_URL` (e.g. `https://codeberg.org`)
+ * and the authorization-code exchange targets that instance instead of GitHub. Gitea
+ * supports **public OAuth clients** (PKCE, no secret), so the broker here is a *secret-less
+ * relay* — it exists only because Gitea's token endpoint sends no CORS (confirmed against
+ * Codeberg), not because a secret must be hidden. Provide `OAUTH_CLIENT_SECRET` too only if
+ * you registered a *confidential* Gitea client; it's optional. (One broker deployment
+ * serves one provider — GitHub when `GITEA_BASE_URL` is unset, Gitea when it's set.)
  */
 export interface BrokerEnv {
+  /**
+   * When set (e.g. `https://codeberg.org`), the broker runs in **Gitea mode**: the
+   * authorization-code exchange POSTs to `<base>/login/oauth/access_token` as a public
+   * client (no secret required). Unset ⇒ GitHub mode (the default).
+   */
+  GITEA_BASE_URL?: string;
   /**
    * The GitHub/OAuth App's client id (public — safe to expose). Named without a
    * `GITHUB_` prefix on purpose: GitHub Actions **reserves** that prefix, so a
@@ -127,6 +141,11 @@ async function exchangeCode(
     return json({ error: 'missing_code_verifier' }, 400, origin);
   }
 
+  // Gitea/Forgejo mode: exchange at the configured instance as a public client (no secret).
+  if (env.GITEA_BASE_URL) {
+    return exchangeGitea(body, env, origin);
+  }
+
   // Prefer the prefix-free names; fall back to the legacy `GITHUB_*` for brokers that
   // were configured before the rename.
   const clientId = env.OAUTH_CLIENT_ID ?? env.GITHUB_CLIENT_ID;
@@ -151,6 +170,52 @@ async function exchangeCode(
 
   if (!githubResponse.ok || typeof data.access_token !== 'string') {
     // Pass through a sanitized error only — never the secret or GitHub internals.
+    const error = typeof data.error === 'string' ? data.error : 'exchange_failed';
+    return json({ error }, 400, origin);
+  }
+
+  return json(
+    { access_token: data.access_token, token_type: data.token_type, scope: data.scope },
+    200,
+    origin,
+  );
+}
+
+/**
+ * Gitea/Forgejo authorization-code exchange. Gitea supports **public clients** (PKCE, no
+ * secret), so this sends `client_secret` only if one is configured (a confidential client).
+ * The token endpoint takes standard form-encoded params; we ask for JSON back. Errors are
+ * passed through sanitized, never the instance internals.
+ */
+async function exchangeGitea(
+  body: ExchangeRequest,
+  env: BrokerEnv,
+  origin: string | null,
+): Promise<Response> {
+  const clientId = env.OAUTH_CLIENT_ID ?? env.GITHUB_CLIENT_ID;
+  if (!clientId) {
+    return json({ error: 'broker_misconfigured' }, 500, origin);
+  }
+  const clientSecret = env.OAUTH_CLIENT_SECRET ?? env.GITHUB_CLIENT_SECRET;
+  const base = env.GITEA_BASE_URL!.replace(/\/+$/, '');
+
+  const params = new URLSearchParams({
+    grant_type: 'authorization_code',
+    client_id: clientId,
+    code: body.code!,
+    code_verifier: body.code_verifier!,
+    ...(body.redirect_uri ? { redirect_uri: body.redirect_uri } : {}),
+    ...(clientSecret ? { client_secret: clientSecret } : {}),
+  });
+
+  const giteaResponse = await fetch(`${base}/login/oauth/access_token`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' },
+    body: params.toString(),
+  });
+
+  const data = (await giteaResponse.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!giteaResponse.ok || typeof data.access_token !== 'string') {
     const error = typeof data.error === 'string' ? data.error : 'exchange_failed';
     return json({ error }, 400, origin);
   }

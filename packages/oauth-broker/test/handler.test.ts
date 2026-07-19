@@ -240,3 +240,83 @@ describe('oauth broker handler', () => {
     expect(res.headers.get('access-control-allow-origin')).toBeNull();
   });
 });
+
+describe('oauth broker handler — Gitea mode', () => {
+  const giteaEnv: BrokerEnv = {
+    OAUTH_CLIENT_ID: 'gitea-client',
+    GITEA_BASE_URL: 'https://codeberg.org/',
+    ALLOWED_ORIGINS: 'https://you.codeberg.page',
+  };
+  const ORIGIN = 'https://you.codeberg.page';
+
+  function giteaPost(body: unknown): Request {
+    return new Request('https://broker.example/', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', Origin: ORIGIN },
+      body: JSON.stringify(body),
+    });
+  }
+
+  it('exchanges at the instance as a public client (no secret) with form-encoded params', async () => {
+    const fetchMock = vi.fn(
+      async () => new Response(JSON.stringify({ access_token: 'gitea_tok', token_type: 'bearer' }), { status: 200 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await handleRequest(
+      giteaPost({ code: 'the-code', code_verifier: 'v', redirect_uri: 'https://you.codeberg.page/edit/' }),
+      giteaEnv,
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get('access-control-allow-origin')).toBe(ORIGIN);
+    expect(await res.json()).toMatchObject({ access_token: 'gitea_tok' });
+
+    // Targets the configured instance's token endpoint (trailing slash normalized).
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe('https://codeberg.org/login/oauth/access_token');
+    // Form-encoded, no client_secret (public client).
+    expect((init as RequestInit).headers).toMatchObject({
+      'content-type': 'application/x-www-form-urlencoded',
+    });
+    const sent = new URLSearchParams((init as RequestInit).body as string);
+    expect(sent.get('grant_type')).toBe('authorization_code');
+    expect(sent.get('client_id')).toBe('gitea-client');
+    expect(sent.get('code')).toBe('the-code');
+    expect(sent.get('code_verifier')).toBe('v');
+    expect(sent.get('client_secret')).toBeNull();
+  });
+
+  it('includes client_secret only when configured (confidential Gitea client)', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ access_token: 't' }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await handleRequest(giteaPost({ code: 'c', code_verifier: 'v' }), {
+      ...giteaEnv,
+      OAUTH_CLIENT_SECRET: 'confidential',
+    });
+    const sent = new URLSearchParams((fetchMock.mock.calls[0]![1] as RequestInit).body as string);
+    expect(sent.get('client_secret')).toBe('confidential');
+  });
+
+  it('still enforces PKCE and the origin allowlist', async () => {
+    const noVerifier = await handleRequest(giteaPost({ code: 'c' }), giteaEnv);
+    expect(noVerifier.status).toBe(400);
+    expect(await noVerifier.json()).toMatchObject({ error: 'missing_code_verifier' });
+
+    const badOrigin = new Request('https://broker.example/', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', Origin: 'https://evil.example' },
+      body: JSON.stringify({ code: 'c', code_verifier: 'v' }),
+    });
+    expect((await handleRequest(badOrigin, giteaEnv)).status).toBe(403);
+  });
+
+  it('passes through a sanitized instance error', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ error: 'invalid_grant' }), { status: 400 })),
+    );
+    const res = await handleRequest(giteaPost({ code: 'stale', code_verifier: 'v' }), giteaEnv);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'invalid_grant' });
+  });
+});

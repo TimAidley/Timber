@@ -76,6 +76,15 @@ build vars > defaults. Full setup: `docs/auth-github-app.md`.
 `code_verifier` is **required** (PKCE enforced). `OPTIONS` is handled for CORS
 preflight. Only an allow-listed origin is accepted.
 
+## Gitea / Forgejo (Codeberg) mode
+Set **`GITEA_BASE_URL`** (e.g. `https://codeberg.org`) and the code exchange targets that
+instance's `/login/oauth/access_token` instead of GitHub. Gitea supports **public OAuth
+clients** (PKCE, no secret), so `OAUTH_CLIENT_SECRET` is **optional** — provide it only for a
+*confidential* client. The broker is needed here purely as a CORS relay (the instance's token
+endpoint sends none); it holds no secret. Everything else (PKCE enforcement, origin
+allowlist, no-leak posture) is identical. One broker deployment serves one provider: GitHub
+when `GITEA_BASE_URL` is unset, Gitea when it's set.
+
 ## Portability
 All logic is in `src/handler.ts` as a web-standard `fetch` handler; `src/worker.ts`
 is just the Cloudflare glue. To run elsewhere (Deno Deploy, Netlify/Vercel edge),

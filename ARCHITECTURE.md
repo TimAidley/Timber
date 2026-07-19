@@ -114,10 +114,11 @@ Everything auth flows through one seam (`packages/app/src/host/auth.ts` picks th
 the rest of the app only ever calls `getToken()`). The host-specific bits of sign-in —
 the "Sign in with X" label, the OAuth authorize endpoint, where to create a token — come
 from a **host descriptor** (`host/hostDescriptor.ts`, derived from `config.host`), so a
-Codeberg/Gitea site presents its own host instead of a hardcoded "GitHub". The PAT path is
-fully host-neutral (a Gitea PAT is just a token to `getToken()`); the OAuth **broker** still
-calls GitHub's token endpoint, so full *Gitea OAuth* is a broker follow-up. Three
-interchangeable modes:
+Codeberg/Gitea site presents its own host instead of a hardcoded "GitHub". Sign-in works on
+either host: PAT (host-neutral), or **OAuth** — for Gitea the broker runs in `GITEA_BASE_URL`
+mode as a **secret-less relay** (Gitea allows public PKCE clients; the relay exists only
+because the instance sends no CORS). The rest of this section describes the **GitHub**
+flow (the default); the three interchangeable modes are:
 
 | Mode | Server needed | Client secret | UX | Selected when |
 |---|---|---|---|---|
@@ -181,7 +182,9 @@ The editor bundle uses a **relative base** (`./`), so the same build works at an
 **Broker** (Cloudflare Worker env, set by `setup-broker.yml`): `OAUTH_CLIENT_ID`,
 `OAUTH_CLIENT_SECRET` (redirect only), `ALLOWED_ORIGINS` (comma-separated; legacy
 `GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET`/`ALLOWED_ORIGIN` still read as fallbacks). The
-Actions-side names use the `GH_`/plain prefix because GitHub **reserves** `GITHUB_`.
+Actions-side names use the `GH_`/plain prefix because GitHub **reserves** `GITHUB_`. For a
+**Gitea/Forgejo (Codeberg)** site, set `GITEA_BASE_URL` (e.g. `https://codeberg.org`) — the
+broker then relays to that instance as a public client, and `OAUTH_CLIENT_SECRET` is optional.
 
 **Timber repo**: `TEMPLATE_SYNC_TOKEN` (fine-grained PAT, Contents R/W on
 `Timber-site-template`) for the mirror.

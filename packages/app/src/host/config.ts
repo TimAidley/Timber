@@ -84,17 +84,20 @@ function str(value: unknown): string | undefined {
 export function resolveConfig(runtime: RuntimeConfig, env: EnvLike): RepoConfig {
   // Only `gitea` opts out of the GitHub default; anything else resolves to `github`.
   const rawHost = str(runtime.host) ?? str(env.VITE_TIMBER_HOST);
+  const host: HostKind = rawHost === 'gitea' ? 'gitea' : 'github';
   return {
-    host: rawHost === 'gitea' ? 'gitea' : 'github',
+    host,
     apiBaseUrl: str(runtime.apiBaseUrl) ?? str(env.VITE_TIMBER_API_BASE_URL),
     owner: str(runtime.owner) ?? str(env.VITE_TIMBER_OWNER) ?? 'TimAidley',
     repo: str(runtime.repo) ?? str(env.VITE_TIMBER_REPO) ?? 'Timber-test-sandbox',
     oauth: {
       clientId: str(runtime.oauth?.clientId) ?? str(env.VITE_TIMBER_OAUTH_CLIENT_ID),
       brokerUrl: str(runtime.oauth?.brokerUrl) ?? str(env.VITE_TIMBER_OAUTH_BROKER_URL),
-      // `scope` differs: an EMPTY string is a meaningful value (GitHub App mode), so
-      // preserve it with `??` and only fall back to `repo` when it is truly absent.
-      scope: runtime.oauth?.scope ?? env.VITE_TIMBER_OAUTH_SCOPE ?? 'repo',
+      // `scope` differs: an EMPTY string is a meaningful value, so preserve it with `??`
+      // and only fall back on a truly-absent value. The default is host-specific —
+      // GitHub's `repo` scope, but Gitea has no such scope (its OAuth app carries its own
+      // granted scopes), so default Gitea to empty and let the instance decide.
+      scope: runtime.oauth?.scope ?? env.VITE_TIMBER_OAUTH_SCOPE ?? (host === 'gitea' ? '' : 'repo'),
       redirectUri:
         str(runtime.oauth?.redirectUri) ?? str(env.VITE_TIMBER_OAUTH_REDIRECT_URI),
       flow: str(runtime.oauth?.flow) ?? str(env.VITE_TIMBER_OAUTH_FLOW),

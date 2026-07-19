@@ -202,8 +202,17 @@ seam"), and **Codeberg** (Forgejo) is a supported second host. The differences f
 3. **Editor config.** The editor is co-hosted at `/<repo>/edit/` and pointed at Codeberg via
    `host: gitea` + `apiBaseUrl: https://codeberg.org` — the `deploy.yml` sets these build
    vars for you. In a hand-written `config.js` they are `host` and `apiBaseUrl`.
-4. **Sign-in.** Use **paste-a-PAT** (create a token under **Settings → Applications** on
-   Codeberg with contents read/write). Full "Sign in with Codeberg" OAuth needs a
-   Codeberg-aware broker — a follow-up; PAT works end-to-end today.
+4. **Sign-in.** Two options:
+   - **Paste-a-PAT** — zero extra infrastructure. Create a token under **Settings →
+     Applications** on Codeberg with contents read/write.
+   - **"Sign in with Codeberg" (OAuth).** Register an OAuth2 app (**Settings → Applications
+     → Create OAuth2 Application**) as a **public client** (no secret), redirect URI =
+     your editor URL (`https://<owner>.codeberg.page/<repo>/edit/`). Deploy Timber's
+     broker with `GITEA_BASE_URL=https://codeberg.org` (+ `OAUTH_CLIENT_ID`,
+     `ALLOWED_ORIGINS=https://<owner>.codeberg.page`; **no secret needed**), and set the
+     editor's `oauth.clientId` + `oauth.brokerUrl`. The broker is required only because
+     Codeberg's token endpoint sends no CORS — it holds no secret (Gitea is a public
+     client). Set `oauth.scope` to what your token needs (e.g. `write:repository`).
 
-Self-hosted Gitea/Forgejo works the same way — set `apiBaseUrl` to your instance origin.
+Self-hosted Gitea/Forgejo works the same way — set `apiBaseUrl` to your instance origin
+(and `GITEA_BASE_URL` on the broker).

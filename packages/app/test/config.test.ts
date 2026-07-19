@@ -66,6 +66,15 @@ describe('resolveConfig', () => {
     expect(resolveConfig({ host: 'bitbucket' }, {}).host).toBe('github');
   });
 
+  it('defaults the OAuth scope per host (repo for GitHub, empty for Gitea)', () => {
+    expect(resolveConfig({}, {}).oauth.scope).toBe('repo');
+    expect(resolveConfig({ host: 'gitea', apiBaseUrl: 'https://codeberg.org' }, {}).oauth.scope).toBe('');
+    // An explicit scope still wins on either host.
+    expect(resolveConfig({ host: 'gitea', oauth: { scope: 'write:repository' } }, {}).oauth.scope).toBe(
+      'write:repository',
+    );
+  });
+
   it('preserves an EMPTY scope (GitHub App mode) instead of defaulting to repo', () => {
     const c = resolveConfig({ oauth: { scope: '' } }, {});
     expect(c.oauth.scope).toBe('');
