@@ -93,9 +93,15 @@ function set(el: HTMLInputElement | HTMLSelectElement, value: string): void {
 const groupNames = (): string[] =>
   [...document.querySelectorAll('.object-group__name')].map((n) => n.textContent?.trim().replace(/\d+$/, '').trim() ?? '');
 
+// The title span now also carries the leading change badge and a trailing Draft/Public
+// badge; strip those so we compare the object name itself.
 const titlesIn = (groupIndex: number): string[] => {
   const group = document.querySelectorAll('.object-group')[groupIndex];
-  return [...(group?.querySelectorAll('.object-list__title') ?? [])].map((t) => t.textContent ?? '');
+  return [...(group?.querySelectorAll('.object-list__title') ?? [])].map((t) => {
+    const clone = t.cloneNode(true) as HTMLElement;
+    clone.querySelectorAll('.vbadge, .cbadge').forEach((b) => b.remove());
+    return clone.textContent?.trim() ?? '';
+  });
 };
 
 describe('ContentList (rendered)', () => {

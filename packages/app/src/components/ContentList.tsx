@@ -50,9 +50,14 @@ function languageName(code: string): string {
   }
 }
 
-/** Human-readable secondary line, showing the value the group is sorted by. */
+/**
+ * Human-readable secondary line, showing the value the group is sorted by. Under the
+ * default Name sort there's nothing to add — the title already *is* that value — so it
+ * returns '' and the row stays a single line (the slug just duplicated the title and
+ * crowded the list). Other sorts surface their key's value as useful context.
+ */
 function secondaryText(o: ContentObject, sort: SortState): string {
-  if (sort.key === NAME_SORT) return o.slug;
+  if (sort.key === NAME_SORT) return '';
   if (sort.key === CREATED_SORT) {
     const created = o.data.created;
     if (typeof created !== 'string') return '—';
@@ -144,13 +149,14 @@ export function ContentList({
           <span className="object-list__title">
             {deviceOnlyPaths.has(o.path) ? <DeviceBadge /> : <ChangeBadge state={changeStateOf(o.path)} />}
             {objectName(o)}
-          </span>
-          <span className="object-list__type">
+            {/* Draft/Public trails the title so it isn't orphaned once the slug line is gone. */}
             {!deviceOnlyPaths.has(o.path) && (schemas.get(o.type)?.page ?? true) ? (
               <VisibilityBadge isPublic={o.public} />
             ) : null}
-            {secondaryText(o, sort)}
           </span>
+          {secondaryText(o, sort) ? (
+            <span className="object-list__type">{secondaryText(o, sort)}</span>
+          ) : null}
         </button>
       </li>
     );
@@ -178,7 +184,9 @@ export function ContentList({
             {deviceOnlyPaths.has(rep.path) ? <DeviceBadge /> : <ChangeBadge state={changeStateOf(rep.path)} />}
             {objectName(rep)}
           </span>
-          <span className="object-list__type">{secondaryText(rep, sort)}</span>
+          {secondaryText(rep, sort) ? (
+            <span className="object-list__type">{secondaryText(rep, sort)}</span>
+          ) : null}
         </button>
         {languageControl(cluster)}
       </li>

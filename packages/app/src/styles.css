@@ -676,6 +676,13 @@ body {
   font-size: 0.9rem;
 }
 
+/* The Draft/Public badge now trails the title (the leading change badge keeps its
+   right margin; only the trailing visibility badge flips to a left gap). */
+.object-list__title .vbadge {
+  margin-right: 0;
+  margin-left: 0.3rem;
+}
+
 .object-list__type {
   font-size: 0.75rem;
   color: var(--text-muted);
