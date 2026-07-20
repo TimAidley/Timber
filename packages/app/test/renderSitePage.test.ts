@@ -27,6 +27,7 @@ function fixture(): { model: ReturnType<typeof assembleContent>; theme: SiteThem
     templates: new Map([['default.liquid', read('themes/default/templates/default.liquid')]]),
     stylesheets: new Map([['assets/theme.css', read('themes/default/assets/theme.css')]]),
     navigationYml: read('config/navigation.yml'),
+    manifest: null,
     objectUrls: [],
   };
   return { model, theme };
@@ -105,6 +106,7 @@ describe('renderSitePage', () => {
       templates: new Map([['default.liquid', read('themes/default/templates/default.liquid')]]),
       stylesheets: new Map([['assets/theme.css', read('themes/default/assets/theme.css')]]),
       navigationYml: null,
+      manifest: null,
       objectUrls: [],
     };
     const en = model.objects.find((o) => o.path === 'content/posts/en/hi/index.md')!;
@@ -133,6 +135,7 @@ describe('renderSitePage', () => {
       templates: new Map(),
       stylesheets: new Map(),
       navigationYml: null,
+      manifest: null,
       objectUrls: [],
     };
     await expect(
@@ -165,6 +168,7 @@ describe('renderSitePage', () => {
       ]),
       stylesheets: new Map(),
       navigationYml: null,
+      manifest: null,
       objectUrls: [],
     };
     const html = await renderSitePage({
@@ -197,6 +201,7 @@ describe('renderSitePage', () => {
       ]),
       stylesheets: new Map([['assets/css/style.css', '.site-header{color:teal}']]),
       navigationYml: null,
+      manifest: null,
       objectUrls: [],
     };
     const html = await renderSitePage({
@@ -210,5 +215,39 @@ describe('renderSitePage', () => {
     });
     expect(html).toContain('<style data-timber-theme>.site-header{color:teal}</style>');
     expect(html).not.toContain('<link'); // the unreachable link was replaced
+  });
+
+  it('previews an imported Eleventy theme with the flat data cascade (theme.json manifest → preview ≡ build)', async () => {
+    // An Eleventy theme reads bare {{ title }} + {{ metadata.* }} (its _data globals), not
+    // page.*. The manifest tells the preview to render with flattenData + the globals, so it
+    // matches the CLI build (SPEC §2 → Tier A).
+    const { model } = fixture();
+    const object = home(model);
+    const theme: SiteTheme = {
+      templates: new Map([
+        [
+          'default.liquid',
+          '<!doctype html><html><head><title>{{ title }}</title></head>' +
+            '<body><h1>{{ title }}</h1><p>by {{ metadata.author }}</p>{{ content }}</body></html>',
+        ],
+      ]),
+      stylesheets: new Map(),
+      navigationYml: null,
+      manifest: { engine: 'eleventy', data: { metadata: { author: 'Ada' } } },
+      objectUrls: [],
+    };
+    const html = await renderSitePage({
+      model,
+      object,
+      schema: model.schemas.get(object.type)!,
+      data: { ...object.data, title: 'Welcome Home' },
+      body: object.body,
+      theme,
+      assetStore: new AssetStore(),
+    });
+    expect(html).toContain('<h1>Welcome Home</h1>'); // bare {{ title }} via flattenData
+    expect(html).toContain('<title>Welcome Home</title>');
+    expect(html).toContain('<p>by Ada</p>'); // {{ metadata.author }} from manifest globals
+    expect(html).not.toContain('{{');
   });
 });

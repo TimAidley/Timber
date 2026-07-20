@@ -6,6 +6,7 @@ import {
   assetSourceDirs,
   assetOutputPath,
 } from '@timber/content';
+import { parseThemeManifest, type ThemeManifest } from '@timber/eleventy-compat';
 import type { HostProvider } from '@timber/host';
 
 /**
@@ -28,6 +29,12 @@ export interface SiteTheme {
   stylesheets: Map<string, string>;
   /** Raw `config/navigation.yml`, or null — used to rebuild `{{ site.nav }}`. */
   navigationYml: string | null;
+  /**
+   * The active theme's `theme.json` manifest (SPEC §2), or null — selects the render runtime
+   * (which compat filters + the flat data cascade for an imported Eleventy theme) so the preview
+   * renders an imported theme exactly as the build does.
+   */
+  manifest: ThemeManifest | null;
   /** Object URLs minted for theme assets, so callers can revoke them on reload. */
   objectUrls: string[];
 }
@@ -201,5 +208,11 @@ export async function loadSiteTheme(
     shaByPath.get('config/navigation.yml') ?? shaByPath.get('config/navigation.yaml');
   const navigationYml = navSha ? await client.readBlob(navSha) : null;
 
-  return { templates, stylesheets, navigationYml, objectUrls };
+  // The active theme's manifest (SPEC §2) — selects the render runtime so an imported Eleventy
+  // theme previews with the same filters + flat data cascade the build uses.
+  const manifestSha =
+    theme.name !== null ? shaByPath.get(`${THEMES_DIR}/${theme.name}/theme.json`) : undefined;
+  const manifest = parseThemeManifest(manifestSha ? await client.readBlob(manifestSha) : undefined);
+
+  return { templates, stylesheets, navigationYml, manifest, objectUrls };
 }

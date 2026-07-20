@@ -1,0 +1,4 @@
+{
+  "engine": "eleventy",
+  "data": { "metadata": { "author": "Ada Lovelace" } }
+}

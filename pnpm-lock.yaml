@@ -74,6 +74,9 @@ importers:
       '@timber/content':
         specifier: workspace:*
         version: link:../content
+      '@timber/eleventy-compat':
+        specifier: workspace:*
+        version: link:../eleventy-compat
       '@timber/generator':
         specifier: workspace:*
         version: link:../generator
@@ -144,6 +147,9 @@ importers:
       '@timber/content':
         specifier: workspace:*
         version: link:../content
+      '@timber/eleventy-compat':
+        specifier: workspace:*
+        version: link:../eleventy-compat
       '@timber/generator':
         specifier: workspace:*
         version: link:../generator

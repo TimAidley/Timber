@@ -19,3 +19,5 @@ export { importEleventyTemplate, importEleventyTheme } from './importTheme.js';
 export type { ImportOptions } from './importTheme.js';
 export { registerEleventyCompat } from './register.js';
 export { eleventyEngine } from './engine.js';
+export { themeRuntime, parseThemeManifest } from './runtime.js';
+export type { ThemeManifest, ThemeRuntime } from './runtime.js';

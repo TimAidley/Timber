@@ -6,6 +6,7 @@ const EMPTY: SiteTheme = {
   templates: new Map(),
   stylesheets: new Map(),
   navigationYml: null,
+  manifest: null,
   objectUrls: [],
 };
 

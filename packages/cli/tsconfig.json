@@ -10,6 +10,7 @@
     { "path": "../generator" },
     { "path": "../content" },
     { "path": "../jekyll-compat" },
+    { "path": "../eleventy-compat" },
     { "path": "../sass" }
   ]
 }

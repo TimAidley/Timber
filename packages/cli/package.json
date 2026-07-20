@@ -18,7 +18,8 @@
     "@timber/content": "workspace:*",
     "@timber/generator": "workspace:*",
     "@timber/jekyll-compat": "workspace:*",
-    "@timber/sass": "workspace:*"
+    "@timber/sass": "workspace:*",
+    "@timber/eleventy-compat": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.2"

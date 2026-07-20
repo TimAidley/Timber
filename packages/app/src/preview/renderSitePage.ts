@@ -1,5 +1,5 @@
 import { renderPage, buildClock, type FrontMatter } from '@timber/generator';
-import { registerJekyllCompat } from '@timber/jekyll-compat';
+import { themeRuntime } from '@timber/eleventy-compat';
 import {
   assembleCollections,
   siteContext,
@@ -47,6 +47,9 @@ export interface RenderSitePageInput {
  */
 export async function renderSitePage(input: RenderSitePageInput): Promise<string> {
   const { model, object, schema, data, body, theme, assetStore } = input;
+  // The active theme's render runtime (SPEC §2) — chosen from its manifest so the preview
+  // registers the same filters + data cascade the build does (preview ≡ build).
+  const runtime = themeRuntime(theme.manifest);
 
   const template =
     theme.templates.get(`${object.type}.liquid`) ?? theme.templates.get('default.liquid');
@@ -106,12 +109,14 @@ export async function renderSitePage(input: RenderSitePageInput): Promise<string
     seo,
     now: clock.now,
     today: clock.today,
-    // Register the Jekyll ecosystem filters/tags, matching the CLI build (build.node.ts) so
-    // preview ≡ build for an imported theme (SPEC §2 → Tier A) — a template using `{% seo %}`
-    // or `date_to_xmlschema` previews instead of throwing. Additive (no built-in overrides),
-    // so a native Timber theme is unaffected.
-    extend: registerJekyllCompat,
+    // Per-theme runtime (SPEC §2 → Tier A), matching the CLI build (build.node.ts) so preview ≡
+    // build for an imported theme: the engine's compat filters (Jekyll ecosystem, or Eleventy's)
+    // plus — for an Eleventy theme — the flat data cascade + `_data` globals. Additive; a native
+    // Timber theme is unaffected.
+    extend: runtime.extend,
+    flattenData: runtime.flattenData,
   };
+  if (runtime.globals) renderInput.globals = runtime.globals;
   if (liveObject.lang !== undefined) renderInput.lang = liveObject.lang;
   if (translations.length > 0) renderInput.translations = translations;
   let html = await renderPage(renderInput);

@@ -1,7 +1,7 @@
 import { readdir, readFile, writeFile, mkdir } from 'node:fs/promises';
 import { dirname, join, relative, sep } from 'node:path';
 import { renderPage, buildClock, createEngine } from '@timber/generator';
-import { registerJekyllCompat } from '@timber/jekyll-compat';
+import { themeRuntime, parseThemeManifest } from '@timber/eleventy-compat';
 import { compileScss } from '@timber/sass';
 import {
   aliasUrls,
@@ -116,6 +116,19 @@ export async function buildSite(repoDir: string, outDir: string): Promise<BuildR
       r.endsWith('.liquid'),
     );
   const theme = resolveThemePaths(activeTheme, () => themeHasTemplates);
+
+  // Per-theme render runtime (SPEC §2): an imported non-native theme carries a
+  // `themes/<name>/theme.json` manifest naming its engine (+ any `_data` globals). It selects
+  // which compat filters to register and whether to expose the flat data cascade. A native or
+  // Jekyll theme has none → the Jekyll ecosystem filters + `page.*`, byte-identical to before.
+  const manifest = theme.name
+    ? parseThemeManifest(
+        await readFile(join(repoDir, THEMES_DIR, theme.name, 'theme.json'), 'utf8').catch(
+          () => undefined,
+        ),
+      )
+    : null;
+  const runtime = themeRuntime(manifest);
 
   // Load every template once, keyed by **bare name** (no `.liquid`), so a page template
   // can `{% layout %}` / `{% render %}` any other template (SPEC §6 layout inheritance +
@@ -254,12 +267,14 @@ export async function buildSite(repoDir: string, outDir: string): Promise<BuildR
       seo,
       now: clock.now,
       today: clock.today,
-      // Register the Jekyll ecosystem filters/tags (SPEC §2 → Tier A). They're purely additive
-      // (no built-in overrides), so a native Timber site is unaffected while an *adopted* Jekyll
-      // theme — whose templates still call `{% seo %}`, `date_to_xmlschema`, etc. — builds with
-      // plain `timber build`, no per-site config. The engine is cached per (templates, extend).
-      extend: registerJekyllCompat,
+      // Per-theme runtime (SPEC §2 → Tier A): the compat filters for the active theme's engine
+      // (Jekyll ecosystem for native/Jekyll, Eleventy filters for an Eleventy theme) plus, for
+      // Eleventy, the flat data cascade + `_data` globals. All additive; a native Timber site is
+      // unaffected. The engine is cached per (templates, extend).
+      extend: runtime.extend,
+      flattenData: runtime.flattenData,
     };
+    if (runtime.globals) renderInput.globals = runtime.globals;
     if (object.lang !== undefined) renderInput.lang = object.lang;
     if (translations.length > 0) renderInput.translations = translations;
     const html = await renderPage(renderInput);

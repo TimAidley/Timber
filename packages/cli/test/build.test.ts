@@ -20,6 +20,7 @@ const siteFixture = join(here, 'fixtures', 'site');
 const invalidFixture = join(here, 'fixtures', 'site-invalid');
 const i18nFixture = join(here, 'fixtures', 'site-i18n');
 const themedFixture = join(here, 'fixtures', 'site-themed');
+const eleventyFixture = join(here, 'fixtures', 'site-eleventy');
 
 async function exists(path: string): Promise<boolean> {
   return access(path)
@@ -220,6 +221,20 @@ describe('buildSite', () => {
     // On a theme↔site path clash, the site's own upload wins (switching themes never
     // disturbs a site's uploads).
     expect((await readFile(join(out, 'assets/shared.txt'), 'utf8')).trim()).toBe('from-site');
+  });
+
+  it('renders an imported Eleventy theme with the flat data cascade (theme.json manifest)', async () => {
+    const result = await buildSite(eleventyFixture, out);
+    expect(result.pages).toBe(1);
+
+    const home = await readFile(join(out, 'pages/home/index.html'), 'utf8');
+    // Bare {{ title }} resolves — the manifest's engine=eleventy turned on flattenData.
+    expect(home).toContain('<h1>Home Page</h1>');
+    expect(home).toContain('<title>Home Page · Eleven Site</title>'); // + site.title from settings
+    // {{ metadata.author }} comes from the manifest's `data` globals (Eleventy _data/*.json).
+    expect(home).toContain('<p class="byline">by Ada Lovelace</p>');
+    // {{ content }} still renders the markdown body.
+    expect(home).toContain('<strong>Eleventy</strong>');
   });
 
   it('build output equals renderPage output for the same object (preview ≡ build)', async () => {

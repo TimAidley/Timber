@@ -38,7 +38,8 @@
     "yaml": "^2.6.1",
     "@timber/jekyll-compat": "workspace:*",
     "@timber/sass": "workspace:*",
-    "fflate": "^0.8.2"
+    "fflate": "^0.8.2",
+    "@timber/eleventy-compat": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "^18.3.12",
