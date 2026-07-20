@@ -31,10 +31,11 @@ describe('browser theme import (Chromium)', () => {
       defaultBranch: 'main',
     };
 
-    const plan = await importThemeFromZip(session, zip);
+    const plan = await importThemeFromZip(session, zip, { themeName: 'theme-1' });
     expect(plan.rootLayout).toBe('base');
+    expect(plan.themeName).toBe('theme-1');
     const paths = committed!.files.map((f) => f.path);
-    expect(paths).toContain('templates/base.liquid');
-    expect(paths).toContain('assets/_sass/_vars.scss');
+    expect(paths).toContain('themes/theme-1/templates/base.liquid');
+    expect(paths).toContain('themes/theme-1/assets/_sass/_vars.scss');
   });
 });

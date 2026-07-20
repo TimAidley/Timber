@@ -3,7 +3,12 @@ import { mkdtemp, mkdir, writeFile, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { importThemeToRepo, parseImportArgs } from '../src/importTheme.node.js';
+import {
+  importThemeToRepo,
+  parseImportArgs,
+  defaultThemeName,
+  activateTheme,
+} from '../src/importTheme.node.js';
 import { buildSite } from '../src/build.node.js';
 
 /**
@@ -146,6 +151,64 @@ describe('importThemeToRepo (adopt-once)', () => {
   });
 });
 
+describe('importThemeToRepo into a theme folder + activation (SPEC §13)', () => {
+  it('writes the theme under themes/<name>/ and points settings.activeTheme at it', async () => {
+    const repo = await mkdtemp(join(tmpdir(), 'timber-themed-'));
+    const r = await importThemeToRepo(THEME, repo, { themeName: 'minima' });
+    expect(r.themeName).toBe('minima');
+    expect(r.templates).toContain('themes/minima/templates/base.liquid');
+    expect(r.assets).toContain('themes/minima/assets/css/style.scss');
+    expect(r.assets.some((a) => a.startsWith('themes/minima/assets/_sass/'))).toBe(true);
+
+    // A settings singleton to activate against.
+    await mkdir(join(repo, 'config/schemas'), { recursive: true });
+    await writeFile(
+      join(repo, 'config/schemas/settings.yml'),
+      'kind: singleton\npage: false\nhasBody: false\nfields:\n  title: { type: text }\n  baseUrl: { type: text }\n',
+    );
+    await mkdir(join(repo, 'content/settings'), { recursive: true });
+    await writeFile(
+      join(repo, 'content/settings/index.md'),
+      '---\ntitle: T\nbaseUrl: https://ex.test/mysite\n---\n',
+    );
+
+    const activated = await activateTheme(repo, 'minima');
+    expect(activated).toBe('content/settings/index.md');
+    const settings = await readFile(join(repo, 'content/settings/index.md'), 'utf8');
+    expect(settings).toContain('activeTheme: minima');
+    expect(settings).toContain('title: T'); // preserved
+
+    // The build renders through the theme folder and publishes its CSS under /assets.
+    await mkdir(join(repo, 'content/pages/about'), { recursive: true });
+    await writeFile(
+      join(repo, 'config/schemas/pages.yml'),
+      'kind: collection\nhasBody: true\nfields:\n  title:\n    type: text\n    required: true\n',
+    );
+    await writeFile(
+      join(repo, 'content/pages/about/index.md'),
+      '---\ntitle: About\npublic: true\n---\n\nBody.\n',
+    );
+    const out = await mkdtemp(join(tmpdir(), 'timber-themed-out-'));
+    await buildSite(repo, out);
+    const html = await readFile(join(out, 'pages/about/index.html'), 'utf8');
+    expect(html).toContain('class="site-header"'); // rendered through themes/minima/templates
+    const css = await readFile(join(out, 'assets/css/style.css'), 'utf8');
+    expect(css).toContain('.site-header'); // theme SCSS compiled + published under /assets
+  });
+
+  it('activateTheme returns null when there is no settings singleton', async () => {
+    const repo = await mkdtemp(join(tmpdir(), 'timber-nosettings-'));
+    expect(await activateTheme(repo, 'x')).toBeNull();
+  });
+});
+
+describe('defaultThemeName', () => {
+  it('slugifies a theme directory basename', () => {
+    expect(defaultThemeName('/path/to/Minima-3.0')).toBe('minima-3-0');
+    expect(defaultThemeName('beautiful-jekyll/')).toBe('beautiful-jekyll');
+  });
+});
+
 describe('parseImportArgs', () => {
   it('parses repeatable and comma-separated --map into a type→layout map', () => {
     expect(
@@ -164,6 +227,19 @@ describe('parseImportArgs', () => {
     expect(parseImportArgs(['theme', 'repo'])).toEqual({
       positionals: ['theme', 'repo'],
       typeMap: {},
+    });
+  });
+
+  it('parses --name (and --name=) into the theme folder name', () => {
+    expect(parseImportArgs(['theme', 'repo', '--name', 'minima'])).toEqual({
+      positionals: ['theme', 'repo'],
+      typeMap: {},
+      name: 'minima',
+    });
+    expect(parseImportArgs(['--name=chirpy', 'theme', 'repo'])).toEqual({
+      positionals: ['theme', 'repo'],
+      typeMap: {},
+      name: 'chirpy',
     });
   });
 });

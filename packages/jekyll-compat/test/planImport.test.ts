@@ -52,4 +52,24 @@ describe('planThemeImport', () => {
       /no layout "nope"/,
     );
   });
+
+  it('writes the whole plan under themes/<name>/ when given a themeName (SPEC §13)', () => {
+    const plan = planThemeImport(theme, { themeName: 'minima', typeMap: { posts: 'post' } });
+    expect(plan.themeName).toBe('minima');
+    // Templates and assets alike carry the theme-folder prefix.
+    expect(plan.templates['themes/minima/templates/base.liquid']).toBeDefined();
+    expect(plan.templates['themes/minima/templates/default.liquid']).toBeDefined();
+    expect(plan.templates['themes/minima/templates/posts.liquid']).toBeDefined();
+    expect(plan.textFiles['themes/minima/assets/css/style.scss']).toContain('a{color:red}');
+    expect(plan.textFiles['themes/minima/assets/_sass/_vars.scss']).toBe('$c: red;');
+    expect(plan.binaryFiles['themes/minima/assets/img/logo.png']).toEqual(
+      new Uint8Array([1, 2, 3]),
+    );
+    // Nothing leaks to the legacy root.
+    expect(plan.templates['templates/base.liquid']).toBeUndefined();
+  });
+
+  it('leaves themeName null (legacy root) when no name is given', () => {
+    expect(planThemeImport(theme).themeName).toBeNull();
+  });
 });

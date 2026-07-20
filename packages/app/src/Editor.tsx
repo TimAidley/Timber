@@ -176,6 +176,16 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
     const value = settings?.data.activeTheme;
     return typeof value === 'string' && value.length > 0 ? value : undefined;
   }, [model]);
+
+  // The settings singleton's file (path + current content), so importing a theme can flip
+  // `activeTheme` to it in the same commit (SPEC §13). Undefined when the site has no settings
+  // singleton — the import then tells the user to set `activeTheme` by hand.
+  const settingsFile = useMemo(() => {
+    const settings = model.objects.find((o) => model.schemas.get(o.type)?.page === false);
+    return settings
+      ? { path: settings.path, source: reassembleDocument(settings.data, settings.body) }
+      : undefined;
+  }, [model]);
   const [showNew, setShowNew] = useState(false);
   const [showNewType, setShowNewType] = useState(false);
   const [showNewFile, setShowNewFile] = useState(false);
@@ -1657,7 +1667,11 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
       ) : null}
 
       {showImportTheme ? (
-        <ImportThemeDialog session={session} onClose={() => setShowImportTheme(false)} />
+        <ImportThemeDialog
+          session={session}
+          {...(settingsFile ? { settingsFile } : {})}
+          onClose={() => setShowImportTheme(false)}
+        />
       ) : null}
 
       {deleteTarget ? (

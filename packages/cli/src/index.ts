@@ -10,7 +10,12 @@ import {
 import { NodeFileSource, NodeOutputSink } from './fileSource.node.js';
 import { buildSnapshotFromDir } from './snapshot.node.js';
 import { buildSite, BuildError } from './build.node.js';
-import { importThemeToRepo, parseImportArgs } from './importTheme.node.js';
+import {
+  importThemeToRepo,
+  parseImportArgs,
+  defaultThemeName,
+  activateTheme,
+} from './importTheme.node.js';
 
 const USAGE = `timber — Timber static-site generator CLI
 
@@ -18,7 +23,7 @@ Usage:
   timber render <contentDir> <templateFile> <outFile>
   timber validate <repoDir>
   timber build <repoDir> <outDir>
-  timber import-theme <themeDir> <repoDir> [--map <type>=<layout> ...]
+  timber import-theme <themeDir> <repoDir> [--name <theme>] [--map <type>=<layout> ...]
 
 render   — reads <contentDir>/index.md and <templateFile>, renders the page
            through the shared generator, and writes the HTML to <outFile>.
@@ -29,10 +34,13 @@ build    — renders the whole site: every public object through its
            <outDir>, copying assets and omitting drafts. Fails (non-zero) if any
            public object is invalid, so a broken site never deploys.
 import-theme — adopt-once import of a Jekyll theme (Tier A): transforms its
-           _layouts/_includes into native templates/*.liquid, compiles its SCSS,
-           and copies its assets into <repoDir>. Use --map <type>=<layout>
-           (repeatable) to render a content type through a specific layout, e.g.
-           --map posts=post. See docs/importing-jekyll-themes.md.
+           _layouts/_includes into native templates into a self-contained
+           themes/<name>/ folder, carries its assets/SCSS over, and points the
+           site's settings.activeTheme at it. --name <theme> sets the folder
+           (default: the theme dir's name); the previous theme stays on disk, so
+           switching back is one setting. Use --map <type>=<layout> (repeatable)
+           to render a content type through a specific layout, e.g. --map
+           posts=post. See docs/importing-jekyll-themes.md.
 
 This is the Node/CI entry point; preview ≡ build.`;
 
@@ -113,12 +121,14 @@ async function importThemeCommand(
   themeDir: string,
   repoDir: string,
   typeMap: Record<string, string>,
+  name?: string,
 ): Promise<number> {
-  const r = await importThemeToRepo(themeDir, repoDir, { typeMap });
+  const themeName = name ?? defaultThemeName(themeDir);
+  const r = await importThemeToRepo(themeDir, repoDir, { typeMap, themeName });
   const out = process.stdout;
   const mappedCount = Object.keys(r.mapped).length;
   out.write(
-    `Imported ${themeDir} → ${repoDir}\n` +
+    `Imported ${themeDir} → ${repoDir}/themes/${themeName}/\n` +
       `  ${r.templates.length} template(s) (root: ${r.rootLayout}, default: ${r.defaultLayout})\n` +
       `  ${r.assets.length} asset(s) copied (SCSS compiled at build/preview time)\n`,
   );
@@ -128,9 +138,21 @@ async function importThemeCommand(
       .join(', ');
     out.write(`  ${mappedCount} type(s) wired: ${pairs}\n`);
   }
+
+  // Activate: point settings.activeTheme at the new folder so it goes live. Any previous
+  // theme stays on disk under its own themes/<name>/, so switching back is one setting.
+  const activated = await activateTheme(repoDir, themeName);
+  if (activated) {
+    out.write(`  activated: set activeTheme: ${themeName} in ${activated}\n`);
+  } else {
+    out.write(
+      `  note: no settings singleton found — set \`activeTheme: ${themeName}\` in your settings to go live.\n`,
+    );
+  }
   out.write(
-    `\nContent types without a templates/<type>.liquid render through templates/default.liquid ` +
-      `(the theme's ${r.defaultLayout} layout). Wire more with --map <type>=<layout>.\n`,
+    `\nContent types without a themes/${themeName}/templates/<type>.liquid render through ` +
+      `themes/${themeName}/templates/default.liquid (the theme's ${r.defaultLayout} layout). ` +
+      `Wire more with --map <type>=<layout>.\n`,
   );
   return 0;
 }
@@ -174,7 +196,7 @@ async function main(argv: string[]): Promise<number> {
   }
 
   if (command === 'import-theme') {
-    const { positionals, typeMap } = parseImportArgs(rest);
+    const { positionals, typeMap, name } = parseImportArgs(rest);
     const [themeDir, repoDir] = positionals;
     if (!themeDir || !repoDir) {
       process.stderr.write(
@@ -182,7 +204,7 @@ async function main(argv: string[]): Promise<number> {
       );
       return 1;
     }
-    return importThemeCommand(themeDir, repoDir, typeMap);
+    return importThemeCommand(themeDir, repoDir, typeMap, name);
   }
 
   process.stderr.write(`error: unknown command "${command}"\n\n${USAGE}\n`);

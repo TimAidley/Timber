@@ -1,10 +1,20 @@
 import { useState } from 'react';
 import type { ThemeImportPlan } from '@timber/jekyll-compat';
 import type { RepoSession } from '../state/repoSession.js';
-import { importThemeFromZip } from '../theme/importTheme.js';
+import {
+  importThemeFromZip,
+  defaultThemeNameFromZip,
+  slugifyThemeName,
+} from '../theme/importTheme.js';
 
 interface ImportThemeDialogProps {
   session: RepoSession;
+  /**
+   * The settings singleton to activate the imported theme in (its `index.md` path + current
+   * content). When present, the import flips `activeTheme` to the new folder in the same commit
+   * so it goes live. Absent (no settings singleton) → the user sets `activeTheme` by hand.
+   */
+  settingsFile?: { path: string; source: string };
   onClose: () => void;
 }
 
@@ -14,27 +24,47 @@ function reloadEditor(): void {
 }
 
 /**
- * "Import Jekyll theme" dialog (SPEC §2 → Tier A) — the browser side of adopt-once. Upload a
- * theme `.zip` (e.g. GitHub's "Download ZIP"); it's transformed to native `templates/*.liquid`
- * + assets (SCSS source carried over, compiled by @timber/sass at build/preview time) and
- * committed to your WIP branch in one commit. No terminal. After import, reload to pick it up.
+ * "Import Jekyll theme" dialog (SPEC §2 → Tier A, §13 themes) — the browser side of adopt-once.
+ * Upload a theme `.zip` (e.g. GitHub's "Download ZIP"); it's transformed to native templates +
+ * assets under a self-contained `themes/<name>/` folder (SCSS source carried over, compiled by
+ * @timber/sass at build/preview time) and committed to your WIP branch in one commit, with the
+ * site's `activeTheme` pointed at it. Any previous theme stays on disk, so switching back is one
+ * setting. No terminal. After import, reload to pick it up.
  */
 export function ImportThemeDialog({
   session,
+  settingsFile,
   onClose,
 }: ImportThemeDialogProps): React.JSX.Element {
-  const [file, setFile] = useState<File | null>(null);
+  const [bytes, setBytes] = useState<Uint8Array | null>(null);
+  const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<ThemeImportPlan | null>(null);
 
+  async function onFile(file: File | null): Promise<void> {
+    setError(null);
+    if (!file) {
+      setBytes(null);
+      return;
+    }
+    const buf = new Uint8Array(await file.arrayBuffer());
+    setBytes(buf);
+    // Default the folder name to the archive's wrapper dir (e.g. minima-3.0.0 → minima-3-0-0);
+    // the user can rename before importing.
+    if (!name) setName(defaultThemeNameFromZip(buf));
+  }
+
   async function submit(): Promise<void> {
-    if (!file || busy) return;
+    const themeName = slugifyThemeName(name);
+    if (!bytes || busy || !themeName) return;
     setBusy(true);
     setError(null);
     try {
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      const plan = await importThemeFromZip(session, bytes);
+      const plan = await importThemeFromZip(session, bytes, {
+        themeName,
+        ...(settingsFile ? { activate: settingsFile } : {}),
+      });
       setDone(plan);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -54,13 +84,16 @@ export function ImportThemeDialog({
           <>
             <p>
               Imported <strong>{Object.keys(done.templates).length}</strong> template(s)
-              (root layout <code>{done.rootLayout}</code>, default{' '}
-              <code>{done.defaultLayout}</code>). Committed to your working branch.
+              into <code>themes/{done.themeName}/</code> (root layout{' '}
+              <code>{done.rootLayout}</code>, default <code>{done.defaultLayout}</code>).
+              {settingsFile ? ' It’s now your active theme.' : ''} Committed to your working
+              branch.
             </p>
             <p className="new-type__hint">
               Reload the editor to pick up the theme. Every content type renders through{' '}
-              <code>templates/default.liquid</code> until you add a{' '}
-              <code>templates/&lt;type&gt;.liquid</code>.
+              <code>themes/{done.themeName}/templates/default.liquid</code> until you add a{' '}
+              <code>&lt;type&gt;.liquid</code>. Your previous theme stays under its own{' '}
+              <code>themes/</code> folder — switch back any time from Settings.
             </p>
             <div className="modal__actions">
               <button type="button" onClick={onClose}>
@@ -76,8 +109,9 @@ export function ImportThemeDialog({
             <p className="new-type__hint">
               Upload a Jekyll theme <code>.zip</code> (e.g. a repo’s “Download ZIP”). Its{' '}
               <code>_layouts</code>/<code>_includes</code> become native templates and its
-              assets (incl. SCSS) are carried over — then committed to your working
-              branch.
+              assets (incl. SCSS) are carried over into a <code>themes/&lt;name&gt;/</code>{' '}
+              folder — then committed to your working branch
+              {settingsFile ? ' and set as the active theme' : ''}.
             </p>
             <label className="new-type__group">
               <span>Theme .zip</span>
@@ -85,11 +119,21 @@ export function ImportThemeDialog({
                 type="file"
                 accept=".zip,application/zip"
                 disabled={busy}
-                onChange={(e) => {
-                  setFile(e.target.files?.[0] ?? null);
-                  setError(null);
-                }}
+                onChange={(e) => void onFile(e.target.files?.[0] ?? null)}
               />
+            </label>
+            <label className="new-type__group">
+              <span>Theme name (folder)</span>
+              <input
+                type="text"
+                value={name}
+                placeholder="e.g. minima"
+                disabled={busy}
+                onChange={(e) => setName(e.target.value)}
+              />
+              <span className="new-type__hint">
+                Stored at <code>themes/{slugifyThemeName(name) || '…'}/</code>.
+              </span>
             </label>
             {error ? <p className="new-type__error">{error}</p> : null}
             <div className="modal__actions">
@@ -99,7 +143,7 @@ export function ImportThemeDialog({
               <button
                 type="button"
                 className="is-primary"
-                disabled={!file || busy}
+                disabled={!bytes || !slugifyThemeName(name) || busy}
                 onClick={() => void submit()}
               >
                 {busy ? 'Importing…' : 'Import'}

@@ -24,6 +24,13 @@ export interface PlanThemeOptions {
   defaultLayout?: string;
   /** Per-content-type layout wiring `{ <type>: <layout> }` → `templates/<type>.liquid`. */
   typeMap?: Record<string, string>;
+  /**
+   * Import into a self-contained theme folder: every path is written under
+   * `themes/<themeName>/` (SPEC §13), so the theme sits beside any others and the settings
+   * singleton's `activeTheme` selects it. Omit to write to the legacy root (`templates/` +
+   * `assets/`), the pre-themes layout.
+   */
+  themeName?: string;
 }
 
 /** The write-set to apply to a Timber repo, keyed by **repo** path. */
@@ -38,6 +45,8 @@ export interface ThemeImportPlan {
   defaultLayout: string;
   /** The `type → layout` wiring applied (from `typeMap`). */
   mapped: Record<string, string>;
+  /** The theme folder written to (`themes/<name>/`), or `null` for the legacy root. */
+  themeName: string | null;
 }
 
 /** Extract `_layouts`/`_includes` bare-name → source from the theme's text files. */
@@ -89,11 +98,17 @@ export function planThemeImport(
         ? 'page'
         : rootLayout);
 
+  // Write into a self-contained `themes/<name>/` folder when a name is given (SPEC §13), so
+  // the theme sits beside any others; otherwise the legacy root. Every repo path — templates
+  // and assets alike — carries this prefix.
+  const themeName = options.themeName ?? null;
+  const prefix = themeName ? `themes/${themeName}/` : '';
+
   const templates: Record<string, string> = {};
   for (const [name, source] of Object.entries(imported))
-    templates[`templates/${name}.liquid`] = source;
+    templates[`${prefix}templates/${name}.liquid`] = source;
   if (!imported['default'])
-    templates['templates/default.liquid'] = imported[defaultLayout]!;
+    templates[`${prefix}templates/default.liquid`] = imported[defaultLayout]!;
 
   const mapped: Record<string, string> = {};
   for (const [type, layout] of Object.entries(options.typeMap ?? {})) {
@@ -103,16 +118,16 @@ export function planThemeImport(
         `map ${type}=${layout}: no layout "${layout}" (have: ${layoutNames.join(', ')})`,
       );
     }
-    templates[`templates/${type}.liquid`] = source;
+    templates[`${prefix}templates/${type}.liquid`] = source;
     mapped[type] = layout;
   }
 
   // Assets: `assets/**` keep their path; `_sass/**` move under `assets/_sass/` (Timber's Sass
-  // load path). Text vs binary is preserved from the input.
+  // load path). Both go under the theme prefix. Text vs binary is preserved from the input.
   const repoPathFor = (themePath: string): string | undefined => {
-    if (themePath.startsWith('assets/')) return themePath;
+    if (themePath.startsWith('assets/')) return `${prefix}${themePath}`;
     if (themePath.startsWith('_sass/'))
-      return `assets/_sass/${themePath.slice('_sass/'.length)}`;
+      return `${prefix}assets/_sass/${themePath.slice('_sass/'.length)}`;
     return undefined; // _layouts/_includes handled above; config etc. ignored
   };
 
@@ -127,5 +142,13 @@ export function planThemeImport(
     if (repoPath) binaryFiles[repoPath] = bytes;
   }
 
-  return { templates, textFiles, binaryFiles, rootLayout, defaultLayout, mapped };
+  return {
+    templates,
+    textFiles,
+    binaryFiles,
+    rootLayout,
+    defaultLayout,
+    mapped,
+    themeName,
+  };
 }

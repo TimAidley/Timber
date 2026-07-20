@@ -1,10 +1,13 @@
 import { readdir, readFile, writeFile, mkdir } from 'node:fs/promises';
-import { join, dirname, relative, sep } from 'node:path';
+import { join, dirname, relative, sep, basename } from 'node:path';
 import {
   planThemeImport,
+  setFrontMatterScalar,
   type PlanThemeOptions,
   type ThemeFiles,
 } from '@timber/jekyll-compat';
+import { loadSchemas, type RepoSnapshot } from '@timber/content';
+import { buildSnapshotFromDir } from './snapshot.node.js';
 
 /**
  * **Adopt-once** import of a Jekyll theme into a Timber content repo (SPEC §2 → Tier A). A
@@ -27,6 +30,37 @@ export interface ImportThemeResult {
   defaultLayout: string;
   /** The `type → layout` wiring applied (from `typeMap`). */
   mapped: Record<string, string>;
+  /** The theme folder written to (`themes/<name>/`), or `null` for the legacy root. */
+  themeName: string | null;
+}
+
+/**
+ * Point the site's settings singleton at `themeName` (its `activeTheme`), so the imported theme
+ * goes live. Finds the singleton the same way the build does — the type marked `page: false` —
+ * and patches its `index.md`. Returns the patched path, or `null` if there's no settings
+ * singleton to update (the caller then tells the user to set `activeTheme` by hand).
+ */
+export async function activateTheme(
+  repoDir: string,
+  themeName: string,
+): Promise<string | null> {
+  const snapshot: RepoSnapshot = await buildSnapshotFromDir(repoDir);
+  const schemas = loadSchemas(snapshot);
+  const configTypes = new Set(
+    [...schemas.entries()].filter(([, s]) => s.page === false).map(([type]) => type),
+  );
+  let settingsPath: string | undefined;
+  for (const path of snapshot.keys()) {
+    const m = /^content\/([^/]+)\/index\.md$/.exec(path);
+    if (m && configTypes.has(m[1]!)) {
+      settingsPath = path;
+      break;
+    }
+  }
+  if (!settingsPath) return null;
+  const source = await readFile(join(repoDir, settingsPath), 'utf8');
+  await writeFile(join(repoDir, settingsPath), setFrontMatterScalar(source, 'activeTheme', themeName));
+  return settingsPath;
 }
 
 /**
@@ -37,9 +71,11 @@ export interface ImportThemeResult {
 export function parseImportArgs(args: string[]): {
   positionals: string[];
   typeMap: Record<string, string>;
+  name?: string;
 } {
   const positionals: string[] = [];
   const typeMap: Record<string, string> = {};
+  let name: string | undefined;
   const addPair = (pair: string): void => {
     const [type, layout] = pair.split('=');
     if (type && layout) typeMap[type.trim()] = layout.trim();
@@ -49,9 +85,21 @@ export function parseImportArgs(args: string[]): {
     if (arg === '--map') args[++i]?.split(',').forEach(addPair);
     else if (arg.startsWith('--map='))
       arg.slice('--map='.length).split(',').forEach(addPair);
+    else if (arg === '--name') name = args[++i]?.trim() || undefined;
+    else if (arg.startsWith('--name=')) name = arg.slice('--name='.length).trim() || undefined;
     else positionals.push(arg);
   }
-  return { positionals, typeMap };
+  return name !== undefined ? { positionals, typeMap, name } : { positionals, typeMap };
+}
+
+/** Derive a default theme folder name from a theme directory path (its basename, slugified). */
+export function defaultThemeName(themeDir: string): string {
+  const base = basename(themeDir.replace(/[/\\]+$/, ''));
+  const slug = base
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return slug || 'theme';
 }
 
 /** All files (recursive, posix-relative) under `absDir`; [] if absent. */
@@ -125,5 +173,6 @@ export async function importThemeToRepo(
     rootLayout: plan.rootLayout,
     defaultLayout: plan.defaultLayout,
     mapped: plan.mapped,
+    themeName: plan.themeName,
   };
 }

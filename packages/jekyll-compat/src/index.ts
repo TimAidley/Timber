@@ -27,3 +27,4 @@ export type {
   PlanThemeOptions,
   ThemeImportPlan,
 } from './planImport.js';
+export { setFrontMatterScalar } from './activate.js';
