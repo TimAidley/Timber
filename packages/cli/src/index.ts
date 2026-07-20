@@ -42,7 +42,7 @@ import-theme — adopt-once import of a Jekyll or Liquid-Eleventy theme (Tier A)
            sets the folder (default: the theme dir's name); the previous theme
            stays on disk, so switching back is one setting. Use --map
            <type>=<layout> (repeatable) to render a content type through a specific
-           layout. See docs/importing-jekyll-themes.md.
+           layout. See docs/importing-themes.md.
 
 This is the Node/CI entry point; preview ≡ build.`;
 

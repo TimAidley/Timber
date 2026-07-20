@@ -14,7 +14,7 @@
  * The native pieces this builds on — `relative_url`/`absolute_url`, `page.url`, the
  * `site.<type>` aliases — live in `@timber/generator` and `@timber/content`, not here.
  * Tier-B themes import in a degraded form; Tier-C (app-in-a-theme, e.g. Chirpy) is out of
- * scope. See `docs/importing-jekyll-themes.md`.
+ * scope. See `docs/importing-themes.md`.
  */
 export { registerJekyllCompat } from './register.js';
 export { registerJekyllFilters, strftime } from './filters.js';

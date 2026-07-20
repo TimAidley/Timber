@@ -20,7 +20,8 @@ a site* see **`INSTALL.md`**.
 |---|---|---|
 | `@timber/generator` | remark/rehype → LiquidJS render core (one page) | browser **and** Node (isomorphic) |
 | `@timber/content` | Content model: schemas, id→object index, reference resolution, validation, SEO, navigation, redirects, video allowlist, visibility | browser and Node |
-| `@timber/jekyll-compat` | **Jekyll-theme import layer** (SPEC §2 → Tier A): the `importJekyllTheme` transform + `registerJekyllCompat` ecosystem filters/tags, plugged into the generator via its `extend` seam. Lets Tier-A (Liquid+CSS) Jekyll themes be imported and rendered by Timber's own generator | browser and Node |
+| `@timber/jekyll-compat` | **Theme-import core + Jekyll engine** (SPEC §2 → Tier A): the shared, engine-pluggable `planThemeImport` (theme files → repo write-set) + the `ThemeEngine` seam + `setFrontMatterScalar`, plus the Jekyll engine (`importJekyllTheme` transform, `registerJekyllCompat` ecosystem filters/tags). Reads `page.*` | browser and Node |
+| `@timber/eleventy-compat` | **Eleventy engine + the runtime dispatch** (SPEC §2 → Tier A): the `importEleventyTemplate` transform, `eleventyEngine` (collects `_includes/**` at any input-dir prefix, parses `_data/*.json` globals), `registerEleventyCompat` (`url`/`slugify`/…), `detectEngine`, and `themeRuntime`/`parseThemeManifest` (the one place that maps a theme's `theme.json` → render mode for *both* engines, so it depends on jekyll-compat). Only **Liquid**-authored Eleventy themes | browser and Node |
 | `@timber/sass` | **Isomorphic SCSS compiler** (SPEC §6): `compileScss` — dart-sass driven by an **in-memory importer** over the repo snapshot, so the browser preview and the Node build compile stylesheets identically (preview ≡ build). dart-sass is pure JS; lazy-loaded in the browser | browser and Node |
 | `@timber/cli` | `timber build . _site` — builds the whole static site | Node (CI) |
 | `@timber/app` | The browser editor SPA (React): auth, editor, preview, media pipeline | browser |
@@ -240,33 +241,29 @@ Cross-cutting things and every file they touch:
   `state/autosave.ts` `markObjectCreated`, `Editor.tsx` add-translation flow +
   `byTranslation` rebuild, `components/AddTranslationDialog.tsx`, `components/ContentList.tsx`
   language chip). A site opts in via `languages`/`defaultLanguage` in its settings singleton.
-- **Jekyll theme compatibility** (SPEC §2 → Tier A) → the native template-contract pieces are
-  in `@timber/generator` (`urlFilters.ts` `relative_url`/`absolute_url`; `render.ts`
-  `page.url`/`page.collection`/`page.content`/`layout`; the `createEngine`/`renderPage` `extend` seam)
-  and `@timber/content` (`collections.ts` `withCollectionAliases`); the compat layer proper is
-  `@timber/jekyll-compat` (`importTheme.ts` transform + `filters.ts`/`tags.ts` +
-  `register.ts`). A consumer renders an imported theme with
-  `renderPage({ …, templates: importJekyllTheme(files, root), extend: registerJekyllCompat })`.
-  Escaping reconciliation (drop redundant `escape`/`xml_escape`) lives in the transform; keep
-  it in lockstep with the generator's auto-escape default (SPEC §6). **SCSS** is compiled
-  **isomorphically** by `@timber/sass` (`compileScss`, in-memory importer) in BOTH
-  `build.node.ts` and the app preview (`siteTheme.ts`) over the **active theme's** `_sass` load
-  path — keep the two in lockstep (same load path + main-vs-partial rule) for preview ≡ build.
-  The **adopt-once** flow shares one isomorphic core — `planThemeImport`
-  (`packages/jekyll-compat/src/planImport.ts`, theme files → repo write-set) — driven from two
-  edges: the CLI (`packages/cli/src/importTheme.node.ts`, fs → files) and the **browser**
+- **Theme compatibility, engine-pluggable** (SPEC §2 → Tier A) → the native template-contract
+  pieces are in `@timber/generator` (`urlFilters.ts` `relative_url`/`absolute_url`; `render.ts`
+  `page.url`/…/`layout` + the **data cascade** `globals`/`flattenData`; the `extend` seam) and
+  `@timber/content` (`collections.ts` `withCollectionAliases`). The import is **engine-pluggable**:
+  the shared `planThemeImport` (`packages/jekyll-compat/src/planImport.ts`, theme files → repo
+  write-set) takes a **`ThemeEngine`** — `jekyllEngine` (`_layouts`/`_includes` → templates,
+  reads `page.*`) or `eleventyEngine` (`@timber/eleventy-compat`: `_includes/**` at any input-dir
+  prefix → templates, `_data/*.json` → globals, `name:'eleventy'`). To add an engine: implement
+  `ThemeEngine.collect` + optional `name`/`globals`; touch nothing else. A non-native engine
+  makes the plan write a **`themes/<name>/theme.json` manifest** (engine + `_data` globals). At
+  render time, **`themeRuntime(manifest)`** (in `@timber/eleventy-compat`, the one place that
+  knows both engines) maps it to `{ extend, flattenData, globals }`; BOTH `build.node.ts` and the
+  preview (`renderSitePage.ts`, manifest loaded by `siteTheme.ts`) use it, so preview ≡ build —
+  an Eleventy theme's bare `{{ title }}`/`{{ metadata.* }}` resolve, a native/Jekyll theme reads
+  `page.*` unchanged. **SCSS** compiles **isomorphically** (`@timber/sass`, in-memory importer)
+  in build + preview over the active theme's `_sass` load path — keep them in lockstep. The
+  **adopt-once** flow runs from two edges: the CLI (`packages/cli/src/importTheme.node.ts`, fs →
+  files, `--engine`/autodetect via `detectEngine`) and the **browser**
   (`packages/app/src/theme/importTheme.ts`: `fflate` unzip → plan → `commitFiles`; UI in
-  `components/ImportThemeDialog.tsx`, opened from the Advanced list in `Editor.tsx`). Both write
-  into a **`themes/<name>/` folder** (§13) — `themes/<name>/templates/*.liquid` + assets incl.
-  the SCSS source (`_sass/` → `themes/<name>/assets/_sass/`) — and **activate** it by patching
-  `settings.activeTheme` (shared `setFrontMatterScalar`; browser folds the patch into the import
-  commit, CLI writes it back). `buildSite` (`build.node.ts`) auto-passes
-  `extend: registerJekyllCompat` so an adopted theme's `{% seo %}`/`date_to_xmlschema`/… build
-  with plain `timber build` (the layer is additive — no built-in overrides — so native sites are
-  unaffected). The **app preview** (`packages/app/src/preview/renderSitePage.ts`) registers the
-  same and inlines whichever stylesheet the page `<link>`s, compiling the active theme's SCSS
-  in-browser (`siteTheme.ts`), so an adopted theme previews ≡ build. Guide:
-  `docs/importing-jekyll-themes.md`.
+  `components/ImportThemeDialog.tsx` with an engine picker). Both write into a **`themes/<name>/`
+  folder** (§13) and **activate** it by patching `settings.activeTheme` (`setFrontMatterScalar`).
+  Guide: `docs/importing-themes.md`. **Change an engine's transform → keep the manifest's
+  `engine` id, `themeRuntime`, and the render-mode wiring in lockstep.**
 - **Themes as folders → also update the resolver + every advanced path helper.** Which repo
   dirs are "the theme" is one seam: **`resolveThemePaths(activeTheme, exists)`** in
   `@timber/content` (`themePaths.ts`) → `{ templatesDir, assetsDir, sassLoadPaths }`, plus

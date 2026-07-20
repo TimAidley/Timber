@@ -13,7 +13,7 @@
  *
  * The template *structure* imports mechanically; theme-defined JS filters degrade to
  * pass-through (Timber's engine runs `strictFilters` off), and Nunjucks-authored themes are out
- * of scope (a different language). See `docs/importing-jekyll-themes.md`.
+ * of scope (a different language). See `docs/importing-themes.md`.
  */
 export { importEleventyTemplate, importEleventyTheme } from './importTheme.js';
 export type { ImportOptions } from './importTheme.js';

@@ -1,18 +1,26 @@
-# Importing a Jekyll theme
+# Importing a theme (Jekyll or Liquid Eleventy)
 
 Timber owns its generator, but because it templates with **LiquidJS** (the Jekyll /
-GitHub-Pages lineage), a large slice of the **Jekyll** theme ecosystem can be *imported* and
-rendered by Timber's own generator — you get a proven design and its documentation without
-running Jekyll. This is the **Tier-A** compatibility path (SPEC §2). A theme is transformed
-**once** on import; it is never executed by Jekyll.
+GitHub-Pages lineage), a large slice of the **Liquid-authored** theme ecosystem can be
+*imported* and rendered by Timber's own generator — you get a proven design and its
+documentation without running Jekyll or Eleventy. This is the **Tier-A** compatibility path
+(SPEC §2). A theme is transformed **once** on import; it is never executed by its original SSG.
 
-See also: SPEC §2 (the tiered decision), SPEC §6 (the template contract), ARCHITECTURE.md
-(where each piece lives).
+Two source engines are supported today:
+
+- **Jekyll** (e.g. Minima, Beautiful-Jekyll) — `_layouts` + `_includes`, reads `page.*`.
+- **Liquid Eleventy** (e.g. nulite) — `_includes/**`, reads bare `{{ title }}` + `{{ _data.* }}`
+  via a flat data cascade. **Only Liquid-authored** 11ty themes — Nunjucks/WebC/JS themes are a
+  different language and out of scope.
+
+The engine is **autodetected** (`_layouts/` → Jekyll, `_includes/*.liquid` → Eleventy) and can
+be overridden. See also: SPEC §2 (the tiered decision), SPEC §6 (the template contract),
+ARCHITECTURE.md (where each piece lives).
 
 ## Quick start
 
-The **adopt-once** import runs two ways — both do the same transform (they share the
-isomorphic `planThemeImport` core), so pick whichever fits.
+The **adopt-once** import runs two ways — both share the isomorphic `planThemeImport` core (and
+the same engine adapters), so pick whichever fits.
 
 Each imported theme lands in its **own `themes/<name>/` folder**, and the site's
 `settings.activeTheme` is pointed at it — so importing makes the theme live while leaving any
@@ -22,24 +30,25 @@ previous theme on disk under its own folder. Switch back, or delete a theme, fro
 ### From the browser (no terminal)
 
 In the editor, open **Advanced → ↓ Import theme**, upload a theme `.zip` (e.g. a repo's
-"Download ZIP"), give the theme a **name** (defaulted from the archive), and click **Import**.
-It transforms the theme into `themes/<name>/templates/*.liquid` + `themes/<name>/assets/**`,
-flips `settings.activeTheme` to it, and commits everything to your working branch in one commit;
-reload to pick it up. The build (and the in-editor preview) compile the theme's SCSS
-isomorphically — nothing to run locally.
+"Download ZIP"), pick the **source engine** (Auto-detect by default), give the theme a **name**
+(defaulted from the archive), and click **Import**. It transforms the theme into
+`themes/<name>/templates/*.liquid` + `themes/<name>/assets/**` (plus a `theme.json` manifest for
+an Eleventy theme), flips `settings.activeTheme` to it, and commits everything to your working
+branch in one commit; reload to pick it up. The build (and the in-editor preview) compile the
+theme's SCSS isomorphically — nothing to run locally.
 
 ### From the CLI
 
 ```sh
-timber import-theme path/to/jekyll-theme  path/to/my-site  --name minima
+timber import-theme path/to/theme  path/to/my-site  [--engine jekyll|eleventy]  --name minima
 ```
 
-It transforms the theme's `_layouts` + `_includes` into native
-`themes/<name>/templates/*.liquid`, carries its assets (incl. SCSS source) into
-`themes/<name>/assets/`, sets `settings.activeTheme`, and prints a summary — e.g. *"14
-templates (root: base, default: page), activated: set activeTheme: minima."* `--name` defaults
-to the theme directory's name. After that your repo is an **ordinary Timber site**: `timber
-build` compiles the theme's SCSS and renders it, with no further Jekyll step.
+It transforms the theme's templates into native `themes/<name>/templates/*.liquid`, carries its
+assets (incl. SCSS source) into `themes/<name>/assets/`, writes the engine manifest, sets
+`settings.activeTheme`, and prints a summary — e.g. *"Imported theme (eleventy) → …/themes/blog/;
+4 templates (root: layouts/base, default: layouts/post); activated."* The engine is
+autodetected; override with `--engine`. `--name` defaults to the theme directory's name. After
+that your repo is an **ordinary Timber site**: `timber build` renders it, no further SSG step.
 
 - **Per-type layouts.** Every content type falls back to `themes/<name>/templates/default.liquid`
   (the theme's generic single-content layout). To render a type through a specific layout, pass
@@ -89,6 +98,32 @@ The rest of this doc covers the **programmatic** API underneath the command.
   built-in already handles Jekyll's strftime, incl. `%-d`), which is why the CLI build can
   register it for every site safely. The high-frequency `relative_url` / `absolute_url` are
   **native** to the generator, not here.
+
+## Eleventy specifics
+
+`@timber/eleventy-compat` is the Eleventy engine — the same shape as the Jekyll one, with the
+differences Eleventy needs:
+
+- **Templates** come from `_includes/**` (layouts *and* partials live there in Eleventy), keyed
+  by their path relative to `_includes/`, at **any input-dir prefix** (`src/_includes/…` is
+  common). The transform handles Eleventy's idioms: front-matter `layout: layouts/base.liquid`
+  chaining (extension + subpath), quoted includes with extensions (`{% include "css/x.liquid" %}`
+  → `{% include "css/x" %}`), and un-spaced tags (`{%if%}`).
+- **Data cascade.** Eleventy reads a page's front matter and `_data/*` globals as **bare
+  top-level variables** (`{{ title }}`, `{{ metadata.author }}`), not under `page.*`. The import
+  writes a `themes/<name>/theme.json` manifest (`{ engine: "eleventy", data: … }`); the build and
+  preview read it and render with the **flat data cascade** (`renderPage`'s `flattenData` +
+  `globals`), so those resolve. `_data/*.json` files are parsed into the manifest; **`.js` data
+  files run arbitrary JavaScript and are skipped** — supply that data via Timber's settings, or
+  by hand. (The reserved context names — `site`, `content`, `collections`, … — always win, so a
+  data key can't shadow them; Timber's `site` settings serve an Eleventy theme's `{{ site.* }}`.)
+- **Filters.** `registerEleventyCompat` ships Eleventy's genuine built-ins (`url`, `slugify`/
+  `slug`, `log`). **Theme-defined JS filters** (`readableDate`, a theme's `similarPosts`, …)
+  can't be imported — they **degrade to pass-through** (Timber runs `strictFilters` off), so the
+  theme's core reading path still renders; sections relying on them just won't compute.
+- **Degrades (Tier-B):** `pagination`, `eleventyComputed`, `permalink` templating, and the
+  `eleventyNavigation` plugin have no Timber equivalent — a theme leaning on them imports only in
+  part. **Out of scope:** Nunjucks/WebC/JS-authored 11ty themes (a different language).
 
 ## Rendering an imported theme
 
