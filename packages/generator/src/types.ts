@@ -104,4 +104,21 @@ export interface RenderPageInput {
    */
   now?: string;
   today?: string;
+  /**
+   * Optional theme-level globals merged into the **top-level** render scope (SPEC §2 → the
+   * Eleventy data cascade). Eleventy exposes `_data/*` files as bare top-level variables
+   * (`{{ metadata.* }}`, `{{ site.* }}`), not under `page.*`, so an imported Eleventy theme
+   * needs its data flat. Merged *below* the reserved names (`page`/`content`/`site`/
+   * `collections`/`seo`/`layout`/`now`/`today`), which always win, so a global can never
+   * shadow the real context. Omit for native/Jekyll themes (which read `page.*`).
+   */
+  globals?: Record<string, unknown>;
+  /**
+   * When true, the page's own front-matter data is *also* merged into the top-level scope
+   * (SPEC §2 → the Eleventy data cascade): a theme that reads bare `{{ title }}` (Eleventy)
+   * rather than `{{ page.title }}` (Jekyll/native) resolves. Front matter wins over
+   * {@link globals} but still loses to the reserved names. Default false — native/Jekyll
+   * rendering is byte-identical.
+   */
+  flattenData?: boolean;
 }

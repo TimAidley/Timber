@@ -73,6 +73,14 @@ export async function renderPage(input: RenderPageInput): Promise<string> {
   const html = await engineFor(input.templates, input.extend).parseAndRender(
     input.template,
     {
+      // Eleventy data cascade (SPEC §2): theme `_data/*` globals, then (if flattened) the
+      // page's own front matter, spread at the TOP LEVEL — so an imported Eleventy theme's
+      // bare `{{ title }}`/`{{ metadata.x }}` resolve. Spread FIRST so the reserved names
+      // below (page/content/site/…) always win and can never be shadowed; front matter is
+      // spread after globals so it wins over them (closer-to-content, Eleventy's rule).
+      // Both omitted for native/Jekyll themes → byte-identical `page.*`-only context.
+      ...(input.globals ?? {}),
+      ...(input.flattenData ? data : {}),
       // Computed language/translations (SPEC §5 → Multilingual) win over any same-named
       // front-matter key, mirroring the model where the path is authoritative for `lang`.
       page: {
