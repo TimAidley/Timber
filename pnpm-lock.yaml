@@ -173,6 +173,18 @@ importers:
         specifier: ^2.6.1
         version: 2.9.0
 
+  packages/eleventy-compat:
+    dependencies:
+      '@timber/generator':
+        specifier: workspace:*
+        version: link:../generator
+      '@timber/jekyll-compat':
+        specifier: workspace:*
+        version: link:../jekyll-compat
+      liquidjs:
+        specifier: ^10.19.0
+        version: 10.27.1
+
   packages/generator:
     dependencies:
       liquidjs:

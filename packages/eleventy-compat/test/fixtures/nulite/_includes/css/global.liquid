@@ -1,0 +1,20 @@
+<style>
+  * { padding: 0; margin: 0; line-height: calc(1em + 0.75rem); }
+  html {
+    --color-background: #fffcf0; --color-text: #22211d;
+    --color-text-shade: #575650; --color-primary: #147d82;
+    --font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
+    --container-max-size: 75ch; --container-padding-sides: var(--space-4);
+    --space-1: 0.35rem; --space-2: 0.5rem; --space-3: 1rem; --space-4: 1.5rem;
+    --space-5: 2rem; --space-6: 2.5rem; --space-7: 3rem; --space-8: 4rem;
+    --font-size-xs: clamp(0.8rem, 0.12vw + 0.8rem, 1rem);
+    --font-size-base: clamp(0.9rem, 0.16vw + 0.9rem, 1.25rem);
+    --font-size-lg: clamp(1.2rem, 0.12vw + 1.2rem, 1.6rem);
+    --font-size-xl: clamp(1.6rem, 0.14vw + 1.6rem, 2rem);
+  }
+  [data-theme="dark"] {
+    --color-background: #100f0f; --color-text: #d2dee1; --color-primary: #62aba4;
+  }
+  body { font-family: var(--font-family); color: var(--color-text); background-color: var(--color-background); }
+  a { color: var(--color-primary); }
+</style>

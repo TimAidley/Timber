@@ -1,0 +1,7 @@
+<button class="dark-toggler" aria-label="Toggle color mode" data-theme-toggle>
+  <div class="toggler-icon"></div>
+</button>
+<script>
+  const t = localStorage.getItem("theme");
+  document.querySelector("html").setAttribute("data-theme", t || "light");
+</script>
