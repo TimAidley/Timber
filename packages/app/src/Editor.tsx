@@ -1289,46 +1289,55 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
           </div>
         </header>
 
-        <LocationReadout
-          readout={computeLocationReadout({
-            storage: deviceOnlyPaths.has(selected.path) ? 'device' : 'backed-up',
-            hasLocalEdits: autosave.editingPaths.has(selected.path),
-            differsFromMain: savedPaths.has(selected.path),
-            newToMain: addedIndexPaths.has(selected.path),
-            isPublic: edit.data.public === true,
-            canDeploy,
-          })}
-          visibility={repoVisibility}
-        />
+        <div className="editor-card">
+          <div className="editor-card__head">
+            <span className="editor-card__eyebrow">Where it lives</span>
+          </div>
+          <div className="editor-card__body">
+            <LocationReadout
+              readout={computeLocationReadout({
+                storage: deviceOnlyPaths.has(selected.path) ? 'device' : 'backed-up',
+                hasLocalEdits: autosave.editingPaths.has(selected.path),
+                differsFromMain: savedPaths.has(selected.path),
+                newToMain: addedIndexPaths.has(selected.path),
+                isPublic: edit.data.public === true,
+                canDeploy,
+              })}
+              visibility={repoVisibility}
+            />
+          </div>
+        </div>
 
-        <section className="editor-panel">
-          <h3>Fields</h3>
-          <SchemaForm
-            schema={schema}
-            data={edit.data}
-            model={workingModel}
-            assetStore={assetStore}
-            bundleDir={selected.path.replace(/\/index\.md$/, '')}
-            onAssetStaged={onContentAssetStaged}
-            onChange={updateField}
-          />
-        </section>
-
-        {hasBody ? (
-          <section className="editor-panel">
-            <h3>Body</h3>
-            <BodyEditor
-              docKey={bodySeed}
-              value={edit.body}
-              onChange={(body) => applyEdit({ ...edit, body })}
+        <div className="editor-card">
+          <div className="editor-card__head">
+            <span className="editor-card__eyebrow">Fields</span>
+          </div>
+          <div className="editor-card__body">
+            <SchemaForm
+              schema={schema}
+              data={edit.data}
+              model={workingModel}
               assetStore={assetStore}
               bundleDir={selected.path.replace(/\/index\.md$/, '')}
-              onStaged={onContentAssetStaged}
-              diffWorkingText={reassembleDocument(edit.data, edit.body)}
-              getPublishedText={getPublishedText}
-              onRevert={canDiscard ? () => setDiscardTarget(selected) : undefined}
+              onAssetStaged={onContentAssetStaged}
+              onChange={updateField}
             />
-          </section>
+          </div>
+        </div>
+
+        {hasBody ? (
+          <BodyEditor
+            label="Body"
+            docKey={bodySeed}
+            value={edit.body}
+            onChange={(body) => applyEdit({ ...edit, body })}
+            assetStore={assetStore}
+            bundleDir={selected.path.replace(/\/index\.md$/, '')}
+            onStaged={onContentAssetStaged}
+            diffWorkingText={reassembleDocument(edit.data, edit.body)}
+            getPublishedText={getPublishedText}
+            onRevert={canDiscard ? () => setDiscardTarget(selected) : undefined}
+          />
         ) : null}
 
         {validation ? (

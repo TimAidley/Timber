@@ -192,21 +192,76 @@ describe('ContentList (i18n clustering)', () => {
     expect(titlesIn(0)).toEqual(['Hello', 'Solo']);
   });
 
-  it('renders a chip per language — present as buttons, missing as muted gaps', async () => {
+  // Mount with a custom language set / onSelect, for the control's adaptive + jump behaviour.
+  function mountI18nWith(opts: {
+    languages: string[];
+    onSelect?: (path: string) => void;
+  }): void {
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    root.render(
+      React.createElement(ContentList, {
+        objects: I18N_OBJECTS,
+        schemas: i18nSchemas,
+        selectedPath: '',
+        editingPaths: new Set<string>(),
+        savedPaths: new Set<string>(),
+        deletedPaths: new Set<string>(),
+        onSelect: opts.onSelect ?? (() => undefined),
+        languages: opts.languages,
+        defaultLanguage: 'en',
+      }),
+    );
+  }
+
+  it('shows a language control with per-language status (codes mode for few languages)', async () => {
     mountI18n();
-    await waitFor(() => document.querySelector('.object-list__langs'));
+    await waitFor(() => document.querySelector('.langctl'));
 
-    const hello = rowByTitle('Hello');
-    expect(hello.querySelectorAll('button.object-list__lang')).toHaveLength(3); // en, fr, de present
-    expect(hello.querySelectorAll('.object-list__lang.is-missing')).toHaveLength(0);
-    // The draft French variant is marked as such.
-    expect(hello.querySelector('.object-list__lang.is-draft')?.textContent).toBe('fr');
+    // 3 site languages (≤ threshold) → codes mode: en, fr, de all present for "Hello".
+    const hello = rowByTitle('Hello').querySelector('.langctl')!;
+    expect(hello.querySelectorAll('.langctl__code')).toHaveLength(3);
+    expect(hello.querySelectorAll('.langctl__code.is-missing')).toHaveLength(0);
+    // The draft French variant reads as draft.
+    expect(hello.querySelector('.langctl__code.is-draft')?.textContent).toBe('fr');
 
-    const solo = rowByTitle('Solo');
-    expect(solo.querySelectorAll('button.object-list__lang')).toHaveLength(1); // en only
-    expect([...solo.querySelectorAll('.object-list__lang.is-missing')].map((c) => c.textContent)).toEqual(
+    // "Solo" exists only in English → fr/de are missing gaps.
+    const solo = rowByTitle('Solo').querySelector('.langctl')!;
+    expect([...solo.querySelectorAll('.langctl__code.is-missing')].map((c) => c.textContent)).toEqual(
       ['fr', 'de'],
     );
+  });
+
+  it('collapses to an N/M coverage summary when the site has many languages', async () => {
+    mountI18nWith({ languages: ['en', 'fr', 'de', 'es', 'ja'] }); // 5 > threshold → compact
+    await waitFor(() => document.querySelector('.langctl'));
+
+    const ctl = rowByTitle('Hello').querySelector('.langctl')!;
+    expect(ctl.querySelector('.langctl__code')).toBeNull(); // no bare codes in compact mode
+    expect(ctl.querySelector('.langctl__frac')?.textContent).toContain('/5');
+    // A pip per site language; "Hello" is public in en/de, draft in fr, missing in es/ja.
+    expect(ctl.querySelectorAll('.langctl__pip')).toHaveLength(5);
+    expect(ctl.querySelectorAll('.langctl__pip.is-public')).toHaveLength(2);
+    expect(ctl.querySelectorAll('.langctl__pip.is-draft')).toHaveLength(1);
+  });
+
+  it('opens the translations menu and jumps to the chosen variant', async () => {
+    let picked = '';
+    mountI18nWith({ languages: ['en', 'fr', 'de'], onSelect: (p) => (picked = p) });
+    await waitFor(() => document.querySelector('.langctl'));
+
+    const hello = rowByTitle('Hello');
+    hello.querySelector<HTMLButtonElement>('.langctl')!.click();
+    const menu = await waitFor(() => hello.querySelector('.langmenu'));
+
+    // One row per site language; the missing ones are disabled.
+    const rows = [...menu.querySelectorAll<HTMLButtonElement>('.langmenu__row')];
+    expect(rows).toHaveLength(3);
+    const fr = rows.find((r) => r.querySelector('.langmenu__code')?.textContent === 'fr')!;
+    fr.click();
+    await tick();
+    expect(picked).toContain('/bonjour/');
   });
 
   it('“Needs translation” filter narrows to clusters with gaps', async () => {

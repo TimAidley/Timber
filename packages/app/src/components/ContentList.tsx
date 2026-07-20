@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ContentObject, ContentTypeSchema } from '@timber/content';
 import { ChangeBadge, DeviceBadge, VisibilityBadge } from './ChangeBadges.js';
 import { objectChangeState } from '../state/changes.js';
@@ -35,6 +35,20 @@ interface ContentListProps {
 
 const DEFAULT_SORT: SortState = { key: NAME_SORT, dir: 'asc' };
 const EMPTY: ReadonlySet<string> = new Set();
+
+/** Above this many site languages the control drops the codes for an "N/M" summary. */
+const LANG_CODES_MAX = 3;
+
+/** A language's own name for the menu (endonym), falling back to the bare code. */
+function languageName(code: string): string {
+  try {
+    return (
+      new Intl.DisplayNames([code], { type: 'language' }).of(code) ?? code.toUpperCase()
+    );
+  } catch {
+    return code.toUpperCase();
+  }
+}
 
 /** Human-readable secondary line, showing the value the group is sorted by. */
 function secondaryText(o: ContentObject, sort: SortState): string {
@@ -77,7 +91,25 @@ export function ContentList({
   const [query, setQuery] = useState('');
   const [sorts, setSorts] = useState<Record<string, SortState>>({});
   const [incompleteOnly, setIncompleteOnly] = useState(false);
+  // Which cluster's translations menu is open (by cluster key), or null. A document-level
+  // listener closes it on an outside click or Escape; the control and its rows stopPropagation
+  // so their own clicks don't immediately re-close it.
+  const [openLangMenu, setOpenLangMenu] = useState<string | null>(null);
   const i18n = languages.length > 0;
+
+  useEffect(() => {
+    if (openLangMenu === null) return;
+    const close = (): void => setOpenLangMenu(null);
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') setOpenLangMenu(null);
+    };
+    document.addEventListener('click', close);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('click', close);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [openLangMenu]);
 
   const groups = useMemo(() => groupByType(objects), [objects]);
 
@@ -148,40 +180,106 @@ export function ContentList({
           </span>
           <span className="object-list__type">{secondaryText(rep, sort)}</span>
         </button>
-        <div className="object-list__langs" role="group" aria-label="Translations">
-          {languages.map((lang) => {
-            const variant = cluster.variants.get(lang);
-            if (!variant) {
+        {languageControl(cluster)}
+      </li>
+    );
+  }
+
+  // The right-hand language control for a cluster: an adaptive summary button (codes when
+  // there are few languages, an "N/M" coverage fraction with pips when there are many) that
+  // opens a menu of every site language with its status and a jump. One tidy line per row,
+  // whatever the language count — replacing the loose, unaligned chip strip.
+  function languageControl(cluster: TranslationCluster): React.JSX.Element {
+    const open = openLangMenu === cluster.key;
+    const present = languages.filter((l) => cluster.variants.has(l)).length;
+    const compact = languages.length > LANG_CODES_MAX;
+    const statusOf = (v: ContentObject | undefined): 'public' | 'draft' | 'missing' =>
+      !v ? 'missing' : v.public ? 'public' : 'draft';
+
+    return (
+      <>
+        <button
+          type="button"
+          className="langctl"
+          aria-haspopup="menu"
+          aria-expanded={open}
+          aria-label={`Translations — ${present} of ${languages.length} languages`}
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpenLangMenu(open ? null : cluster.key);
+          }}
+        >
+          {compact ? (
+            <>
+              <span className="langctl__globe" aria-hidden="true">
+                🌐
+              </span>
+              <span className="langctl__frac">
+                <b>{present}</b>/{languages.length}
+              </span>
+              <span className="langctl__pips" aria-hidden="true">
+                {languages.map((lang) => {
+                  const st = statusOf(cluster.variants.get(lang));
+                  return (
+                    <i
+                      key={lang}
+                      className={`langctl__pip${st === 'missing' ? '' : ` is-${st}`}`}
+                    />
+                  );
+                })}
+              </span>
+            </>
+          ) : (
+            languages.map((lang) => {
+              const st = statusOf(cluster.variants.get(lang));
               return (
-                <span
-                  key={lang}
-                  className="object-list__lang is-missing"
-                  title={`${lang}: not translated`}
-                >
+                <span key={lang} className={`langctl__code is-${st}`}>
                   {lang}
                 </span>
               );
-            }
-            return (
-              <button
-                key={lang}
-                type="button"
-                className={[
-                  'object-list__lang',
-                  variant.path === selectedPath ? 'is-active' : '',
-                  variant.public ? '' : 'is-draft',
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-                onClick={() => onSelect(variant.path)}
-                title={`${lang}${variant.public ? '' : ' — draft'}`}
-              >
-                {lang}
-              </button>
-            );
-          })}
-        </div>
-      </li>
+            })
+          )}
+          <span className="langctl__caret" aria-hidden="true">
+            ▾
+          </span>
+        </button>
+        {open ? (
+          <div
+            className="langmenu"
+            role="menu"
+            aria-label={`${objectName(cluster.representative)} — translations`}
+          >
+            <div className="langmenu__head">Translations</div>
+            {languages.map((lang) => {
+              const variant = cluster.variants.get(lang);
+              const st = statusOf(variant);
+              const label =
+                st === 'public' ? 'Public' : st === 'draft' ? 'Draft' : 'Not translated';
+              const isCurrent = variant?.path === selectedPath;
+              return (
+                <button
+                  key={lang}
+                  type="button"
+                  role="menuitem"
+                  className={`langmenu__row is-${st}${isCurrent ? ' is-current' : ''}`}
+                  disabled={!variant}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (variant) {
+                      onSelect(variant.path);
+                      setOpenLangMenu(null);
+                    }
+                  }}
+                >
+                  <span className="langmenu__code">{lang}</span>
+                  <span className="langmenu__name">{languageName(lang)}</span>
+                  <span className={`langmenu__status is-${st}`}>{label}</span>
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+      </>
     );
   }
 

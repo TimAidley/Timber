@@ -682,12 +682,12 @@ body {
 }
 
 /* A translation cluster row (SPEC §5 → Multilingual): the title button grows and
-   truncates on the left; the language chips sit inline on the right, so each cluster is
-   one compact row instead of a title block plus a separate chip strip below. On a narrow
-   sidebar the chips wrap under the title rather than crushing it. */
+   truncates on the left; a single compact language control sits on the right and opens
+   a menu, so the row stays one tidy line no matter how many languages the site has.
+   `position: relative` anchors that menu's popover. */
 .object-cluster {
+  position: relative;
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   column-gap: 0.25rem;
 }
@@ -708,55 +708,177 @@ body {
   text-overflow: ellipsis;
 }
 
-/* Language chip strip: one chip per site language — present languages are buttons,
-   missing ones muted gaps. A fixed-width, single-line unit pushed to the row's right edge
-   (0.6rem inset); it stays intact and, only if the title leaves no room, wraps below as a
-   whole (via the row's flex-wrap) rather than stacking its chips one-per-line. */
-.object-list__langs {
-  display: flex;
+/* The language control: one fixed-width, right-aligned button per cluster that opens the
+   translations menu. It's *adaptive* — up to a few languages it shows their codes (toned
+   by status); beyond that it collapses to an "N/M" coverage fraction plus a pip per
+   language, so the width never blows out however many languages a site declares.
+
+   `button.langctl` (not `.langctl`) so it ties `.object-list button`'s specificity and,
+   coming later in source, wins — otherwise that rule's `flex-direction: column` / `width:
+   100%` would stack the codes vertically and stretch the control. */
+button.langctl {
   flex: 0 0 auto;
-  flex-wrap: nowrap;
-  gap: 0.2rem;
   margin-left: auto;
-  padding: 0 0.6rem 0 0;
-}
-
-.object-list__lang {
-  display: inline-block;
-  padding: 0.02rem 0.35rem;
-  border: 1px solid transparent;
+  display: inline-flex;
+  flex-direction: row;
+  width: auto;
+  align-items: center;
+  gap: 0.28rem;
+  padding: 0.16rem 0.4rem 0.16rem 0.45rem;
+  border: 1px solid var(--border);
   border-radius: var(--radius-full);
-  background: var(--surface-sunken);
+  background: var(--surface);
   color: var(--text-muted);
-  font-size: 0.62rem;
+  font: inherit;
+  font-size: 0.66rem;
   font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  line-height: 1.5;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+  transition: border-color var(--ease), color var(--ease), background var(--ease);
+}
+button.langctl:hover,
+button.langctl[aria-expanded='true'] {
+  background: var(--surface);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
-/* Present-language chips are clickable buttons that jump to that variant. */
-button.object-list__lang {
-  cursor: pointer;
-}
-button.object-list__lang:hover {
+/* Codes mode: a code per language, toned by its status. Public reads full-ink, draft
+   muted, a missing language a faint dashed gap — coverage at a glance, still one unit. */
+.langctl__code {
+  text-transform: uppercase;
   color: var(--text);
-  border-color: var(--border);
 }
-.object-list__lang.is-active {
-  background: var(--accent-soft, var(--surface-raised));
+.langctl__code.is-draft {
+  color: var(--text-muted);
+}
+.langctl__code.is-missing {
+  color: var(--text-faint);
+  border-bottom: 1px dashed currentColor;
+}
+
+/* Compact mode: globe + N/M fraction + a pip per language. */
+.langctl__globe {
+  font-size: 0.72rem;
+  line-height: 1;
+  filter: saturate(0.4);
+}
+.langctl__frac b {
   color: var(--text);
-  border-color: var(--accent, var(--border));
 }
-/* A draft variant reads as an outline; a missing language as a faint dashed gap. */
-.object-list__lang.is-draft {
-  background: transparent;
-  border-color: var(--border);
+.langctl__pips {
+  display: inline-flex;
+  gap: 2px;
 }
-.object-list__lang.is-missing {
-  background: transparent;
-  border: 1px dashed var(--border);
+.langctl__pip {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--border-strong);
+}
+.langctl__pip.is-public {
+  background: var(--success);
+}
+.langctl__pip.is-draft {
+  background: var(--warning);
+}
+.langctl__caret {
+  font-size: 0.6rem;
   opacity: 0.6;
+}
+
+/* The translations menu: every site language with its status and a jump. Present variants
+   are actionable rows; a missing language is a disabled "Not translated" row. */
+.langmenu {
+  position: absolute;
+  z-index: 30;
+  right: 0.4rem;
+  top: calc(100% - 0.15rem);
+  min-width: 210px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-pop);
+  padding: 0.35rem;
+}
+.langmenu__head {
+  font-size: 0.64rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  font-weight: 700;
+  padding: 0.3rem 0.45rem 0.4rem;
+}
+
+/* `button.langmenu__row` for the same specificity reason as `button.langctl` above —
+   otherwise the code/name/status stack into a column. */
+button.langmenu__row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 0.4rem 0.45rem;
+  cursor: pointer;
+  color: var(--text);
+}
+.langmenu__row:hover:not(:disabled) {
+  background: var(--surface-sunken);
+}
+.langmenu__row.is-current {
+  background: var(--accent-soft);
+}
+.langmenu__row:disabled {
+  cursor: default;
+}
+.langmenu__code {
+  flex: 0 0 auto;
+  width: 2rem;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text);
+}
+.langmenu__row:disabled .langmenu__code {
+  color: var(--text-faint);
+}
+.langmenu__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.82rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.langmenu__row:disabled .langmenu__name {
+  color: var(--text-muted);
+}
+.langmenu__status {
+  flex: 0 0 auto;
+  font-size: 0.66rem;
+  font-weight: 700;
+  padding: 0.08rem 0.45rem;
+  border-radius: var(--radius-full);
+}
+.langmenu__status.is-public {
+  background: var(--success-soft);
+  color: var(--success);
+}
+.langmenu__status.is-draft {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+.langmenu__status.is-missing {
+  background: transparent;
+  color: var(--text-faint);
+  border: 1px dashed var(--border-strong);
 }
 
 /* "Needs translation" coverage filter, beside the search box. */
@@ -795,27 +917,38 @@ button.object-list__lang:hover {
 }
 
 .object-group {
-  margin-bottom: 1.1rem;
+  margin-bottom: 0.5rem;
 }
 
+/* The group header is a real section anchor, not a footnote. It bleeds edge-to-edge
+   across the sidebar's padding and carries a hairline rule, so each type is physically
+   fenced off; it sticks to the top while its list scrolls, so you always know which type
+   you're in. `top: -1rem` cancels the sidebar's 1rem top padding so it pins flush. */
 .object-group__head {
+  position: sticky;
+  top: -1rem;
+  z-index: 3;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.4rem;
-  margin-bottom: 0.35rem;
-  padding: 0 0.6rem;
+  margin: 0 -0.85rem 0.4rem;
+  padding: 0.5rem 0.85rem 0.45rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
 }
 
+/* Darker and heavier than the item titles beneath it — the parent out-ranks its
+   children again, so the hierarchy reads the right way up. */
 .object-group__name {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  font-size: 0.7rem;
-  font-weight: 700;
+  font-size: 0.74rem;
+  font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--text-muted);
+  color: var(--text);
 }
 
 .object-group__count {
@@ -1006,6 +1139,75 @@ button.object-list__lang:hover {
 
 .editor-panel {
   margin: 1.4rem 0;
+}
+
+/* -----------------------------------------------------------------------------
+   Editor section cards
+   -----------------------------------------------------------------------------
+   The center column's sections (Where it lives, Fields, Body) share one card shape and
+   one header grammar — the same heavy uppercase eyebrow the sidebar groups use — so the
+   three columns read as one system instead of loose parts. No `overflow` clip, so field
+   pickers and editor popovers inside a card aren't cut off; the head keeps its own rounded
+   top corners since the card can't clip them. */
+.editor-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-xs);
+  margin-bottom: 0.9rem;
+}
+
+.editor-card__head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.9rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
+.editor-card__eyebrow {
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text);
+}
+
+.editor-card__hint {
+  margin-left: auto;
+  font-size: 0.72rem;
+  color: var(--text-faint);
+}
+
+.editor-card__body {
+  padding: 0.9rem;
+}
+
+/* Inside a card the readout is just the row of stops — the card supplies the frame. */
+.editor-card__body .readout {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+/* The Body card carries the real Editor/Markdown/Diff tabs in its header, pushed right,
+   using the header's own bottom border as the tab rail — prominent, clearly selectable,
+   clearly selected (the underline tabs were never the problem; hiding them was). */
+.editor-card__head--tabs {
+  align-items: stretch;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.editor-card__head--tabs .editor-card__eyebrow {
+  align-self: center;
+}
+.editor-card__head--tabs .body-editor__tabs {
+  margin: 0 0 0 auto;
+  border-bottom: 0;
+  align-self: stretch;
 }
 
 /* Shown in place of the editor when a pending-delete object is selected. */
@@ -1202,7 +1404,7 @@ button.object-list__lang:hover {
 .body-editor__tab.is-active {
   color: var(--accent);
   border-bottom-color: var(--accent);
-  font-weight: 550;
+  font-weight: 600;
 }
 
 .body-editor .milkdown,

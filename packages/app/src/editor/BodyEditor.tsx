@@ -73,6 +73,8 @@ interface BodyEditorProps extends WysiwygProps {
   getPublishedText?: () => Promise<string | null>;
   /** Revert the whole page to its published version (shown on the Diff tab when there are changes). */
   onRevert?: (() => void) | undefined;
+  /** Card eyebrow shown beside the tabs (e.g. "Body"). Omitted ⇒ no eyebrow (bare demo/tests). */
+  label?: string;
 }
 
 /**
@@ -269,6 +271,7 @@ export function BodyEditor({
   diffWorkingText,
   getPublishedText,
   onRevert,
+  label,
 }: BodyEditorProps): React.JSX.Element {
   const [mode, setMode] = useState<'wysiwyg' | 'source' | 'diff'>('wysiwyg');
   const showDiffTab = diffWorkingText !== undefined && getPublishedText !== undefined;
@@ -314,8 +317,10 @@ export function BodyEditor({
   }, [docKey]);
 
   return (
-    <div className="body-editor">
-      <div className="body-editor__tabs" role="tablist" aria-label="Body editor mode">
+    <section className="editor-card body-editor">
+      <div className="editor-card__head editor-card__head--tabs">
+        {label ? <span className="editor-card__eyebrow">{label}</span> : null}
+        <div className="body-editor__tabs" role="tablist" aria-label="Body editor mode">
         <button
           type="button"
           role="tab"
@@ -352,8 +357,10 @@ export function BodyEditor({
             Diff
           </button>
         ) : null}
+        </div>
       </div>
 
+      <div className="editor-card__body">
       <div
         id="body-editor-panel"
         role="tabpanel"
@@ -406,6 +413,7 @@ export function BodyEditor({
           />
         )}
       </div>
-    </div>
+      </div>
+    </section>
   );
 }
