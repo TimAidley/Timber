@@ -14,36 +14,53 @@ See also: SPEC §2 (the tiered decision), SPEC §6 (the template contract), ARCH
 The **adopt-once** import runs two ways — both do the same transform (they share the
 isomorphic `planThemeImport` core), so pick whichever fits.
 
+Each imported theme lands in its **own `themes/<name>/` folder**, and the site's
+`settings.activeTheme` is pointed at it — so importing makes the theme live while leaving any
+previous theme on disk under its own folder. Switch back, or delete a theme, from
+**Advanced → Manage themes** (see [Switching & deleting](#switching--deleting-themes)).
+
 ### From the browser (no terminal)
 
 In the editor, open **Advanced → ↓ Import theme**, upload a theme `.zip` (e.g. a repo's
-"Download ZIP"), and click **Import**. It transforms the theme and commits
-`templates/*.liquid` + assets to your working branch in one commit; reload to pick it up. The
-build (and the in-editor preview) compile the theme's SCSS isomorphically — nothing to run
-locally.
+"Download ZIP"), give the theme a **name** (defaulted from the archive), and click **Import**.
+It transforms the theme into `themes/<name>/templates/*.liquid` + `themes/<name>/assets/**`,
+flips `settings.activeTheme` to it, and commits everything to your working branch in one commit;
+reload to pick it up. The build (and the in-editor preview) compile the theme's SCSS
+isomorphically — nothing to run locally.
 
 ### From the CLI
 
 ```sh
-timber import-theme path/to/jekyll-theme  path/to/my-site
+timber import-theme path/to/jekyll-theme  path/to/my-site  --name minima
 ```
 
-It transforms the theme's `_layouts` + `_includes` into native `templates/*.liquid`, compiles
-its SCSS (dart-sass), copies its other assets, and prints a summary — e.g. *"14 templates
-(root: base, default: page), 1 stylesheet compiled."* After that your repo is an **ordinary
-Timber site**: `timber build` renders it, styled by the theme, with no further Jekyll step.
+It transforms the theme's `_layouts` + `_includes` into native
+`themes/<name>/templates/*.liquid`, carries its assets (incl. SCSS source) into
+`themes/<name>/assets/`, sets `settings.activeTheme`, and prints a summary — e.g. *"14
+templates (root: base, default: page), activated: set activeTheme: minima."* `--name` defaults
+to the theme directory's name. After that your repo is an **ordinary Timber site**: `timber
+build` compiles the theme's SCSS and renders it, with no further Jekyll step.
 
-- **Per-type layouts.** Every content type falls back to `templates/default.liquid` (the
-  theme's generic single-content layout). To render a type through a specific layout, pass
+- **Per-type layouts.** Every content type falls back to `themes/<name>/templates/default.liquid`
+  (the theme's generic single-content layout). To render a type through a specific layout, pass
   `--map <type>=<layout>` (repeatable, or comma-separated) — e.g.
   `timber import-theme theme site --map posts=post --map events=event` writes
-  `templates/posts.liquid` from the theme's `post` layout, and so on. You can also add a
-  `templates/<type>.liquid` by hand later.
+  `themes/<name>/templates/posts.liquid` from the theme's `post` layout, and so on. You can also
+  add a `<type>.liquid` by hand later.
 - **The build auto-registers the Jekyll ecosystem filters/tags** (`{% seo %}`,
   `date_to_xmlschema`, …) — they're additive (no built-in overrides), so nothing extra is
   needed and native sites are unaffected.
-- **Re-adopting** an upstream update: re-run `import-theme`; the transform is deterministic, so
-  the diff is clean.
+- **Re-adopting** an upstream update: re-run `import-theme` with the same `--name`; the
+  transform is deterministic, so the diff is clean.
+
+## Switching & deleting themes
+
+Because each theme is a self-contained `themes/<name>/` folder, in the editor's **Advanced →
+Manage themes** you can **switch** the active theme (writes `settings.activeTheme`) or **delete**
+a theme folder wholesale. The active theme can't be deleted — switch away first — so a site is
+never left without a theme. Everything commits to your working branch, so nothing is live until
+you publish. A site with no `themes/` folder (or no `activeTheme`) uses the legacy root
+`templates/` + `assets/` unchanged.
 
 The rest of this doc covers the **programmatic** API underneath the command.
 
@@ -113,12 +130,13 @@ Proven end-to-end against **Minima** (renders + compiles its SCSS) and **Beautif
 Known limits (the "mainly compatible, not 100%" residue):
 
 - **CSS/Sass is compiled isomorphically** — the import just commits the theme's SCSS *source*
-  (its `assets/**/*.scss` + its `_sass/` partials, placed under `assets/_sass/`), and both the
-  Node build and the browser preview compile it via `@timber/sass` (`compileScss`, dart-sass +
-  an in-memory importer). A **main** stylesheet is a `.scss` with a `---` front-matter fence
-  (compiled to a sibling `.css`); partials (no fence) are pulled in via `@import`. So **preview
-  ≡ build for styling** — no committed-CSS fallback. (SCSS is a general Timber feature now, not
-  import-only: any site can author `assets/*.scss`.)
+  (its `assets/**/*.scss` + its `_sass/` partials, placed under `themes/<name>/assets/_sass/`),
+  and both the Node build and the browser preview compile it via `@timber/sass` (`compileScss`,
+  dart-sass + an in-memory importer) over the **active theme's** load path. A **main** stylesheet
+  is a `.scss` with a `---` front-matter fence (compiled to a sibling `.css`, published to
+  `/assets`); partials (no fence) are pulled in via `@import`. So **preview ≡ build for styling**
+  — no committed-CSS fallback. (SCSS is a general Timber feature now, not import-only: any site
+  can author `.scss` in its theme's `assets/`.)
 - **In-editor preview** — the editor's live preview registers the same ecosystem filters/tags
   as the build *and* compiles SCSS in-browser (isomorphic dart-sass), so an adopted theme using
   `{% seo %}` and shipping `.scss` previews exactly as it builds (preview ≡ build), edits to a
