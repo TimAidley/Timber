@@ -4,14 +4,17 @@ import { classifyUpload, extensionOf } from '../media/assetPolicy.js';
 import { extForMime, siteAssetPath } from '../media/assetName.js';
 import { categorize, isThumbnailable, type SiteAsset } from '../media/siteAssets.js';
 import { findAssetReferences, type SourceText } from '../media/assetReferences.js';
+import { LEGACY_THEME, type ThemePaths } from '@timber/content';
 import type { AssetStore } from '../state/assets.js';
 
 interface AssetManagerProps {
-  /** The committed `/assets` files at load, seeded from the session tree. */
+  /** The committed theme-asset files at load, seeded from the session tree. */
   initialAssets: SiteAsset[];
   assetStore: AssetStore;
   /** Templates + stylesheets, scanned to warn before deleting a referenced asset. */
   sources: SourceText[];
+  /** The active theme (SPEC §13): uploads land in its asset dir; refs resolve against it. */
+  theme?: ThemePaths;
   /** Stage an uploaded asset's path for the WIP commit (autosave.markAssetDirty). */
   onStage: (path: string) => void;
   /** Delete asset paths from the branch (autosave.markPathsDeleted). */
@@ -52,6 +55,7 @@ export function AssetManager({
   initialAssets,
   assetStore,
   sources,
+  theme = LEGACY_THEME,
   onStage,
   onDelete,
 }: AssetManagerProps): React.JSX.Element {
@@ -79,11 +83,11 @@ export function AssetManager({
         let size: number;
         if (decision.action === 'process') {
           const processed = await processImage(file);
-          path = siteAssetPath(file.name, extForMime(processed.mime, file.name));
+          path = siteAssetPath(file.name, extForMime(processed.mime, file.name), theme);
           assetStore.stage(path, processed.blob);
           size = processed.processedSize;
         } else {
-          path = siteAssetPath(file.name, extensionOf(file.name));
+          path = siteAssetPath(file.name, extensionOf(file.name), theme);
           assetStore.stage(path, file);
           size = file.size;
         }
@@ -110,7 +114,7 @@ export function AssetManager({
   }
 
   function requestDelete(asset: SiteAsset): void {
-    setPending({ asset, refs: findAssetReferences(asset.path, sources) });
+    setPending({ asset, refs: findAssetReferences(asset.path, sources, theme) });
   }
 
   function confirmDelete(): void {

@@ -2965,3 +2965,72 @@ button.object-list__lang:hover {
   color: var(--danger-strong);
   text-decoration: underline;
 }
+
+/* Theme manager (SPEC §13): switch / delete the self-contained themes/<name>/ folders. */
+.theme-manager {
+  padding: 1rem 1.25rem;
+}
+.theme-manager__list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.theme-manager__list > li {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem 0.9rem;
+  background: var(--surface);
+}
+.theme-manager__list > li.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.theme-manager__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.theme-manager__name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.theme-manager__badge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--accent-contrast);
+  background: var(--accent);
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+}
+.theme-manager__hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.theme-manager__actions {
+  display: inline-flex;
+  gap: 0.4rem;
+}
+.theme-manager__actions button.is-primary {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  border-color: var(--accent);
+}
+.theme-manager__actions button.is-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.theme-manager__confirm {
+  margin-top: 0.6rem;
+  padding-top: 0.6rem;
+  border-top: 1px dashed var(--border);
+}
+.theme-manager__confirm .is-danger {
+  background: var(--danger);
+  color: #fff;
+  border-color: var(--danger);
+}

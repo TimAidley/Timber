@@ -5,6 +5,7 @@ import {
   resolvePublic,
   withPublic,
   Validator,
+  resolveThemePaths,
   type ContentModel,
   type ContentObject,
   type ContentTypeSchema,
@@ -63,6 +64,7 @@ import { AdvancedPreview } from './advanced/AdvancedPreview.js';
 import { AdvancedEditorPanel } from './advanced/AdvancedEditorPanel.js';
 import { AdvancedList } from './advanced/AdvancedList.js';
 import { AssetManager } from './advanced/AssetManager.js';
+import { ThemeManager } from './advanced/ThemeManager.js';
 import { listSiteAssets } from './media/siteAssets.js';
 import { NewTypeDialog } from './components/NewTypeDialog.js';
 import { NewFileDialog } from './components/NewFileDialog.js';
@@ -177,6 +179,12 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
     return typeof value === 'string' && value.length > 0 ? value : undefined;
   }, [model]);
 
+  // The active theme's directories (SPEC §13), so the advanced area (templates, styles, the
+  // asset manager, new-file) scopes to the *current* theme's files only — never a sibling
+  // theme's. We trust the setting here (the picker only offers existing themes; import always
+  // creates the folder); build/preview do the robust tree-existence check. Unset → legacy root.
+  const theme = useMemo(() => resolveThemePaths(activeTheme, () => true), [activeTheme]);
+
   // The settings singleton's file (path + current content), so importing a theme can flip
   // `activeTheme` to it in the same commit (SPEC §13). Undefined when the site has no settings
   // singleton — the import then tells the user to set `activeTheme` by hand.
@@ -215,9 +223,10 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   // switching never drops unsaved state and edits coalesce into the same WIP commit.
   const advancedAllowed = canAccessAdvanced();
   const [view, setView] = useState<'content' | 'advanced'>('content');
-  // Within the advanced view, the asset manager (binary /assets files) is a mode toggled
-  // against the text-file editor — selecting a template/config file returns to the editor.
-  const [assetsActive, setAssetsActive] = useState(false);
+  // Within the advanced view, `files` is the text-file editor; `assets` is the binary asset
+  // manager; `themes` is the theme switcher/delete panel (SPEC §13). Selecting a template/config
+  // file returns to `files`.
+  const [advancedMode, setAdvancedMode] = useState<'files' | 'assets' | 'themes'>('files');
   // Only load advanced files once the user first opens that view (lazy). Once seen,
   // the hook keeps its state so switching back and forth is instant.
   const [advancedSeen, setAdvancedSeen] = useState(false);
@@ -1000,12 +1009,15 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
 
   // Advanced/admin state (templates + config), lazily loaded on first visit. Its file
   // list renders in the shared sidebar and its editor/preview in the shared work area.
-  const advanced = useAdvanced(session, autosave, advancedSeen);
+  const advanced = useAdvanced(session, autosave, advancedSeen, theme);
 
   // Site assets (binary /assets files) for the asset manager: the committed set is read
   // straight from the loaded tree (no extra fetch); the manager overlays this session's
   // uploads/deletes locally. Templates + stylesheets feed the delete-reference guard.
-  const initialAssets = useMemo(() => listSiteAssets(session.treeEntries), [session]);
+  const initialAssets = useMemo(
+    () => listSiteAssets(session.treeEntries, theme),
+    [session, theme],
+  );
   const assetSources = useMemo(
     () =>
       (advanced.files ?? [])
@@ -1048,7 +1060,7 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
     }
     for (const path of savedPaths) {
       if (bundlePrefixes.some((p) => path.startsWith(p))) continue; // rolled into its object
-      const k = kindOf(path);
+      const k = kindOf(path, theme);
       entries.push({
         path,
         title: path.split('/').pop() ?? path,
@@ -1074,6 +1086,7 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
     advanced,
     advancedAllowed,
     layout,
+    theme,
   ]);
   function openView(next: 'content' | 'advanced'): void {
     if (next === 'advanced') setAdvancedSeen(true);
@@ -1163,8 +1176,16 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   // Content and advanced share the same chrome; only the inner editor + preview differ.
   const mainContent =
     view === 'advanced' ? (
-      assetsActive ? (
+      advancedMode === 'themes' ? (
+        <ThemeManager
+          session={session}
+          {...(activeTheme ? { activeTheme } : {})}
+          {...(settingsFile ? { settingsFile } : {})}
+          treeEntries={session.treeEntries}
+        />
+      ) : advancedMode === 'assets' ? (
         <AssetManager
+          theme={theme}
           initialAssets={initialAssets}
           assetStore={assetStore}
           sources={assetSources}
@@ -1352,7 +1373,7 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
 
   const previewContent =
     view === 'advanced' ? (
-      assetsActive ? null : advanced.selected ? (
+      advancedMode !== 'files' ? null : advanced.selected ? (
         <AdvancedPreview
           session={session}
           kind={advanced.selected.kind}
@@ -1556,9 +1577,9 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
                   ) : (
                     <AdvancedList
                       files={advanced.files}
-                      selectedPath={assetsActive ? undefined : advanced.selectedPath}
+                      selectedPath={advancedMode === 'files' ? advanced.selectedPath : undefined}
                       onSelect={(path) => {
-                        setAssetsActive(false);
+                        setAdvancedMode('files');
                         advanced.setSelectedPath(path);
                         if (layout.isMobile) layout.setSidebarOpen(false);
                       }}
@@ -1573,15 +1594,38 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
                       <li>
                         <button
                           type="button"
-                          className={assetsActive ? 'is-active' : ''}
+                          className={advancedMode === 'assets' ? 'is-active' : ''}
                           onClick={() => {
-                            setAssetsActive(true);
+                            setAdvancedMode('assets');
                             if (layout.isMobile) layout.setSidebarOpen(false);
                           }}
                         >
                           <span className="object-list__title">Manage assets</span>
                           <span className="object-list__type">
-                            fonts, logos, favicons in /assets
+                            fonts, logos, favicons in the active theme
+                          </span>
+                        </button>
+                      </li>
+                    </ul>
+                  </section>
+
+                  <section className="object-group">
+                    <div className="object-group__head">
+                      <span className="object-group__name">Themes</span>
+                    </div>
+                    <ul className="object-list">
+                      <li>
+                        <button
+                          type="button"
+                          className={advancedMode === 'themes' ? 'is-active' : ''}
+                          onClick={() => {
+                            setAdvancedMode('themes');
+                            if (layout.isMobile) layout.setSidebarOpen(false);
+                          }}
+                        >
+                          <span className="object-list__title">Manage themes</span>
+                          <span className="object-list__type">
+                            switch, delete, import
                           </span>
                         </button>
                       </li>
@@ -1661,6 +1705,7 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
       {showNewFile ? (
         <NewFileDialog
           existingPaths={new Set((advanced.files ?? []).map((f) => f.path))}
+          theme={theme}
           onClose={() => setShowNewFile(false)}
           onCreate={(opts) => advanced.createFile(opts)}
         />

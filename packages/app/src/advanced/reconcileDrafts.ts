@@ -1,3 +1,4 @@
+import { LEGACY_THEME, type ThemePaths } from '@timber/content';
 import { kindOf, type AdvancedFile, type AdvancedKind } from './loadAdvancedFiles.js';
 import { validateAdvancedFile } from './validate.js';
 
@@ -41,6 +42,7 @@ export interface ReconcileResult {
 export function reconcileAdvancedDrafts(
   loadedFiles: AdvancedFile[],
   drafts: DraftInput[],
+  theme: ThemePaths = LEGACY_THEME,
 ): ReconcileResult {
   const byPath = new Map(loadedFiles.map((f) => [f.path, f] as const));
   const text = new Map(loadedFiles.map((f) => [f.path, f.content]));
@@ -58,7 +60,7 @@ export function reconcileAdvancedDrafts(
       }
       continue;
     }
-    const kind = kindOf(draft.path);
+    const kind = kindOf(draft.path, theme);
     if (!kind) continue; // a content-object draft (or any non-advanced path)
     const file: AdvancedFile = { path: draft.path, kind, content: draft.body };
     extra.push(file);

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { LEGACY_THEME, type ThemePaths } from '@timber/content';
 import type { RepoSession } from '../state/repoSession.js';
 import type { Autosave } from '../state/autosave.js';
 import { LocalDraftStore } from '../state/localDraft.js';
@@ -54,6 +55,7 @@ export function useAdvanced(
   session: RepoSession,
   autosave: Autosave,
   active: boolean,
+  theme: ThemePaths = LEGACY_THEME,
 ): Advanced {
   const [files, setFiles] = useState<AdvancedFile[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -72,11 +74,11 @@ export function useAdvanced(
     void (async () => {
       try {
         const store = await LocalDraftStore.open();
-        const loadedFiles = await loadAdvancedFiles(session.client, session.loadedRef);
+        const loadedFiles = await loadAdvancedFiles(session.client, session.loadedRef, theme);
         if (cancelled) return;
         draftStore.current = store;
         const drafts = await store.allForRepo(repoKey);
-        const { files, text, requeue } = reconcileAdvancedDrafts(loadedFiles, drafts);
+        const { files, text, requeue } = reconcileAdvancedDrafts(loadedFiles, drafts, theme);
         // Re-queue any uncommitted valid drafts (in-progress edits + resurrected files).
         for (const { path, content } of requeue) autosave.markFileDirty(path, content);
         if (cancelled) return;
@@ -137,7 +139,7 @@ export function useAdvanced(
    */
   function createFile(opts: NewFileOptions): void {
     addFile({
-      path: newFilePath(opts),
+      path: newFilePath(opts, theme),
       kind: opts.kind,
       content: buildStarterFile(opts),
     });

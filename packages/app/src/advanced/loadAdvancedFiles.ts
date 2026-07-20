@@ -1,4 +1,5 @@
 import type { HostProvider } from '@timber/host';
+import { LEGACY_THEME, type ThemePaths } from '@timber/content';
 
 /**
  * A source file the advanced area edits: a Liquid template or a config YAML. These
@@ -15,16 +16,17 @@ export interface AdvancedFile {
 /** Which validator + editor language a file gets. */
 export type AdvancedKind = 'template' | 'style' | 'schema' | 'config';
 
-const TEMPLATE_RE = /^templates\/.*\.liquid$/;
-const STYLE_RE = /^assets\/.*\.css$/;
 const CONFIG_RE = /^config\/.*\.ya?ml$/;
 
-/** Classify a repo path into the kind that drives validation + syntax highlighting.
- *  `assets/**.css` is the theme's stylesheet(s) — editable text, unlike the fonts/images
- *  that also live under `assets/` (those need a binary manager, not this text loop). */
-export function kindOf(path: string): AdvancedKind | undefined {
-  if (TEMPLATE_RE.test(path)) return 'template';
-  if (STYLE_RE.test(path)) return 'style';
+/** Classify a repo path into the kind that drives validation + syntax highlighting, scoped to
+ *  the active theme (SPEC §13): a `template`/`style` is one under *this* theme's
+ *  `templatesDir`/`assetsDir` (so the advanced area only ever surfaces the current theme's
+ *  files, never a sibling theme's). `config/**` is site-level, theme-independent. `assetsDir`
+ *  `.css` files are editable text, unlike the fonts/images that also live there (those need
+ *  the binary manager). Defaults to the legacy root for callers without a resolved theme. */
+export function kindOf(path: string, theme: ThemePaths = LEGACY_THEME): AdvancedKind | undefined {
+  if (path.startsWith(`${theme.templatesDir}/`) && path.endsWith('.liquid')) return 'template';
+  if (path.startsWith(`${theme.assetsDir}/`) && path.endsWith('.css')) return 'style';
   if (CONFIG_RE.test(path)) return path.startsWith('config/schemas/') ? 'schema' : 'config';
   return undefined;
 }
@@ -36,11 +38,15 @@ export function kindOf(path: string): AdvancedKind | undefined {
  * fetching each blob concurrently. Sorted templates → schemas → config for a stable
  * file list.
  */
-export async function loadAdvancedFiles(client: HostProvider, ref: string): Promise<AdvancedFile[]> {
+export async function loadAdvancedFiles(
+  client: HostProvider,
+  ref: string,
+  theme: ThemePaths = LEGACY_THEME,
+): Promise<AdvancedFile[]> {
   const tree = await client.loadTree(ref);
   const targets = tree.entries.flatMap((entry) => {
     if (entry.type !== 'blob') return [];
-    const kind = kindOf(entry.path);
+    const kind = kindOf(entry.path, theme);
     return kind ? [{ path: entry.path, sha: entry.sha, kind }] : [];
   });
 

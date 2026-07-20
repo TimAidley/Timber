@@ -39,6 +39,7 @@ export { loadNavigation } from './navigation.js';
 export type { NavItem } from './navigation.js';
 export {
   THEMES_DIR,
+  LEGACY_THEME,
   resolveThemePaths,
   assetSourceDirs,
   assetOutputPath,

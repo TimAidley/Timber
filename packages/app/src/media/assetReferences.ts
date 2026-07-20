@@ -10,6 +10,8 @@
  * Matches are delimiter-bounded so `logo.webp` doesn't match `my-logo.webproj`.
  */
 
+import { LEGACY_THEME, type ThemePaths } from '@timber/content';
+
 /** A source file scanned for references — a template or a stylesheet. */
 export interface SourceText {
   path: string;
@@ -37,9 +39,11 @@ function referencesToken(text: string, token: string): boolean {
 export function findAssetReferences(
   assetPath: string,
   sources: readonly SourceText[],
+  theme: ThemePaths = LEGACY_THEME,
 ): string[] {
-  const relative = assetPath.startsWith('assets/')
-    ? assetPath.slice('assets/'.length)
+  const prefix = `${theme.assetsDir}/`;
+  const relative = assetPath.startsWith(prefix)
+    ? assetPath.slice(prefix.length)
     : assetPath;
   const tokens = relative === assetPath ? [assetPath] : [assetPath, relative];
   return sources

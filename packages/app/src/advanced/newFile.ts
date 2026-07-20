@@ -9,6 +9,8 @@
  * unit-testable, mirroring `schemaTemplate.ts`.
  */
 
+import { LEGACY_THEME, type ThemePaths } from '@timber/content';
+
 export type NewFileKind = 'template' | 'style' | 'config';
 
 export interface NewFileOptions {
@@ -20,13 +22,14 @@ export interface NewFileOptions {
 /** File names double as path segments, so keep them slug-safe (same shape as types). */
 const NAME_RE = /^[a-z][a-z0-9-]*$/;
 
-/** Repo path for a new file of the given kind. */
-export function newFilePath(opts: NewFileOptions): string {
+/** Repo path for a new file of the given kind, scoped to the active theme (SPEC §13): a new
+ *  template/style lands in *this* theme's folder; a config file is site-level. */
+export function newFilePath(opts: NewFileOptions, theme: ThemePaths = LEGACY_THEME): string {
   switch (opts.kind) {
     case 'template':
-      return `templates/${opts.name}.liquid`;
+      return `${theme.templatesDir}/${opts.name}.liquid`;
     case 'style':
-      return `assets/${opts.name}.css`;
+      return `${theme.assetsDir}/${opts.name}.css`;
     case 'config':
       return `config/${opts.name}.yml`;
   }
@@ -41,14 +44,15 @@ export function validateFileName(
   kind: NewFileKind,
   name: string,
   existingPaths: ReadonlySet<string>,
+  theme: ThemePaths = LEGACY_THEME,
 ): string | null {
   const n = name.trim();
   if (!n) return 'Enter a file name.';
   if (!NAME_RE.test(n)) {
     return 'Use lowercase letters, numbers and hyphens, starting with a letter — e.g. “events”.';
   }
-  if (existingPaths.has(newFilePath({ kind, name: n }))) {
-    return `${newFilePath({ kind, name: n })} already exists.`;
+  if (existingPaths.has(newFilePath({ kind, name: n }, theme))) {
+    return `${newFilePath({ kind, name: n }, theme)} already exists.`;
   }
   return null;
 }

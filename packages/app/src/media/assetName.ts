@@ -1,3 +1,5 @@
+import { LEGACY_THEME, type ThemePaths } from '@timber/content';
+
 /**
  * Naming for uploaded image assets, shared by the `image` field widget
  * ({@link ../forms/ImageField}) and the body editor's insert-image button, so both
@@ -36,13 +38,18 @@ export function bundleImagePath(bundleDir: string, fileName: string, mime: strin
 }
 
 /**
- * The repo-relative path a **site-wide** asset (font/logo/favicon) is staged/committed to
- * under `/assets` (SPEC §13). Unlike a bundle image, a site asset is shared by the theme,
- * so it lives in the central `assets/` folder with a slug-safe name + explicit extension
- * (from the processed MIME for images, or the original extension for a passthrough binary).
+ * The repo-relative path a **theme** asset (font/logo/favicon) is staged/committed to under
+ * the active theme's asset dir (SPEC §13) — `themes/<name>/assets/` when a theme is active,
+ * else the legacy `assets/`. Unlike a bundle image, this is a theme-shared file, so it lives
+ * in the theme's asset folder with a slug-safe name + explicit extension (from the processed
+ * MIME for images, or the original extension for a passthrough binary).
  */
-export function siteAssetPath(fileName: string, ext: string): string {
-  return `assets/${baseNameFrom(fileName)}.${ext}`;
+export function siteAssetPath(
+  fileName: string,
+  ext: string,
+  theme: ThemePaths = LEGACY_THEME,
+): string {
+  return `${theme.assetsDir}/${baseNameFrom(fileName)}.${ext}`;
 }
 
 const MIME_BY_EXT: Record<string, string> = {

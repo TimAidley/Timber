@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { LEGACY_THEME, type ThemePaths } from '@timber/content';
 import {
   newFilePath,
   validateFileName,
@@ -9,6 +10,8 @@ import {
 interface NewFileDialogProps {
   /** Every existing advanced file path — creation is blocked for a colliding path. */
   existingPaths: ReadonlySet<string>;
+  /** The active theme (SPEC §13): a new template/style lands in its folder. */
+  theme?: ThemePaths;
   onClose: () => void;
   /** Confirmed a valid new-file definition → author its starter content. */
   onCreate: (opts: NewFileOptions) => void;
@@ -25,16 +28,17 @@ interface NewFileDialogProps {
  */
 export function NewFileDialog({
   existingPaths,
+  theme = LEGACY_THEME,
   onClose,
   onCreate,
 }: NewFileDialogProps): React.JSX.Element {
   const [kind, setKind] = useState<NewFileKind>('template');
   const [name, setName] = useState('');
 
-  const nameError = validateFileName(kind, name, existingPaths);
+  const nameError = validateFileName(kind, name, existingPaths, theme);
   // Only scold a name once the author has typed something (not an empty field on open).
   const showError = name.trim() !== '' && nameError !== null;
-  const path = name.trim() ? newFilePath({ kind, name: name.trim() }) : null;
+  const path = name.trim() ? newFilePath({ kind, name: name.trim() }, theme) : null;
 
   function submit(): void {
     if (nameError) return;

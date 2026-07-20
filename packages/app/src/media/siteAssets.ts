@@ -1,4 +1,5 @@
 import type { TreeEntry } from '@timber/host';
+import { LEGACY_THEME, type ThemePaths } from '@timber/content';
 import { extensionOf } from './assetPolicy.js';
 
 /**
@@ -42,13 +43,19 @@ export function isThumbnailable(asset: SiteAsset): boolean {
 }
 
 /**
- * Extract the site assets from a repo tree: every blob directly or deeply under `assets/`,
- * as classified {@link SiteAsset} entries sorted by path. The editable stylesheet(s) are
- * included so the manager is a faithful folder view (they're also editable under Styles).
+ * Extract the active theme's assets from a repo tree: every blob under the theme's asset dir
+ * (`themes/<name>/assets/` when a theme is active, else the legacy `assets/`), as classified
+ * {@link SiteAsset} entries sorted by path (SPEC §13). Scoped to the current theme so the
+ * manager only ever shows the files that belong to it — switching theme swaps the whole set.
+ * The editable stylesheet(s) are included so the manager is a faithful folder view (they're
+ * also editable under Styles).
  */
-export function listSiteAssets(entries: readonly TreeEntry[]): SiteAsset[] {
+export function listSiteAssets(
+  entries: readonly TreeEntry[],
+  theme: ThemePaths = LEGACY_THEME,
+): SiteAsset[] {
   return entries
-    .filter((e) => e.type === 'blob' && e.path.startsWith('assets/'))
+    .filter((e) => e.type === 'blob' && e.path.startsWith(`${theme.assetsDir}/`))
     .map((e): SiteAsset => {
       const name = e.path.slice(e.path.lastIndexOf('/') + 1);
       const ext = extensionOf(name);

@@ -15,6 +15,15 @@
 /** Repo directory that holds every theme folder. */
 export const THEMES_DIR = 'themes';
 
+/** The legacy single-root layout (`templates/` + `assets/`), used by pre-themes sites and as
+ *  the default for path helpers that haven't been handed a resolved theme. */
+export const LEGACY_THEME: ThemePaths = {
+  name: null,
+  templatesDir: 'templates',
+  assetsDir: 'assets',
+  sassLoadPaths: ['assets/_sass'],
+};
+
 export interface ThemePaths {
   /** The active theme's name, or `null` for the legacy root layout. */
   name: string | null;
@@ -41,14 +50,7 @@ export function resolveThemePaths(
   themeExists: (name: string) => boolean,
 ): ThemePaths {
   const name = activeTheme && themeExists(activeTheme) ? activeTheme : null;
-  if (name === null) {
-    return {
-      name: null,
-      templatesDir: 'templates',
-      assetsDir: 'assets',
-      sassLoadPaths: ['assets/_sass'],
-    };
-  }
+  if (name === null) return LEGACY_THEME;
   const base = `${THEMES_DIR}/${name}`;
   return {
     name,
