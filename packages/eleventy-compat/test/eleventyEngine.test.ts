@@ -53,6 +53,21 @@ describe('eleventyEngine.collect', () => {
     expect(templates['layouts/default']).toContain('{% block main %}{% endblock %}'); // {{content}}
     expect(templates['layouts/default']).toContain('{% include "navbar" %}'); // ext stripped
   });
+
+  it('collects templates + data under a src/ input-dir prefix', () => {
+    const srcTheme: ThemeFiles = {
+      text: {
+        'src/_includes/layouts/base.liquid': '<main>{{ content }}</main>',
+        'src/_includes/nav.liquid': '<nav></nav>',
+        'src/_data/metadata.json': '{ "author": "Ada" }',
+      },
+    };
+    const c = eleventyEngine.collect(srcTheme, {});
+    expect(c.rootLayout).toBe('layouts/base');
+    expect(c.templates['layouts/base']).toBeDefined();
+    expect(c.templates['nav']).toBeDefined();
+    expect(eleventyEngine.globals!(srcTheme).metadata).toEqual({ author: 'Ada' });
+  });
 });
 
 describe('eleventyEngine.globals', () => {

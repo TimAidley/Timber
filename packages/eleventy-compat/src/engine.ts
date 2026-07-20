@@ -19,12 +19,27 @@ function layoutRefOf(source: string): string | undefined {
   return lm ? stripExt(lm[1]!.trim().replace(/['"]/g, '')) : undefined;
 }
 
-/** Read `_includes/**.{liquid,html}` → bare-path-keyed sources (`layouts/default`, `navbar`, …). */
-function collectIncludes(text: Record<string, string>): Record<string, string> {
+/**
+ * The input-dir prefix a theme's `_includes/` sits under (`''` at the repo root, or e.g. `src/`
+ * — Eleventy's input dir is configurable and many themes use `src/`). Detected from the first
+ * `_includes/*.{liquid,html}` path so collection works whatever the theme's layout.
+ */
+function inputPrefix(text: Record<string, string>): string {
+  for (const path of Object.keys(text)) {
+    const m = /^(.*\/)?_includes\/.+\.(?:liquid|html)$/.exec(path);
+    if (m) return m[1] ?? '';
+  }
+  return '';
+}
+
+/** Read `<prefix>_includes/**.{liquid,html}` → bare-path-keyed sources (`layouts/default`, …). */
+function collectIncludes(text: Record<string, string>, prefix: string): Record<string, string> {
   const out: Record<string, string> = {};
+  const head = `${prefix}_includes/`;
   for (const [path, source] of Object.entries(text)) {
-    const m = /^_includes\/(.+\.(?:liquid|html))$/.exec(path);
-    if (m) out[stripExt(m[1]!)] = source;
+    if (!path.startsWith(head)) continue;
+    const rel = path.slice(head.length);
+    if (/\.(liquid|html)$/.test(rel)) out[stripExt(rel)] = source;
   }
   return out;
 }
@@ -39,7 +54,7 @@ export const eleventyEngine: ThemeEngine = {
   name: 'eleventy',
 
   collect(theme: ThemeFiles, opts) {
-    const raw = collectIncludes(theme.text);
+    const raw = collectIncludes(theme.text, inputPrefix(theme.text));
     if (Object.keys(raw).length === 0) {
       throw new Error('no _includes/ templates found — is this a Liquid Eleventy theme?');
     }
@@ -79,8 +94,9 @@ export const eleventyEngine: ThemeEngine = {
     // data files run arbitrary JavaScript and can't be parsed statically — they're skipped
     // (the theme falls back to Timber's settings for `site`, or the user fills them in).
     const out: Record<string, unknown> = {};
+    const prefix = inputPrefix(theme.text);
     for (const [path, source] of Object.entries(theme.text)) {
-      const m = /^_data\/([^/]+)\.json$/.exec(path);
+      const m = new RegExp(`^${prefix}_data/([^/]+)\\.json$`).exec(path);
       if (!m) continue;
       try {
         out[m[1]!] = JSON.parse(source);

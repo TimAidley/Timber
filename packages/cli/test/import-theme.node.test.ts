@@ -202,6 +202,59 @@ describe('importThemeToRepo into a theme folder + activation (SPEC §13)', () =>
   });
 });
 
+describe('importThemeToRepo autodetects + imports a Liquid Eleventy theme (SPEC §2 → Tier A)', () => {
+  const ELEVENTY = join(here, 'fixtures', 'eleventy-theme');
+
+  it('detects the Eleventy engine, writes a theme.json manifest, and builds with the flat cascade', async () => {
+    const repo = await mkdtemp(join(tmpdir(), 'timber-11ty-'));
+    const r = await importThemeToRepo(ELEVENTY, repo, { themeName: 'blog' });
+
+    // Autodetected as Eleventy (src/_includes/*.liquid + eleventy.config.js, no _layouts/).
+    expect(r.engine).toBe('eleventy');
+    expect(r.rootLayout).toBe('layouts/base');
+    expect(r.templates).toContain('themes/blog/templates/layouts/base.liquid');
+    expect(r.templates).toContain('themes/blog/templates/header.liquid');
+
+    // A manifest declares the engine + the parsed _data/*.json globals.
+    const manifest = JSON.parse(
+      await readFile(join(repo, 'themes/blog/theme.json'), 'utf8'),
+    );
+    expect(manifest.engine).toBe('eleventy');
+    expect(manifest.data.metadata).toEqual({ author: 'Grace Hopper' });
+
+    // A minimal site around it, then build.
+    await mkdir(join(repo, 'config/schemas'), { recursive: true });
+    await writeFile(
+      join(repo, 'config/schemas/settings.yml'),
+      'kind: singleton\npage: false\nhasBody: false\nfields:\n  title: { type: text }\n  baseUrl: { type: text }\n  activeTheme: { type: text }\n',
+    );
+    await writeFile(
+      join(repo, 'config/schemas/pages.yml'),
+      'kind: collection\nhasBody: true\nfields:\n  title:\n    type: text\n    required: true\n',
+    );
+    await mkdir(join(repo, 'content/settings'), { recursive: true });
+    await writeFile(
+      join(repo, 'content/settings/index.md'),
+      '---\ntitle: My Blog\nbaseUrl: https://blog.example\nactiveTheme: blog\n---\n',
+    );
+    await mkdir(join(repo, 'content/pages/hi'), { recursive: true });
+    await writeFile(
+      join(repo, 'content/pages/hi/index.md'),
+      '---\ntitle: Hi There\npublic: true\n---\n\nHello **world**.\n',
+    );
+
+    const out = await mkdtemp(join(tmpdir(), 'timber-11ty-out-'));
+    await buildSite(repo, out);
+    const html = await readFile(join(out, 'pages/hi/index.html'), 'utf8');
+    expect(html).toContain('<h1>Hi There</h1>'); // bare {{ title }} via the flat cascade
+    expect(html).toContain('<title>Hi There</title>');
+    expect(html).toContain('by Grace Hopper'); // {{ metadata.author }} from manifest globals
+    expect(html).toContain('class="masthead"'); // header include
+    expect(html).toContain('<strong>world</strong>'); // markdown body
+    expect(html).not.toContain('{%');
+  });
+});
+
 describe('defaultThemeName', () => {
   it('slugifies a theme directory basename', () => {
     expect(defaultThemeName('/path/to/Minima-3.0')).toBe('minima-3-0');
@@ -240,6 +293,19 @@ describe('parseImportArgs', () => {
       positionals: ['theme', 'repo'],
       typeMap: {},
       name: 'chirpy',
+    });
+  });
+
+  it('parses --engine (and --engine=) into the source engine', () => {
+    expect(parseImportArgs(['theme', 'repo', '--engine', 'eleventy'])).toEqual({
+      positionals: ['theme', 'repo'],
+      typeMap: {},
+      engine: 'eleventy',
+    });
+    expect(parseImportArgs(['--engine=jekyll', 'theme', 'repo'])).toEqual({
+      positionals: ['theme', 'repo'],
+      typeMap: {},
+      engine: 'jekyll',
     });
   });
 });

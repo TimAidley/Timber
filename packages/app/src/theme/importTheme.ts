@@ -6,6 +6,7 @@ import {
   type ThemeFiles,
   type ThemeImportPlan,
 } from '@timber/jekyll-compat';
+import { detectEngine, engineByName } from '@timber/eleventy-compat';
 import type { FileWrite, HostProvider } from '@timber/host';
 
 /**
@@ -88,6 +89,8 @@ export interface BrowserImportOptions extends PlanThemeOptions {
    * previous theme stays on disk under its own `themes/<name>/`, so switching back is one edit.
    */
   activate?: { path: string; source: string };
+  /** Source engine by name (`jekyll`/`eleventy`); omit or `auto` to autodetect from the zip. */
+  engineName?: string;
 }
 
 /**
@@ -101,11 +104,15 @@ export async function importThemeFromZip(
   zip: Uint8Array,
   options: BrowserImportOptions = {},
 ): Promise<ThemeImportPlan> {
-  const { activate, ...planOptions } = options;
+  const { activate, engineName, ...planOptions } = options;
   const { files: themeFiles, rootName } = readZip(zip);
   const themeName =
     planOptions.themeName ?? (rootName ? slugifyThemeName(rootName) : 'theme');
-  const plan = planThemeImport(themeFiles, { ...planOptions, themeName });
+  // Explicit engine option wins, then an engine name from the dialog, else autodetect the zip.
+  const engine =
+    planOptions.engine ??
+    (engineName && engineName !== 'auto' ? engineByName(engineName) : detectEngine(themeFiles));
+  const plan = planThemeImport(themeFiles, { ...planOptions, themeName, engine });
   const files = planToFileWrites(plan);
   if (activate) {
     files.push({

@@ -106,4 +106,33 @@ describe('browser theme import', () => {
     expect('content' in settings! ? settings.content : '').toContain('activeTheme: acme');
     expect('content' in settings! ? settings.content : '').toContain('title: My Site');
   });
+
+  it('autodetects a Liquid Eleventy zip and commits its theme.json manifest', async () => {
+    let committed: CommitFilesInput | undefined;
+    const session: ImportSession = {
+      client: {
+        commitFiles: async (input: CommitFilesInput): Promise<CommitResult> => {
+          committed = input;
+          return { sha: 'abc' };
+        },
+      },
+      wipBranch: 'alice_wip',
+      defaultBranch: 'main',
+    };
+    const ELEVENTY = {
+      '_includes/layouts/base.liquid': '<main>{{ content }}</main>',
+      '_includes/layouts/post.liquid':
+        '---\nlayout: layouts/base.liquid\n---\n<h1>{{ title }}</h1>{{ content }}',
+      '_data/metadata.json': '{ "author": "Ada" }',
+    };
+    const plan = await importThemeFromZip(session, makeZip(ELEVENTY, 'nulite-main'), {
+      // engineName omitted → autodetect
+    });
+    expect(plan.engine).toBe('eleventy');
+    const paths = committed!.files.map((f) => f.path);
+    expect(paths).toContain('themes/nulite-main/templates/layouts/base.liquid');
+    const manifest = committed!.files.find((f) => f.path === 'themes/nulite-main/theme.json');
+    expect(manifest && 'content' in manifest ? manifest.content : '').toContain('"eleventy"');
+    expect(manifest && 'content' in manifest ? manifest.content : '').toContain('"author": "Ada"');
+  });
 });

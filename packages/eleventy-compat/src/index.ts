@@ -21,3 +21,4 @@ export { registerEleventyCompat } from './register.js';
 export { eleventyEngine } from './engine.js';
 export { themeRuntime, parseThemeManifest } from './runtime.js';
 export type { ThemeManifest, ThemeRuntime } from './runtime.js';
+export { detectEngine, engineByName, engineName } from './detect.js';

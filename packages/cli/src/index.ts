@@ -16,6 +16,7 @@ import {
   defaultThemeName,
   activateTheme,
 } from './importTheme.node.js';
+import { engineByName } from '@timber/eleventy-compat';
 
 const USAGE = `timber — Timber static-site generator CLI
 
@@ -23,7 +24,7 @@ Usage:
   timber render <contentDir> <templateFile> <outFile>
   timber validate <repoDir>
   timber build <repoDir> <outDir>
-  timber import-theme <themeDir> <repoDir> [--name <theme>] [--map <type>=<layout> ...]
+  timber import-theme <themeDir> <repoDir> [--engine jekyll|eleventy] [--name <theme>] [--map <type>=<layout> ...]
 
 render   — reads <contentDir>/index.md and <templateFile>, renders the page
            through the shared generator, and writes the HTML to <outFile>.
@@ -33,14 +34,15 @@ build    — renders the whole site: every public object through its
            templates/<type>.liquid (fallback templates/default.liquid) into
            <outDir>, copying assets and omitting drafts. Fails (non-zero) if any
            public object is invalid, so a broken site never deploys.
-import-theme — adopt-once import of a Jekyll theme (Tier A): transforms its
-           _layouts/_includes into native templates into a self-contained
-           themes/<name>/ folder, carries its assets/SCSS over, and points the
-           site's settings.activeTheme at it. --name <theme> sets the folder
-           (default: the theme dir's name); the previous theme stays on disk, so
-           switching back is one setting. Use --map <type>=<layout> (repeatable)
-           to render a content type through a specific layout, e.g. --map
-           posts=post. See docs/importing-jekyll-themes.md.
+import-theme — adopt-once import of a Jekyll or Liquid-Eleventy theme (Tier A):
+           transforms its templates into a self-contained themes/<name>/ folder,
+           carries its assets/SCSS over, and points settings.activeTheme at it.
+           The source engine is autodetected (_layouts/ → jekyll,
+           _includes/*.liquid → eleventy); override with --engine. --name <theme>
+           sets the folder (default: the theme dir's name); the previous theme
+           stays on disk, so switching back is one setting. Use --map
+           <type>=<layout> (repeatable) to render a content type through a specific
+           layout. See docs/importing-jekyll-themes.md.
 
 This is the Node/CI entry point; preview ≡ build.`;
 
@@ -116,19 +118,24 @@ async function buildCommand(repoDir: string, outDir: string): Promise<number> {
   }
 }
 
-/** Adopt-once import of a Jekyll theme into a Timber repo; returns an exit code. */
+/** Adopt-once import of a Jekyll or Eleventy theme into a Timber repo; returns an exit code. */
 async function importThemeCommand(
   themeDir: string,
   repoDir: string,
   typeMap: Record<string, string>,
   name?: string,
+  engine?: string,
 ): Promise<number> {
   const themeName = name ?? defaultThemeName(themeDir);
-  const r = await importThemeToRepo(themeDir, repoDir, { typeMap, themeName });
+  const r = await importThemeToRepo(themeDir, repoDir, {
+    typeMap,
+    themeName,
+    ...(engine ? { engine: engineByName(engine) } : {}),
+  });
   const out = process.stdout;
   const mappedCount = Object.keys(r.mapped).length;
   out.write(
-    `Imported ${themeDir} → ${repoDir}/themes/${themeName}/\n` +
+    `Imported ${themeDir} (${r.engine}) → ${repoDir}/themes/${themeName}/\n` +
       `  ${r.templates.length} template(s) (root: ${r.rootLayout}, default: ${r.defaultLayout})\n` +
       `  ${r.assets.length} asset(s) copied (SCSS compiled at build/preview time)\n`,
   );
@@ -196,7 +203,7 @@ async function main(argv: string[]): Promise<number> {
   }
 
   if (command === 'import-theme') {
-    const { positionals, typeMap, name } = parseImportArgs(rest);
+    const { positionals, typeMap, name, engine } = parseImportArgs(rest);
     const [themeDir, repoDir] = positionals;
     if (!themeDir || !repoDir) {
       process.stderr.write(
@@ -204,7 +211,7 @@ async function main(argv: string[]): Promise<number> {
       );
       return 1;
     }
-    return importThemeCommand(themeDir, repoDir, typeMap, name);
+    return importThemeCommand(themeDir, repoDir, typeMap, name, engine);
   }
 
   process.stderr.write(`error: unknown command "${command}"\n\n${USAGE}\n`);

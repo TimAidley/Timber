@@ -6,6 +6,7 @@ import {
   type PlanThemeOptions,
   type ThemeFiles,
 } from '@timber/jekyll-compat';
+import { detectEngine } from '@timber/eleventy-compat';
 import { loadSchemas, type RepoSnapshot } from '@timber/content';
 import { buildSnapshotFromDir } from './snapshot.node.js';
 
@@ -32,6 +33,8 @@ export interface ImportThemeResult {
   mapped: Record<string, string>;
   /** The theme folder written to (`themes/<name>/`), or `null` for the legacy root. */
   themeName: string | null;
+  /** The source engine used (`jekyll` or `eleventy`). */
+  engine: string;
 }
 
 /**
@@ -72,10 +75,12 @@ export function parseImportArgs(args: string[]): {
   positionals: string[];
   typeMap: Record<string, string>;
   name?: string;
+  engine?: string;
 } {
   const positionals: string[] = [];
   const typeMap: Record<string, string> = {};
   let name: string | undefined;
+  let engine: string | undefined;
   const addPair = (pair: string): void => {
     const [type, layout] = pair.split('=');
     if (type && layout) typeMap[type.trim()] = layout.trim();
@@ -87,9 +92,17 @@ export function parseImportArgs(args: string[]): {
       arg.slice('--map='.length).split(',').forEach(addPair);
     else if (arg === '--name') name = args[++i]?.trim() || undefined;
     else if (arg.startsWith('--name=')) name = arg.slice('--name='.length).trim() || undefined;
+    else if (arg === '--engine') engine = args[++i]?.trim() || undefined;
+    else if (arg.startsWith('--engine='))
+      engine = arg.slice('--engine='.length).trim() || undefined;
     else positionals.push(arg);
   }
-  return name !== undefined ? { positionals, typeMap, name } : { positionals, typeMap };
+  return {
+    positionals,
+    typeMap,
+    ...(name !== undefined ? { name } : {}),
+    ...(engine !== undefined ? { engine } : {}),
+  };
 }
 
 /** Derive a default theme folder name from a theme directory path (its basename, slugified). */
@@ -102,35 +115,33 @@ export function defaultThemeName(themeDir: string): string {
   return slug || 'theme';
 }
 
-/** All files (recursive, posix-relative) under `absDir`; [] if absent. */
-async function walk(absDir: string, base = absDir): Promise<string[]> {
-  const entries = await readdir(absDir, { withFileTypes: true }).catch(() => null);
-  if (!entries) return [];
-  const out: string[] = [];
-  for (const entry of entries) {
-    const abs = join(absDir, entry.name);
-    if (entry.isDirectory()) out.push(...(await walk(abs, base)));
-    else out.push(relative(base, abs).split(sep).join('/'));
-  }
-  return out;
-}
-
 /** Files that are text (read as UTF-8); everything else (images, fonts) is read as bytes. */
 const TEXT_EXT =
   /\.(html|liquid|scss|sass|css|js|mjs|json|ya?ml|txt|md|markdown|svg|xml)$/i;
 
-/** Read the theme's `_layouts`/`_includes`/`assets`/`_sass` into an in-memory {@link ThemeFiles}. */
+/** Directories to skip when reading a theme (build noise; never part of a theme's source). */
+const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', '_site', '.cache']);
+
+/** Recursively read the whole theme dir into {@link ThemeFiles} (skipping build noise), so any
+ *  engine (Jekyll `_layouts`/`_includes`, Eleventy `_includes`/`_data`, at any input-dir prefix)
+ *  finds what it needs. Text vs binary is by extension. */
 async function readThemeFiles(themeDir: string): Promise<ThemeFiles> {
   const text: Record<string, string> = {};
   const binary: Record<string, Uint8Array> = {};
-  for (const sub of ['_layouts', '_includes', 'assets', '_sass']) {
-    for (const rel of await walk(join(themeDir, sub))) {
-      const themePath = `${sub}/${rel}`;
-      const abs = join(themeDir, sub, rel);
-      if (TEXT_EXT.test(rel)) text[themePath] = await readFile(abs, 'utf8');
-      else binary[themePath] = new Uint8Array(await readFile(abs));
+  const walkAll = async (absDir: string): Promise<void> => {
+    const entries = await readdir(absDir, { withFileTypes: true }).catch(() => []);
+    for (const entry of entries) {
+      const abs = join(absDir, entry.name);
+      if (entry.isDirectory()) {
+        if (!SKIP_DIRS.has(entry.name)) await walkAll(abs);
+      } else {
+        const rel = relative(themeDir, abs).split(sep).join('/');
+        if (TEXT_EXT.test(rel)) text[rel] = await readFile(abs, 'utf8');
+        else binary[rel] = new Uint8Array(await readFile(abs));
+      }
     }
-  }
+  };
+  await walkAll(themeDir);
   return { text, binary };
 }
 
@@ -145,7 +156,11 @@ export async function importThemeToRepo(
   repoDir: string,
   options: ImportThemeOptions = {},
 ): Promise<ImportThemeResult> {
-  const plan = planThemeImport(await readThemeFiles(themeDir), options);
+  const files = await readThemeFiles(themeDir);
+  // Pick the source engine: an explicit `engine` option wins; otherwise autodetect from the
+  // theme's shape (`_layouts/` → Jekyll, `_includes/*.liquid` → Eleventy).
+  const engine = options.engine ?? detectEngine(files);
+  const plan = planThemeImport(files, { ...options, engine });
 
   async function write(repoPath: string, data: string | Uint8Array): Promise<void> {
     await mkdir(dirname(join(repoDir, repoPath)), { recursive: true });
@@ -174,5 +189,6 @@ export async function importThemeToRepo(
     defaultLayout: plan.defaultLayout,
     mapped: plan.mapped,
     themeName: plan.themeName,
+    engine: plan.engine ?? 'jekyll',
   };
 }

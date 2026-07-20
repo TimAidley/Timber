@@ -1,0 +1,5 @@
+<!doctype html>
+<html>
+  <head><title>{% if title %}{{ title }}{% else %}{{ site.title }}{% endif %}</title></head>
+  <body>{% include "header.liquid" %}<main>{{ content }}</main></body>
+</html>

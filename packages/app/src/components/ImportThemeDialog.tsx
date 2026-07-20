@@ -38,6 +38,7 @@ export function ImportThemeDialog({
 }: ImportThemeDialogProps): React.JSX.Element {
   const [bytes, setBytes] = useState<Uint8Array | null>(null);
   const [name, setName] = useState('');
+  const [engineName, setEngineName] = useState('auto');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<ThemeImportPlan | null>(null);
@@ -63,6 +64,7 @@ export function ImportThemeDialog({
     try {
       const plan = await importThemeFromZip(session, bytes, {
         themeName,
+        engineName,
         ...(settingsFile ? { activate: settingsFile } : {}),
       });
       setDone(plan);
@@ -74,17 +76,18 @@ export function ImportThemeDialog({
   }
 
   return (
-    <div className="modal" role="dialog" aria-label="Import Jekyll theme">
+    <div className="modal" role="dialog" aria-label="Import theme">
       <div className="modal__panel">
         <header className="modal__header">
-          <h2>Import Jekyll theme</h2>
+          <h2>Import theme</h2>
         </header>
 
         {done ? (
           <>
             <p>
-              Imported <strong>{Object.keys(done.templates).length}</strong> template(s)
-              into <code>themes/{done.themeName}/</code> (root layout{' '}
+              Imported <strong>{Object.keys(done.templates).length}</strong>{' '}
+              <strong>{done.engine ?? 'jekyll'}</strong> template(s) into{' '}
+              <code>themes/{done.themeName}/</code> (root layout{' '}
               <code>{done.rootLayout}</code>, default <code>{done.defaultLayout}</code>).
               {settingsFile ? ' It’s now your active theme.' : ''} Committed to your working
               branch.
@@ -107,10 +110,10 @@ export function ImportThemeDialog({
         ) : (
           <>
             <p className="new-type__hint">
-              Upload a Jekyll theme <code>.zip</code> (e.g. a repo’s “Download ZIP”). Its{' '}
-              <code>_layouts</code>/<code>_includes</code> become native templates and its
-              assets (incl. SCSS) are carried over into a <code>themes/&lt;name&gt;/</code>{' '}
-              folder — then committed to your working branch
+              Upload a <strong>Jekyll</strong> or <strong>Liquid Eleventy</strong> theme{' '}
+              <code>.zip</code> (e.g. a repo’s “Download ZIP”). Its templates become native
+              Timber templates and its assets (incl. SCSS) are carried over into a{' '}
+              <code>themes/&lt;name&gt;/</code> folder — then committed to your working branch
               {settingsFile ? ' and set as the active theme' : ''}.
             </p>
             <label className="new-type__group">
@@ -121,6 +124,18 @@ export function ImportThemeDialog({
                 disabled={busy}
                 onChange={(e) => void onFile(e.target.files?.[0] ?? null)}
               />
+            </label>
+            <label className="new-type__group">
+              <span>Source engine</span>
+              <select
+                value={engineName}
+                disabled={busy}
+                onChange={(e) => setEngineName(e.target.value)}
+              >
+                <option value="auto">Auto-detect</option>
+                <option value="jekyll">Jekyll</option>
+                <option value="eleventy">Eleventy (Liquid)</option>
+              </select>
             </label>
             <label className="new-type__group">
               <span>Theme name (folder)</span>
