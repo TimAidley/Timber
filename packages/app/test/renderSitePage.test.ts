@@ -24,8 +24,8 @@ function fixture(): { model: ReturnType<typeof assembleContent>; theme: SiteThem
   const schemas = loadSchemas(snapshot);
   const model = assembleContent(snapshot, schemas);
   const theme: SiteTheme = {
-    templates: new Map([['default.liquid', read('templates/default.liquid')]]),
-    stylesheets: new Map([['assets/theme.css', read('assets/theme.css')]]),
+    templates: new Map([['default.liquid', read('themes/default/templates/default.liquid')]]),
+    stylesheets: new Map([['assets/theme.css', read('themes/default/assets/theme.css')]]),
     navigationYml: read('config/navigation.yml'),
     objectUrls: [],
   };
@@ -102,8 +102,8 @@ describe('renderSitePage', () => {
     ]);
     const model = assembleContent(snapshot, loadSchemas(snapshot));
     const theme: SiteTheme = {
-      templates: new Map([['default.liquid', read('templates/default.liquid')]]),
-      stylesheets: new Map([['assets/theme.css', read('assets/theme.css')]]),
+      templates: new Map([['default.liquid', read('themes/default/templates/default.liquid')]]),
+      stylesheets: new Map([['assets/theme.css', read('themes/default/assets/theme.css')]]),
       navigationYml: null,
       objectUrls: [],
     };

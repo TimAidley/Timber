@@ -20,6 +20,10 @@ import {
   translationsOf,
   urlFor,
   Validator,
+  THEMES_DIR,
+  resolveThemePaths,
+  assetSourceDirs,
+  assetOutputPath,
   type ContentObject,
   type ContentTypeSchema,
 } from '@timber/content';
@@ -95,36 +99,48 @@ export async function buildSite(repoDir: string, outDir: string): Promise<BuildR
   }
   if (problems.length > 0) throw new BuildError(problems);
 
+  // Site-wide context from the global-settings singleton (SPEC §13): the config
+  // object whose type is marked `page: false`. It's read for `{{ site }}` but never
+  // rendered as a page.
+  const settingsObject = model.objects.find((o) => schemas.get(o.type)?.page === false);
+  const site = siteContext(settingsObject);
+
+  // Resolve the active theme (SPEC §13): its templates + assets live under
+  // `themes/<name>/`, selected by the settings singleton's `activeTheme`. A site with no
+  // active theme — or a dangling one whose folder was deleted — uses the legacy root
+  // (`templates/` + `assets/`) unchanged, so every pre-themes site builds exactly as before.
+  const activeTheme = typeof site.activeTheme === 'string' ? site.activeTheme : undefined;
+  const themeHasTemplates =
+    activeTheme !== undefined &&
+    (await walkFiles(join(repoDir, THEMES_DIR, activeTheme, 'templates'))).some((r) =>
+      r.endsWith('.liquid'),
+    );
+  const theme = resolveThemePaths(activeTheme, () => themeHasTemplates);
+
   // Load every template once, keyed by **bare name** (no `.liquid`), so a page template
   // can `{% layout %}` / `{% render %}` any other template (SPEC §6 layout inheritance +
   // snippets). Nested files keep their subpath (`partials/card.liquid` → `partials/card`),
   // matching how LiquidJS resolves `{% render 'partials/card' %}`. This same map is handed
   // to every `renderPage` so the browser preview (which loads the same set) stays ≡ build.
   const templates: Record<string, string> = {};
-  for (const rel of await walkFiles(join(repoDir, 'templates'))) {
+  for (const rel of await walkFiles(join(repoDir, theme.templatesDir))) {
     if (!rel.endsWith('.liquid')) continue;
     templates[rel.slice(0, -'.liquid'.length)] = await readFile(
-      join(repoDir, 'templates', rel),
+      join(repoDir, theme.templatesDir, rel),
       'utf8',
     );
   }
 
-  /** The entry (child) template for a type: `templates/<type>.liquid` → `default.liquid`. */
+  /** The entry (child) template for a type: `<theme>/<type>.liquid` → `default.liquid`. */
   function resolveTemplate(type: string): string {
     const source = templates[type] ?? templates['default'];
     if (source === undefined) {
       throw new BuildError([
-        `no template for type "${type}" (templates/${type}.liquid or templates/default.liquid)`,
+        `no template for type "${type}" (${theme.templatesDir}/${type}.liquid or ${theme.templatesDir}/default.liquid)`,
       ]);
     }
     return source;
   }
-
-  // Site-wide context from the global-settings singleton (SPEC §13): the config
-  // object whose type is marked `page: false`. It's read for `{{ site }}` but never
-  // rendered as a page.
-  const settingsObject = model.objects.find((o) => schemas.get(o.type)?.page === false);
-  const site = siteContext(settingsObject);
 
   // Homepage-at-root (SPEC §5): the settings singleton names a `homepage` object id;
   // that object renders to `/` instead of its normal `/type/slug/` URL.
@@ -155,23 +171,33 @@ export async function buildSite(repoDir: string, outDir: string): Promise<BuildR
   let redirects = 0;
   const sitemapUrls: string[] = [];
 
-  // Site-wide assets: /assets/** → <out>/assets/**. SCSS is compiled (isomorphic dart-sass —
-  // same as the browser preview, SPEC §6); a *main* stylesheet (a `.scss` carrying a `---`
-  // front-matter fence, the Jekyll convention) becomes a sibling `.css`, partials (no fence,
-  // e.g. under `assets/_sass/`) are consumed via `@import` and not emitted, everything else
-  // copies verbatim. `@import`/`@use` resolve against `assets/_sass` + the file's own dir.
-  const assetRels = await walkFiles(join(repoDir, 'assets'));
+  // Site assets → <out>/assets/**. The active theme's own assets (`themes/<name>/assets/**`)
+  // publish under `/assets` alongside the site's own uploads (`assets/**`), which override on
+  // a path clash — so switching themes never disturbs a site's uploads (SPEC §13). In legacy
+  // mode the single `assets/` root is the only source. SCSS is compiled (isomorphic dart-sass,
+  // same as the browser preview, SPEC §6): a *main* stylesheet (a `.scss` carrying a `---`
+  // front-matter fence, the Jekyll convention) becomes a sibling `.css`; partials (no fence,
+  // e.g. under a theme's `_sass/`) are consumed via `@import` and not emitted; everything else
+  // copies verbatim. `@import`/`@use` resolve against the theme's `_sass` + `assets/_sass` + the
+  // file's own dir. Gathered lowest-priority first, keyed by OUTPUT path so a later (site-level)
+  // source wins.
+  const outputs = new Map<string, { repoPath: string; srcDir: string; rel: string }>();
   const scssFiles: Record<string, string> = {};
-  for (const rel of assetRels) {
-    if (rel.endsWith('.scss')) {
-      scssFiles[`assets/${rel}`] = await readFile(join(repoDir, 'assets', rel), 'utf8');
+  for (const srcDir of assetSourceDirs(theme)) {
+    for (const rel of await walkFiles(join(repoDir, srcDir))) {
+      const repoPath = `${srcDir}/${rel}`;
+      const outPath = assetOutputPath(repoPath, theme);
+      if (outPath === null) continue;
+      outputs.set(outPath, { repoPath, srcDir, rel });
+      if (rel.endsWith('.scss')) {
+        scssFiles[repoPath] = await readFile(join(repoDir, srcDir, rel), 'utf8');
+      }
     }
   }
   const scssEngine = createEngine();
   const scssResolve = (scss: string): Promise<string> =>
     scssEngine.parseAndRender(scss, { site });
-  for (const rel of assetRels) {
-    const repoPath = `assets/${rel}`;
+  for (const [outPath, { repoPath, srcDir, rel }] of outputs) {
     if (rel.endsWith('.scss')) {
       const source = scssFiles[repoPath]!;
       if (!/^---\r?\n/.test(source)) continue; // a partial — pulled in via @import, not emitted
@@ -179,14 +205,15 @@ export async function buildSite(repoDir: string, outDir: string): Promise<BuildR
         source,
         entryPath: repoPath,
         files: scssFiles,
-        loadPaths: ['assets/_sass'],
+        loadPaths: theme.sassLoadPaths,
         resolve: scssResolve,
       });
-      const outRel = rel.replace(/\.scss$/, '.css');
+      const outRel = outPath.replace(/\.scss$/, '.css').slice('assets/'.length);
       await mkdir(join(outDir, 'assets', dirname(outRel)), { recursive: true });
       await writeFile(join(outDir, 'assets', outRel), css, 'utf8');
     } else {
-      await copyFile(join(repoDir, 'assets', rel), join(outDir, 'assets', rel));
+      const outRel = outPath.slice('assets/'.length);
+      await copyFile(join(repoDir, srcDir, rel), join(outDir, 'assets', outRel));
     }
     assets += 1;
   }

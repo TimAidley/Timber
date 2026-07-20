@@ -168,6 +168,14 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
       typeof declared === 'string' && declared.length > 0 ? declared : (languages[0] ?? '');
     return { languages, defaultLanguage, enabled: languages.length > 0 };
   }, [model]);
+
+  // Active theme (SPEC §13): the settings singleton's `activeTheme` selects which
+  // `themes/<name>/` folder the preview renders through. Unset → legacy root theme.
+  const activeTheme = useMemo(() => {
+    const settings = model.objects.find((o) => model.schemas.get(o.type)?.page === false);
+    const value = settings?.data.activeTheme;
+    return typeof value === 'string' && value.length > 0 ? value : undefined;
+  }, [model]);
   const [showNew, setShowNew] = useState(false);
   const [showNewType, setShowNewType] = useState(false);
   const [showNewFile, setShowNewFile] = useState(false);
@@ -1078,7 +1086,7 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   const previewLive = view === 'content' && !!selected && !selectedDeleted;
   const previewEnabled = previewLive && (showPreviewPane || previewWindowOpenRef.current);
   // The edited site's own templates + theme, so preview ≡ the built page (SPEC §6/§13).
-  const siteTheme = useSiteTheme(session, previewEnabled);
+  const siteTheme = useSiteTheme(session, previewEnabled, activeTheme);
   const { html: previewHtml, error: previewError } = useRenderedPreview(
     workingModel,
     selected,

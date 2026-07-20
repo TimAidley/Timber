@@ -19,6 +19,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const siteFixture = join(here, 'fixtures', 'site');
 const invalidFixture = join(here, 'fixtures', 'site-invalid');
 const i18nFixture = join(here, 'fixtures', 'site-i18n');
+const themedFixture = join(here, 'fixtures', 'site-themed');
 
 async function exists(path: string): Promise<boolean> {
   return access(path)
@@ -194,6 +195,31 @@ describe('buildSite', () => {
     // A language switcher linking each sibling, marking the current language.
     expect(en).toContain('<a href="/en/posts/hello/" aria-current="true">en</a>');
     expect(en).toContain('<a href="/fr/posts/bonjour/">fr</a>');
+  });
+
+  it('renders through the active theme folder and merges its assets into /assets (SPEC §13)', async () => {
+    const result = await buildSite(themedFixture, out);
+    expect(result.pages).toBe(1);
+
+    // The page renders through themes/acme/templates/default.liquid, not a root template.
+    const home = await readFile(join(out, 'pages/home/index.html'), 'utf8');
+    expect(home).toContain('class="acme"');
+    expect(home).toContain('<h1>Home</h1>');
+    expect(home).toContain('<strong>acme</strong>'); // markdown body rendered
+
+    // The theme's SCSS compiled (resolving @import from the theme's own _sass) and published
+    // under /assets/theme.css — the URL the theme's <link> references.
+    const css = await readFile(join(out, 'assets/theme.css'), 'utf8');
+    expect(css).toContain('color:red'); // $c from themes/acme/assets/_sass/_vars.scss (compressed)
+    // Partials are consumed, never emitted.
+    expect(await exists(join(out, 'assets/_sass/_vars.scss'))).toBe(false);
+    expect(await exists(join(out, 'assets/theme.scss'))).toBe(false);
+
+    // A site-level upload (no theme copy) publishes as-is.
+    expect((await readFile(join(out, 'assets/logo.txt'), 'utf8')).trim()).toBe('site-logo');
+    // On a theme↔site path clash, the site's own upload wins (switching themes never
+    // disturbs a site's uploads).
+    expect((await readFile(join(out, 'assets/shared.txt'), 'utf8')).trim()).toBe('from-site');
   });
 
   it('build output equals renderPage output for the same object (preview ≡ build)', async () => {

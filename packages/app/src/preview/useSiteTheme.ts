@@ -16,23 +16,32 @@ const EMPTY: SiteTheme = {
  * object URLs when replaced or unmounted. On failure it yields an empty theme, so the
  * render falls back to surfacing "no template" rather than crashing the pane.
  */
-export function useSiteTheme(session: RepoSession, enabled: boolean): SiteTheme | null {
-  const [state, setState] = useState<{ ref: string; theme: SiteTheme } | null>(null);
+export function useSiteTheme(
+  session: RepoSession,
+  enabled: boolean,
+  activeTheme?: string,
+): SiteTheme | null {
+  const [state, setState] = useState<{
+    ref: string;
+    activeTheme: string | undefined;
+    theme: SiteTheme;
+  } | null>(null);
 
   useEffect(() => {
-    if (!enabled || state?.ref === session.loadedRef) return;
+    if (!enabled) return;
+    if (state?.ref === session.loadedRef && state.activeTheme === activeTheme) return;
     let cancelled = false;
-    loadSiteTheme(session.client, session.loadedRef)
+    loadSiteTheme(session.client, session.loadedRef, activeTheme)
       .then((theme) => {
-        if (!cancelled) setState({ ref: session.loadedRef, theme });
+        if (!cancelled) setState({ ref: session.loadedRef, activeTheme, theme });
       })
       .catch(() => {
-        if (!cancelled) setState({ ref: session.loadedRef, theme: EMPTY });
+        if (!cancelled) setState({ ref: session.loadedRef, activeTheme, theme: EMPTY });
       });
     return () => {
       cancelled = true;
     };
-  }, [enabled, session, state]);
+  }, [enabled, session, activeTheme, state]);
 
   // Revoke a theme's object URLs when it's replaced or the editor unmounts.
   useEffect(

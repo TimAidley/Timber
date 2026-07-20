@@ -37,6 +37,13 @@ export type { SiteContext, PageSeo, HreflangAlternate } from './seo.js';
 export { themeStyle } from './theme.js';
 export { loadNavigation } from './navigation.js';
 export type { NavItem } from './navigation.js';
+export {
+  THEMES_DIR,
+  resolveThemePaths,
+  assetSourceDirs,
+  assetOutputPath,
+} from './themePaths.js';
+export type { ThemePaths } from './themePaths.js';
 
 export type {
   FieldKind,

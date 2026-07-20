@@ -11,6 +11,13 @@ fields:
   homepage:
     type: reference
     referenceType: pages
+  # Active theme (SPEC §13): the name of the folder under `themes/` to render the site
+  # with. Each theme is self-contained (`themes/<name>/templates` + `themes/<name>/assets`),
+  # so switching is just changing this value and deleting one is removing its folder. Leave
+  # unset to fall back to the legacy root `templates/` + `assets/`.
+  activeTheme:
+    type: text
+    label: Active theme
   # Theme options (SPEC §13): override the default theme's CSS variables. Each is
   # optional — leave it unset to keep the theme default.
   accentColor:
