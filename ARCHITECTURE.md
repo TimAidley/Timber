@@ -28,6 +28,7 @@ a site* see **`INSTALL.md`**.
 | `@timber/host` | The **host-provider port**: host-neutral types + the `HostProvider` interface (`HostRepo` + `HostIdentity` + optional `DeployBackend`) the editor depends on, so a git host is a swappable adapter | browser and Node |
 | `@timber/github` | **A `HostProvider` adapter** — `RepoClient` (Octokit): load/commit via the Git Data API, read/dispatch workflow runs | browser |
 | `@timber/gitea` | **A second `HostProvider` adapter** — `GiteaClient` for Gitea/Forgejo (Codeberg), over the Gitea REST API via `fetch` (no SDK). Proves the port is host-neutral | browser |
+| `@timber/gitlab` | **A third `HostProvider` adapter** — `GitLabClient` over the GitLab REST API v4 via `fetch`, with a real pipelines-based `DeployBackend` | browser |
 | `@timber/oauth-broker` | Cloudflare Worker: OAuth token exchange (holds the secret) **+** device-flow relay (secret-less) | edge |
 
 **Core principle:** the generator is **one codebase with two entry points** — the browser
@@ -75,23 +76,26 @@ Everything the editor does against a git host — load content, commit edits to 
 branch, publish (squash WIP→main), watch the deploy — flows through **one port**,
 `HostProvider` (`packages/host`). The app constructs a concrete adapter in exactly one
 place — `createHostProvider()` (`packages/app/src/host/hostProvider.ts`) — and depends
-only on the port everywhere else. Two adapters exist: **`@timber/github`** (`RepoClient`,
-Octokit) and **`@timber/gitea`** (`GiteaClient`, Gitea/Forgejo/Codeberg, over `fetch`); a
-site picks one via `config.host` (`github` default, or `gitea` + an `apiBaseUrl`). Adding
-GitLab/self-hosted later means a new adapter + a branch in that factory — nothing else.
+only on the port everywhere else. Three adapters exist: **`@timber/github`** (`RepoClient`,
+Octokit), **`@timber/gitea`** (`GiteaClient`, Gitea/Forgejo/Codeberg, over `fetch`), and
+**`@timber/gitlab`** (`GitLabClient`, over `fetch`); a site picks one via `config.host`
+(`github` default, or `gitea`/`gitlab` + an `apiBaseUrl`). Adding a fourth means a new
+adapter + a branch in that factory — nothing else.
 
-The Gitea adapter was built specifically to prove the port isn't GitHub-shaped, and it
-holds: `GiteaClient implements HostProvider` with a completely different HTTP model. Where
-the hosts diverge, the **adapter** absorbs it and the port stays clean — a useful map of
-where the abstraction earns its keep:
+The Gitea and GitLab adapters were built specifically to prove the port isn't GitHub-shaped,
+and it holds: each `implements HostProvider` with a completely different HTTP model, and no
+adapter has required a change to `@timber/host`. Where the hosts diverge, the **adapter**
+absorbs it and the port stays clean — a map of where the abstraction earns its keep:
 
-| Concern | GitHub adapter | Gitea adapter | Port stays neutral because… |
-|---|---|---|---|
-| Commit | blob→tree→commit overlay | one **ChangeFiles** call (create/update/delete ops) | `commitFiles` takes a write-set; the adapter classifies create-vs-update against the branch tree |
-| Move | reuse blob sha server-side | read the bytes and re-upload | `MoveEntry.sha` is documented as an **opaque content handle**, not "a GitHub blob sha" |
-| Publish | compose a squashed tree | **replay** the WIP change-set onto main | `publishSquash` carries the plan; Gitea ignores `wipTip`/`strategy` (GitHub tree concerns) |
-| Changed paths | `compare` returns a file list | **diff the two trees** by path+sha | callers only need added/modified/removed (a rename reads as add+remove) |
-| Deploy | GitHub Actions (`deploy.yml`) | **none** — Codeberg Pages is branch-based | `DeployBackend` is optional; the editor degrades when it's absent |
+| Concern | GitHub | Gitea | GitLab | Port stays neutral because… |
+|---|---|---|---|---|
+| Commit | blob→tree→commit overlay | one **ChangeFiles** call | Commits API `actions[]` | `commitFiles` takes a write-set; the adapter classifies create-vs-update against the branch tree |
+| Move | reuse blob sha server-side | read + re-upload | **native server-side `move`** | `MoveEntry.sha` is an **opaque content handle**, not "a GitHub blob sha" |
+| Publish | compose a squashed tree | **replay** the change-set | **replay** the change-set | `publishSquash` carries the plan; Gitea/GitLab ignore `wipTip`/`strategy` |
+| Changed paths | `compare` file list | **tree-diff** by path+sha | `compare` file list (**rename-aware**) | callers only need added/modified/removed(/renamed) |
+| Reset WIP | force-update ref | force-update ref | **delete + recreate** (no force-update) | `resetBranch` is intent, not a ref-update primitive |
+| Deploy | GitHub Actions | **none** (Codeberg Pages is branch-based) | **CI/CD pipelines** | `DeployBackend` is optional; GitLab implements it, Codeberg omits it |
+| Addressing | `owner`/`repo` | `owner`/`repo` | URL-encoded **project path** (nested groups) | the port has no `owner`/`repo`; it's adapter construction config |
 
 The port is split by capability so a host provides what it can:
 
@@ -99,7 +103,7 @@ The port is split by capability so a host provides what it can:
 |---|---|---|
 | Read/write git content + **publish** | `HostRepo` | Always required. Publish is the intent-level `publishSquash()` — the app computes the *plan* (validity gate, clean-vs-rebase, conflict detection, all host-neutral); the adapter owns the host-specific mechanics of building the squashed commit (GitHub's blob→tree→commit model stays inside `@timber/github`). Also exposes repo **visibility** via `getVisibility()` → `public` / `private` / `unknown` (the last for a host that can't report it — both shipped adapters do). |
 | Who is signed in | `HostIdentity` | `getAuthenticatedLogin()` drives the per-user `<login>_wip` branch (SPEC §11). |
-| Trigger/observe a build | `DeployBackend` (**optional**) | `getLatestDeploy()` / `triggerDeploy()`. A host with **no CI** omits it, and the editor degrades — no publish-status morph, no out-of-date banner — instead of assuming GitHub Actions + Pages. GitHub maps it onto the site-template's `deploy.yml` workflow. |
+| Trigger/observe a build | `DeployBackend` (**optional**) | `getLatestDeploy()` / `triggerDeploy()`. A host with **no CI** omits it, and the editor degrades — no publish-status morph, no out-of-date banner. GitHub maps it onto the `deploy.yml` workflow; **GitLab** onto CI/CD **pipelines** (a real second implementation); Codeberg omits it (branch-based Pages, no run to observe). |
 
 **Page hosting is host-neutral in the generator.** It turned out nothing GitHub-specific
 had to move: the **base path** is derived from the site's configured `baseUrl`
@@ -107,9 +111,10 @@ had to move: the **base path** is derived from the site's configured `baseUrl`
 domain, all just work — and the **meta-refresh redirect stubs** (`redirects.ts`) work on any
 static host. Only the *deploy mechanism* is per-host, and it lives entirely in the
 site-template, not the app or generator: `.github/workflows/deploy.yml` uploads a Pages
-artifact (GitHub), while `.forgejo/workflows/deploy.yml` builds and force-pushes to the
-`pages` branch that **Codeberg** Pages serves. Both co-host the editor at `/<repo>/edit/`;
-they coexist in one template (GitHub ignores `.forgejo/`, Forgejo ignores `.github/`).
+artifact (GitHub), `.forgejo/workflows/deploy.yml` force-pushes to the `pages` branch that
+**Codeberg** Pages serves, and `.gitlab-ci.yml`'s `pages` job publishes a `public/` artifact
+to **GitLab** Pages. All three co-host the editor at `/<repo>/edit/` and coexist in one
+template (each host ignores the others' workflow files).
 
 ## Authentication — the `getToken()` seam
 
@@ -186,8 +191,9 @@ The editor bundle uses a **relative base** (`./`), so the same build works at an
 `OAUTH_CLIENT_SECRET` (redirect only), `ALLOWED_ORIGINS` (comma-separated; legacy
 `GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET`/`ALLOWED_ORIGIN` still read as fallbacks). The
 Actions-side names use the `GH_`/plain prefix because GitHub **reserves** `GITHUB_`. For a
-**Gitea/Forgejo (Codeberg)** site, set `GITEA_BASE_URL` (e.g. `https://codeberg.org`) — the
-broker then relays to that instance as a public client, and `OAUTH_CLIENT_SECRET` is optional.
+**Gitea/Forgejo (Codeberg)** or **GitLab** site, set `GITEA_BASE_URL` (e.g.
+`https://codeberg.org`) or `GITLAB_BASE_URL` (e.g. `https://gitlab.com`) — the broker then
+relays to that instance as a public client, and `OAUTH_CLIENT_SECRET` is optional.
 
 **Timber repo**: `TEMPLATE_SYNC_TOKEN` (fine-grained PAT, Contents R/W on
 `Timber-site-template`) for the mirror.

@@ -220,3 +220,28 @@ seam"), and **Codeberg** (Forgejo) is a supported second host. The differences f
 Self-hosted Gitea/Forgejo works the same way — set `apiBaseUrl` to your instance origin;
 the workflows derive `GITEA_BASE_URL` from the instance, and `TIMBER_EDITOR_ORIGIN` overrides
 the editor origin if your Pages domain isn't `<owner>.codeberg.page`.
+
+---
+
+## Alternative: host on GitLab
+
+**GitLab** is a supported third host (self-hosted GitLab works too — set `apiBaseUrl` to your
+instance). Differences from GitHub:
+
+1. **Deploy via CI/CD → GitLab Pages.** The template ships **`.gitlab-ci.yml`** — its `pages`
+   job builds your site and publishes the `public/` artifact, served at
+   `https://<namespace>.gitlab.io/<project>/`. (It coexists with the other hosts' workflows;
+   each host ignores the others'.) GitLab CI runs it automatically once the file is present.
+2. **Base URL.** Set `baseUrl` in `content/settings/index.md` to your Pages URL.
+3. **Editor config.** Co-hosted at `/<project>/edit/`, pointed at GitLab via `host: gitlab`
+   + `apiBaseUrl` + `projectPath` — the `.gitlab-ci.yml` sets these from GitLab's built-in
+   `CI_*` variables. Nested groups are handled by `projectPath` (`CI_PROJECT_PATH`).
+4. **Deploy status in the editor works** — GitLab's pipelines back a real deploy capability,
+   so the Publish button shows Building… → Published (unlike Codeberg).
+5. **Sign-in.** Paste-a-PAT (create one under *User settings → Access tokens* with
+   `write_repository`), or **"Sign in with GitLab"**: register a **public** OAuth application
+   (*User settings → Applications*, "Confidential" unchecked, redirect URI = your editor URL),
+   deploy Timber's broker with **`GITLAB_BASE_URL`** set (no secret — GitLab is a public
+   client; the broker is only a CORS relay), and add CI/CD variables `TIMBER_OAUTH_CLIENT_ID`,
+   `TIMBER_OAUTH_BROKER_URL`, and `TIMBER_OAUTH_SCOPE` (e.g. `api`). *(Automated broker setup
+   for GitLab, like Codeberg's, is a follow-up; deploy the broker with `wrangler` for now.)*

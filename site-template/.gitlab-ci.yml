@@ -1,0 +1,71 @@
+# Build & deploy a Timber site to GitLab Pages.
+#
+# Copy this file into your CONTENT project at .gitlab-ci.yml. It builds your site with the
+# Timber generator and publishes it via GitLab Pages (the `pages` job's `public/` artifact),
+# served at your project's Pages URL, e.g. https://<namespace>.gitlab.io/<project>/. Like
+# GitHub (and unlike Codeberg's branch-based Pages), GitLab Pages is CI-artifact-based, so
+# `main` holds source only. This file coexists with the GitHub/Codeberg workflows — GitLab
+# ignores .github/ and .forgejo/, and they ignore .gitlab-ci.yml.
+#
+# One-time setup:
+#   1. Set your site's baseUrl (content/settings) to your Pages URL so links resolve under
+#      the /<project>/ subpath.
+#   2. Pin TIMBER_REF below to a Timber release tag so preview ≡ production.
+#   3. Editor sign-in: paste-a-PAT works with no setup. For "Sign in with GitLab", register
+#      a PUBLIC OAuth application (User settings → Applications, "Confidential" unchecked,
+#      redirect URI = your editor URL), deploy Timber's broker with GITLAB_BASE_URL set (no
+#      secret — GitLab is a public client), and add CI/CD variables TIMBER_OAUTH_CLIENT_ID,
+#      TIMBER_OAUTH_BROKER_URL, and TIMBER_OAUTH_SCOPE (e.g. api or write_repository).
+
+stages:
+  - deploy
+
+variables:
+  TIMBER_REPO: 'TimAidley/Timber'
+  TIMBER_REF: 'main' # pin to a Timber release tag
+
+pages:
+  stage: deploy
+  image: node:22-bookworm
+  # Deploy on default-branch pushes, manual/API triggers (the editor's publish), and the
+  # scheduled rebuild — the same set the other hosts' workflows use.
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "api"'
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+  script:
+    - npm install -g pnpm@10
+    # Timber lives on GitHub; clone it directly (pinned).
+    - git clone --depth 1 --branch "$TIMBER_REF" "https://github.com/$TIMBER_REPO" .timber
+    - (cd .timber && pnpm install --frozen-lockfile && pnpm --filter "@timber/cli..." build)
+    # GitLab Pages serves the `public/` directory.
+    - node .timber/packages/cli/dist/index.js build . public
+    # Co-host the editor at /<project>/edit/, configured for this GitLab project. The editor
+    # uses a relative base, so it works under the Pages subpath without a base var. Sign-in
+    # is paste-a-PAT unless the OAuth CI/CD variables (or a committed .timber-broker-url) are
+    # present, in which case it's "Sign in with GitLab".
+    - |
+      EDITOR_PATH="${TIMBER_EDITOR_PATH:-edit}"
+      EDITOR_PATH="${EDITOR_PATH#/}"; EDITOR_PATH="${EDITOR_PATH%/}"
+      export VITE_TIMBER_HOST='gitlab'
+      export VITE_TIMBER_API_BASE_URL="$CI_SERVER_URL"
+      export VITE_TIMBER_OWNER="$CI_PROJECT_NAMESPACE"
+      export VITE_TIMBER_REPO="$CI_PROJECT_NAME"
+      export VITE_TIMBER_PROJECT_PATH="$CI_PROJECT_PATH"
+      export VITE_TIMBER_UPSTREAM_REPO="$TIMBER_REPO"
+      export VITE_TIMBER_UPSTREAM_REF="$TIMBER_REF"
+      export VITE_TIMBER_BUILD_SHA="$(git -C .timber rev-parse HEAD)"
+      export VITE_TIMBER_OAUTH_CLIENT_ID="${TIMBER_OAUTH_CLIENT_ID:-}"
+      export VITE_TIMBER_OAUTH_SCOPE="${TIMBER_OAUTH_SCOPE:-}"
+      if [ -f .timber-broker-url ]; then
+        export VITE_TIMBER_OAUTH_BROKER_URL="$(cat .timber-broker-url)"
+      else
+        export VITE_TIMBER_OAUTH_BROKER_URL="${TIMBER_OAUTH_BROKER_URL:-}"
+      fi
+      ( cd .timber && pnpm --filter "@timber/app..." build )
+      mkdir -p "public/$EDITOR_PATH"
+      cp -r .timber/packages/app/dist/. "public/$EDITOR_PATH/"
+  artifacts:
+    paths:
+      - public
