@@ -223,6 +223,35 @@ the editor origin if your Pages domain isn't `<owner>.codeberg.page`.
 
 ---
 
+## Alternative: deploy to Cloudflare Pages (source stays on GitHub)
+
+Your source, editor, and commits stay on **GitHub** exactly as above — only the *hosting
+target* changes to **Cloudflare Pages** (git host and deploy target are separate axes).
+GitHub Actions still runs the build and publishes to Cloudflare via `wrangler`, so the
+editor's publish status keeps working. To switch:
+
+1. **Skip §2.2 (Enable Pages)** — you're not using GitHub Pages.
+2. In your repo → **Settings → Secrets and variables → Actions**:
+   - Variable **`TIMBER_DEPLOY_TARGET`** = `cloudflare`.
+   - Secret **`CLOUDFLARE_API_TOKEN`** (a token with **Cloudflare Pages: Edit**) and Secret
+     **`CLOUDFLARE_ACCOUNT_ID`**.
+   - Optional Variable **`TIMBER_CF_PAGES_PROJECT`** — the Pages project name (defaults to the
+     repo name; the workflow creates it on the first run).
+3. **Base URL.** Set `baseUrl` in `content/settings/index.md` to your Pages **root** —
+   `https://<project>.pages.dev` or your custom domain (no `/<repo>/` subpath), since
+   Cloudflare Pages serves at the root. The editor is co-hosted at **`/edit/`** (not
+   `/<repo>/edit/`). If you use OAuth, register the callback as `<root>/edit/`.
+
+Push to `main` (or run the workflow) and it builds + deploys to Cloudflare Pages. The
+`@timber/*` adapters, WIP branches, and sign-in are all unchanged — this is only a deploy
+target, not a different git host.
+
+*(This is the "GitHub Actions builds → `wrangler pages deploy`" model. Cloudflare's own Git
+integration can also build a Timber site, but then there's no GitHub Actions run for the
+editor's publish status to follow, so the Actions path above is recommended.)*
+
+---
+
 ## Alternative: host on GitLab
 
 **GitLab** is a supported third host (self-hosted GitLab works too — set `apiBaseUrl` to your

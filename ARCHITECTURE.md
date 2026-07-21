@@ -116,6 +116,13 @@ artifact (GitHub), `.forgejo/workflows/deploy.yml` force-pushes to the `pages` b
 to **GitLab** Pages. All three co-host the editor at `/<repo>/edit/` and coexist in one
 template (each host ignores the others' workflow files).
 
+**Git host and deploy target are separate axes.** The deploy target isn't forced to match
+the git host: a **GitHub**-hosted site can deploy to **Cloudflare Pages** instead of GitHub
+Pages, via a `TIMBER_DEPLOY_TARGET=cloudflare` variable on `deploy.yml` — GitHub Actions
+still builds and then publishes with `wrangler pages deploy` (so the editor's Actions-run
+publish status is unchanged; only the served root differs, `<project>.pages.dev` at `/`, so
+the editor sits at `/edit/`). The git host (adapter, WIP branches, commit loop) is untouched.
+
 ## Authentication — the `getToken()` seam
 
 Everything auth flows through one seam (`packages/app/src/host/auth.ts` picks the mode;
