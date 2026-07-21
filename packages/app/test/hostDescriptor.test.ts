@@ -6,6 +6,7 @@ function config(over: Partial<RepoConfig>): RepoConfig {
   return {
     host: 'github',
     apiBaseUrl: undefined,
+    projectPath: undefined,
     owner: 'jane',
     repo: 'site',
     oauth: { clientId: undefined, brokerUrl: undefined, scope: 'repo', redirectUri: undefined, flow: undefined },
@@ -37,5 +38,13 @@ describe('hostDescriptorFor', () => {
     // Trailing slash on the base is normalized away.
     expect(d.authorizeUrl).toBe('https://git.example.org/login/oauth/authorize');
     expect(d.tokenSettingsUrl).toBe('https://git.example.org/user/settings/applications');
+  });
+
+  it('describes GitLab (/oauth authorize + access-tokens settings)', () => {
+    const d = hostDescriptorFor(config({ host: 'gitlab', apiBaseUrl: 'https://gitlab.com' }));
+    expect(d.label).toBe('GitLab');
+    expect(d.authorizeUrl).toBe('https://gitlab.com/oauth/authorize');
+    expect(d.tokenSettingsUrl).toBe('https://gitlab.com/-/user_settings/personal_access_tokens');
+    expect(d.supportsTokenPrefill).toBe(false);
   });
 });

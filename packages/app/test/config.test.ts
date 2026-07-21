@@ -66,10 +66,21 @@ describe('resolveConfig', () => {
     expect(resolveConfig({ host: 'bitbucket' }, {}).host).toBe('github');
   });
 
-  it('defaults the OAuth scope per host (repo for GitHub, empty for Gitea)', () => {
+  it('selects the gitlab host with apiBaseUrl + projectPath', () => {
+    const c = resolveConfig(
+      { host: 'gitlab', apiBaseUrl: 'https://gitlab.com', projectPath: 'grp/sub/site' },
+      {},
+    );
+    expect(c.host).toBe('gitlab');
+    expect(c.apiBaseUrl).toBe('https://gitlab.com');
+    expect(c.projectPath).toBe('grp/sub/site');
+  });
+
+  it('defaults the OAuth scope per host (repo for GitHub, empty for Gitea/GitLab)', () => {
     expect(resolveConfig({}, {}).oauth.scope).toBe('repo');
     expect(resolveConfig({ host: 'gitea', apiBaseUrl: 'https://codeberg.org' }, {}).oauth.scope).toBe('');
-    // An explicit scope still wins on either host.
+    expect(resolveConfig({ host: 'gitlab', apiBaseUrl: 'https://gitlab.com' }, {}).oauth.scope).toBe('');
+    // An explicit scope still wins on any host.
     expect(resolveConfig({ host: 'gitea', oauth: { scope: 'write:repository' } }, {}).oauth.scope).toBe(
       'write:repository',
     );

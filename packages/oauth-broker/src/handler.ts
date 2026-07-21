@@ -26,13 +26,14 @@
  * Multiple sites can share one broker: `ALLOWED_ORIGINS` is a comma/space-separated
  * list, so one App + one broker can serve several content-repo deployments.
  *
- * **Gitea/Forgejo (Codeberg) mode:** set `GITEA_BASE_URL` (e.g. `https://codeberg.org`)
- * and the authorization-code exchange targets that instance instead of GitHub. Gitea
- * supports **public OAuth clients** (PKCE, no secret), so the broker here is a *secret-less
- * relay* — it exists only because Gitea's token endpoint sends no CORS (confirmed against
- * Codeberg), not because a secret must be hidden. Provide `OAUTH_CLIENT_SECRET` too only if
- * you registered a *confidential* Gitea client; it's optional. (One broker deployment
- * serves one provider — GitHub when `GITEA_BASE_URL` is unset, Gitea when it's set.)
+ * **Gitea/Forgejo (Codeberg) and GitLab modes:** set `GITEA_BASE_URL` (e.g.
+ * `https://codeberg.org`) or `GITLAB_BASE_URL` (e.g. `https://gitlab.com`) and the
+ * authorization-code exchange targets that instance instead of GitHub. Both allow **public
+ * OAuth clients** (PKCE, no secret), so the broker here is a *secret-less relay* — it exists
+ * only because those token endpoints send no CORS (confirmed against Codeberg), not because
+ * a secret must be hidden. Provide `OAUTH_CLIENT_SECRET` too only if you registered a
+ * *confidential* client; it's optional. (One broker deployment serves one provider — GitHub
+ * by default, Gitea/GitLab when the matching `*_BASE_URL` is set.)
  */
 export interface BrokerEnv {
   /**
@@ -41,6 +42,12 @@ export interface BrokerEnv {
    * client (no secret required). Unset ⇒ GitHub mode (the default).
    */
   GITEA_BASE_URL?: string;
+  /**
+   * When set (e.g. `https://gitlab.com`), the broker runs in **GitLab mode**: the
+   * authorization-code exchange POSTs to `<base>/oauth/token` as a public client (no
+   * secret required). Like Gitea mode, this is a secret-less CORS relay.
+   */
+  GITLAB_BASE_URL?: string;
   /**
    * The GitHub/OAuth App's client id (public — safe to expose). Named without a
    * `GITHUB_` prefix on purpose: GitHub Actions **reserves** that prefix, so a
@@ -141,9 +148,13 @@ async function exchangeCode(
     return json({ error: 'missing_code_verifier' }, 400, origin);
   }
 
-  // Gitea/Forgejo mode: exchange at the configured instance as a public client (no secret).
+  // Gitea/Forgejo and GitLab modes: exchange at the configured instance as a public
+  // client (no secret). Only the token endpoint path differs between them.
   if (env.GITEA_BASE_URL) {
-    return exchangeGitea(body, env, origin);
+    return exchangeInstance(body, env, origin, `${trimSlash(env.GITEA_BASE_URL)}/login/oauth/access_token`);
+  }
+  if (env.GITLAB_BASE_URL) {
+    return exchangeInstance(body, env, origin, `${trimSlash(env.GITLAB_BASE_URL)}/oauth/token`);
   }
 
   // Prefer the prefix-free names; fall back to the legacy `GITHUB_*` for brokers that
@@ -181,23 +192,29 @@ async function exchangeCode(
   );
 }
 
+/** Trim trailing slashes from a base URL. */
+function trimSlash(url: string): string {
+  return url.replace(/\/+$/, '');
+}
+
 /**
- * Gitea/Forgejo authorization-code exchange. Gitea supports **public clients** (PKCE, no
- * secret), so this sends `client_secret` only if one is configured (a confidential client).
- * The token endpoint takes standard form-encoded params; we ask for JSON back. Errors are
- * passed through sanitized, never the instance internals.
+ * Authorization-code exchange against a self-describing instance (Gitea/Forgejo or GitLab)
+ * at `tokenUrl`. These allow **public clients** (PKCE, no secret), so `client_secret` is
+ * sent only if one is configured (a confidential client). The token endpoint takes standard
+ * form-encoded params; we ask for JSON back. Errors are passed through sanitized, never the
+ * instance internals.
  */
-async function exchangeGitea(
+async function exchangeInstance(
   body: ExchangeRequest,
   env: BrokerEnv,
   origin: string | null,
+  tokenUrl: string,
 ): Promise<Response> {
   const clientId = env.OAUTH_CLIENT_ID ?? env.GITHUB_CLIENT_ID;
   if (!clientId) {
     return json({ error: 'broker_misconfigured' }, 500, origin);
   }
   const clientSecret = env.OAUTH_CLIENT_SECRET ?? env.GITHUB_CLIENT_SECRET;
-  const base = env.GITEA_BASE_URL!.replace(/\/+$/, '');
 
   const params = new URLSearchParams({
     grant_type: 'authorization_code',
@@ -208,14 +225,14 @@ async function exchangeGitea(
     ...(clientSecret ? { client_secret: clientSecret } : {}),
   });
 
-  const giteaResponse = await fetch(`${base}/login/oauth/access_token`, {
+  const instanceResponse = await fetch(tokenUrl, {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' },
     body: params.toString(),
   });
 
-  const data = (await giteaResponse.json().catch(() => ({}))) as Record<string, unknown>;
-  if (!giteaResponse.ok || typeof data.access_token !== 'string') {
+  const data = (await instanceResponse.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!instanceResponse.ok || typeof data.access_token !== 'string') {
     const error = typeof data.error === 'string' ? data.error : 'exchange_failed';
     return json({ error }, 400, origin);
   }

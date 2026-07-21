@@ -320,3 +320,55 @@ describe('oauth broker handler — Gitea mode', () => {
     expect(await res.json()).toEqual({ error: 'invalid_grant' });
   });
 });
+
+describe('oauth broker handler — GitLab mode', () => {
+  const gitlabEnv: BrokerEnv = {
+    OAUTH_CLIENT_ID: 'gitlab-client',
+    GITLAB_BASE_URL: 'https://gitlab.com/',
+    ALLOWED_ORIGINS: 'https://jane.gitlab.io',
+  };
+  const ORIGIN = 'https://jane.gitlab.io';
+
+  function glPost(body: unknown): Request {
+    return new Request('https://broker.example/', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', Origin: ORIGIN },
+      body: JSON.stringify(body),
+    });
+  }
+
+  it('exchanges at GitLab /oauth/token as a public client (form-encoded, no secret)', async () => {
+    const fetchMock = vi.fn(
+      async () => new Response(JSON.stringify({ access_token: 'gl_tok', token_type: 'bearer' }), { status: 200 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await handleRequest(
+      glPost({ code: 'the-code', code_verifier: 'v', redirect_uri: 'https://jane.gitlab.io/site/edit/' }),
+      gitlabEnv,
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get('access-control-allow-origin')).toBe(ORIGIN);
+    expect(await res.json()).toMatchObject({ access_token: 'gl_tok' });
+
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe('https://gitlab.com/oauth/token'); // trailing slash normalized, GitLab path
+    const sent = new URLSearchParams((init as RequestInit).body as string);
+    expect(sent.get('grant_type')).toBe('authorization_code');
+    expect(sent.get('client_id')).toBe('gitlab-client');
+    expect(sent.get('client_secret')).toBeNull(); // public client
+  });
+
+  it('still enforces PKCE and the origin allowlist', async () => {
+    const noVerifier = await handleRequest(glPost({ code: 'c' }), gitlabEnv);
+    expect(noVerifier.status).toBe(400);
+    expect(await noVerifier.json()).toMatchObject({ error: 'missing_code_verifier' });
+
+    const badOrigin = new Request('https://broker.example/', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', Origin: 'https://evil.example' },
+      body: JSON.stringify({ code: 'c', code_verifier: 'v' }),
+    });
+    expect((await handleRequest(badOrigin, gitlabEnv)).status).toBe(403);
+  });
+});

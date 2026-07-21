@@ -48,6 +48,20 @@ export function hostDescriptorFor(config: RepoConfig): HostDescriptor {
       supportsTokenPrefill: false,
     };
   }
+  if (config.host === 'gitlab') {
+    const base = (config.apiBaseUrl ?? '').replace(/\/+$/, '');
+    return {
+      // Codeberg-style specific label would need a host list; GitLab.com and self-hosted
+      // both present as "GitLab".
+      label: 'GitLab',
+      // GitLab's OAuth2 authorize + token endpoints live at /oauth on the instance.
+      authorizeUrl: `${base}/oauth/authorize`,
+      // GitLab PATs: User settings → Access tokens.
+      tokenSettingsUrl: `${base}/-/user_settings/personal_access_tokens`,
+      patPlaceholder: 'glpat-…',
+      supportsTokenPrefill: false,
+    };
+  }
   return {
     label: 'GitHub',
     authorizeUrl: 'https://github.com/login/oauth/authorize',

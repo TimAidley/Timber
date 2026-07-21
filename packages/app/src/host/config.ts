@@ -1,19 +1,24 @@
 /** Which git host adapter backs this instance (SPEC's host-provider seam). */
-export type HostKind = 'github' | 'gitea';
+export type HostKind = 'github' | 'gitea' | 'gitlab';
 
 export interface RepoConfig {
   /**
-   * The git host to edit against: `github` (default) or `gitea` (Gitea/Forgejo, e.g.
-   * Codeberg). Selects the {@link HostProvider} adapter in `createHostProvider`.
+   * The git host to edit against: `github` (default), `gitea` (Gitea/Forgejo, e.g.
+   * Codeberg), or `gitlab`. Selects the {@link HostProvider} adapter in `createHostProvider`.
    */
   host: HostKind;
   /**
-   * For `gitea`: the instance origin, e.g. `https://codeberg.org` (the `/api/v1` root is
-   * appended by the adapter). Unused by `github`.
+   * For `gitea`/`gitlab`: the instance origin, e.g. `https://codeberg.org` or
+   * `https://gitlab.com` (the adapter appends its API root). Unused by `github`.
    */
   apiBaseUrl: string | undefined;
   owner: string;
   repo: string;
+  /**
+   * For `gitlab` only: the full project path, overriding `owner/repo` — needed for
+   * **nested groups** (`group/subgroup/project`). Unused by `github`/`gitea`.
+   */
+  projectPath: string | undefined;
   /**
    * Production sign-in (SPEC §9): set `clientId` + `brokerUrl` to activate "Sign in
    * with GitHub" (via the `@timber/oauth-broker`). Unset ⇒ the dev paste-a-PAT gate.
@@ -57,6 +62,7 @@ export interface RepoConfig {
 export interface RuntimeConfig {
   host?: string;
   apiBaseUrl?: string;
+  projectPath?: string;
   owner?: string;
   repo?: string;
   oauth?: {
@@ -82,12 +88,13 @@ function str(value: unknown): string | undefined {
  * module-load gymnastics.
  */
 export function resolveConfig(runtime: RuntimeConfig, env: EnvLike): RepoConfig {
-  // Only `gitea` opts out of the GitHub default; anything else resolves to `github`.
+  // `gitea`/`gitlab` opt out of the GitHub default; anything else resolves to `github`.
   const rawHost = str(runtime.host) ?? str(env.VITE_TIMBER_HOST);
-  const host: HostKind = rawHost === 'gitea' ? 'gitea' : 'github';
+  const host: HostKind = rawHost === 'gitea' ? 'gitea' : rawHost === 'gitlab' ? 'gitlab' : 'github';
   return {
     host,
     apiBaseUrl: str(runtime.apiBaseUrl) ?? str(env.VITE_TIMBER_API_BASE_URL),
+    projectPath: str(runtime.projectPath) ?? str(env.VITE_TIMBER_PROJECT_PATH),
     owner: str(runtime.owner) ?? str(env.VITE_TIMBER_OWNER) ?? 'TimAidley',
     repo: str(runtime.repo) ?? str(env.VITE_TIMBER_REPO) ?? 'Timber-test-sandbox',
     oauth: {
@@ -95,9 +102,9 @@ export function resolveConfig(runtime: RuntimeConfig, env: EnvLike): RepoConfig 
       brokerUrl: str(runtime.oauth?.brokerUrl) ?? str(env.VITE_TIMBER_OAUTH_BROKER_URL),
       // `scope` differs: an EMPTY string is a meaningful value, so preserve it with `??`
       // and only fall back on a truly-absent value. The default is host-specific —
-      // GitHub's `repo` scope, but Gitea has no such scope (its OAuth app carries its own
-      // granted scopes), so default Gitea to empty and let the instance decide.
-      scope: runtime.oauth?.scope ?? env.VITE_TIMBER_OAUTH_SCOPE ?? (host === 'gitea' ? '' : 'repo'),
+      // GitHub's `repo` scope; Gitea/GitLab have their own scope vocabularies (their OAuth
+      // app carries granted scopes), so default those to empty and let the instance decide.
+      scope: runtime.oauth?.scope ?? env.VITE_TIMBER_OAUTH_SCOPE ?? (host === 'github' ? 'repo' : ''),
       redirectUri:
         str(runtime.oauth?.redirectUri) ?? str(env.VITE_TIMBER_OAUTH_REDIRECT_URI),
       flow: str(runtime.oauth?.flow) ?? str(env.VITE_TIMBER_OAUTH_FLOW),
