@@ -1,0 +1,22 @@
+{
+  "name": "@timber/gitlab",
+  "version": "0.0.0",
+  "description": "Timber's GitLab host adapter: a third HostProvider implementation over the GitLab REST API v4 via fetch, with a real pipelines-based DeployBackend.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@timber/host": "workspace:*"
+  }
+}
