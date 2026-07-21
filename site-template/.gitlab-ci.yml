@@ -11,18 +11,75 @@
 #   1. Set your site's baseUrl (content/settings) to your Pages URL so links resolve under
 #      the /<project>/ subpath.
 #   2. Pin TIMBER_REF below to a Timber release tag so preview ≡ production.
-#   3. Editor sign-in: paste-a-PAT works with no setup. For "Sign in with GitLab", register
-#      a PUBLIC OAuth application (User settings → Applications, "Confidential" unchecked,
-#      redirect URI = your editor URL), deploy Timber's broker with GITLAB_BASE_URL set (no
-#      secret — GitLab is a public client), and add CI/CD variables TIMBER_OAUTH_CLIENT_ID,
-#      TIMBER_OAUTH_BROKER_URL, and TIMBER_OAUTH_SCOPE (e.g. api or write_repository).
+#   3. Editor sign-in: paste-a-PAT works with no setup. For "Sign in with GitLab", the
+#      `setup-oauth-broker` job below deploys the broker for you (run it once from the
+#      Pipelines page) — see its comment for the one-time variables it needs.
 
 stages:
+  - setup
   - deploy
 
 variables:
   TIMBER_REPO: 'TimAidley/Timber'
   TIMBER_REF: 'main' # pin to a Timber release tag
+
+# One-time OAuth broker setup for "Sign in with GitLab" — run manually from the Pipelines
+# page (the ▶ on this job). It deploys Timber's broker to Cloudflare in GitLab mode (public
+# client, NO secret — GitLab is a public client; the broker is only a CORS relay), records
+# the worker URL to .timber-broker-url, and pushes it (triggering a redeploy with sign-in
+# active). One-time CI/CD variables (Settings → CI/CD → Variables), all "masked":
+#   TIMBER_OAUTH_CLIENT_ID   your public OAuth application's Application ID
+#   CLOUDFLARE_API_TOKEN     Workers Scripts: Edit
+#   CLOUDFLARE_ACCOUNT_ID
+#   GITLAB_PUSH_TOKEN        a project/personal access token with write_repository (to push
+#                            .timber-broker-url back and trigger the redeploy)
+# Optional: OAUTH_CLIENT_SECRET (only for a *confidential* app), TIMBER_EDITOR_ORIGIN
+# (override the editor origin if CI_PAGES_URL isn't your final origin).
+setup-oauth-broker:
+  stage: setup
+  image: node:22-bookworm
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      when: manual
+      allow_failure: true
+  script:
+    - apt-get update -qq && apt-get install -y -qq jq
+    - git clone --depth 1 --branch "$TIMBER_REF" "https://github.com/$TIMBER_REPO" .timber
+    - |
+      set -euo pipefail
+      ORIGIN="${TIMBER_EDITOR_ORIGIN:-$(printf '%s' "${CI_PAGES_URL:-}" | sed -E 's#^(https?://[^/]+).*#\1#')}"
+      if [ -z "$ORIGIN" ]; then
+        echo "Could not determine the editor origin. Set a TIMBER_EDITOR_ORIGIN CI/CD variable (e.g. https://<namespace>.gitlab.io) and re-run." >&2
+        exit 1
+      fi
+      # Deploy the broker (Gitea/GitLab mode uses no secret). CLOUDFLARE_* are read from env.
+      ( cd .timber/packages/oauth-broker
+        if [ -n "${OAUTH_CLIENT_SECRET:-}" ]; then
+          printf '%s' "$OAUTH_CLIENT_SECRET" | npx --yes wrangler@3 secret put OAUTH_CLIENT_SECRET
+        fi
+        npx --yes wrangler@3 deploy \
+          --var GITLAB_BASE_URL:"$CI_SERVER_URL" \
+          --var OAUTH_CLIENT_ID:"$TIMBER_OAUTH_CLIENT_ID" \
+          --var ALLOWED_ORIGINS:"$ORIGIN" )
+      # Look up the worker URL and commit it; the push triggers a redeploy with OAuth active.
+      SUBDOMAIN="$(curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+        "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain" | jq -r '.result.subdomain')"
+      if [ -z "$SUBDOMAIN" ] || [ "$SUBDOMAIN" = "null" ]; then
+        echo "Could not read your workers.dev subdomain. Enable workers.dev for your account, then re-run." >&2
+        exit 1
+      fi
+      URL="https://timber-oauth-broker.$SUBDOMAIN.workers.dev"
+      echo "Broker URL: $URL"
+      echo "$URL" > .timber-broker-url
+      git config user.name 'GitLab CI'
+      git config user.email "ci@${CI_SERVER_HOST}"
+      git add .timber-broker-url
+      if git diff --cached --quiet; then
+        echo "Broker URL unchanged — trigger a pipeline manually if the editor isn't yet OAuth-enabled."
+      else
+        git commit -m 'chore: record OAuth broker URL'
+        git push "https://oauth2:${GITLAB_PUSH_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" "HEAD:${CI_DEFAULT_BRANCH}"
+      fi
 
 pages:
   stage: deploy

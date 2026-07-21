@@ -239,9 +239,11 @@ instance). Differences from GitHub:
 4. **Deploy status in the editor works** — GitLab's pipelines back a real deploy capability,
    so the Publish button shows Building… → Published (unlike Codeberg).
 5. **Sign-in.** Paste-a-PAT (create one under *User settings → Access tokens* with
-   `write_repository`), or **"Sign in with GitLab"**: register a **public** OAuth application
-   (*User settings → Applications*, "Confidential" unchecked, redirect URI = your editor URL),
-   deploy Timber's broker with **`GITLAB_BASE_URL`** set (no secret — GitLab is a public
-   client; the broker is only a CORS relay), and add CI/CD variables `TIMBER_OAUTH_CLIENT_ID`,
-   `TIMBER_OAUTH_BROKER_URL`, and `TIMBER_OAUTH_SCOPE` (e.g. `api`). *(Automated broker setup
-   for GitLab, like Codeberg's, is a follow-up; deploy the broker with `wrangler` for now.)*
+   `write_repository`), or **"Sign in with GitLab" (automated)**: register a **public** OAuth
+   application (*User settings → Applications*, "Confidential" unchecked, redirect URI = your
+   editor URL). Then add CI/CD variables (*Settings → CI/CD → Variables*, masked)
+   `TIMBER_OAUTH_CLIENT_ID`, `TIMBER_OAUTH_SCOPE` (e.g. `api`), `CLOUDFLARE_API_TOKEN`,
+   `CLOUDFLARE_ACCOUNT_ID`, and `GITLAB_PUSH_TOKEN` (a token with `write_repository`), and run
+   the **`setup-oauth-broker`** job from the Pipelines page (the ▶ button). It deploys the
+   broker in GitLab mode (**no secret** — GitLab is a public client; the broker is only a CORS
+   relay), records its URL, and redeploys the editor with sign-in active.
