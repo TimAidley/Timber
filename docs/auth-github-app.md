@@ -38,7 +38,10 @@ GitHub → Settings → Developer settings → **GitHub Apps** → **New GitHub 
   - **Contents:** Read & write  — commits via the Git Data API
   - **Actions:** Read & write   — deploy-status reads + `workflow_dispatch` re-run
   - **Metadata:** Read (mandatory, auto-selected)
-- Save, then note the **Client ID** and generate a **Client secret**.
+- Save, then note the **Client ID** — the value starting with `Iv1.`/`Iv23…`, **not** the
+  numeric **App ID** shown right next to it. Only the Client ID works at the OAuth authorize
+  endpoint; the App ID there just bounces you to a bare GitHub 404. Then generate a **Client
+  secret**.
 
 ### 2. Install it on your repo(s)
 App page → **Install App** → your account → **Only select repositories** → pick each

@@ -124,7 +124,9 @@ GitHub → Settings → Developer settings → **GitHub Apps** → **New GitHub 
 - **Repository permissions** (nothing else): **Contents: Read & write**, **Actions: Read &
   write**, **Metadata: Read** (auto).
 - > **Device flow only:** also tick **Enable Device Flow** (on the General page).
-- Create it, copy the **Client ID**, and generate a **Client secret**.
+- Create it, copy the **Client ID** (starts with `Iv1.`/`Iv23…` — **not** the numeric
+  **App ID** next to it; the App ID at the authorize endpoint just yields a GitHub 404), and
+  generate a **Client secret**.
 - **Install App** → your account → **Only select repositories** → **`<repo>`**. (The
   install is what actually grants access to the repo.)
 
@@ -135,7 +137,7 @@ In your repo → **Settings → Secrets and variables → Actions**. Use these e
 
 | Kind | Name | Value |
 |---|---|---|
-| Variable | `GH_OAUTH_CLIENT_ID` | the App's **Client ID** |
+| Variable | `GH_OAUTH_CLIENT_ID` | the App's **Client ID** (`Iv1.`/`Iv23…`, not the App ID) |
 | Secret | `CLOUDFLARE_API_TOKEN` | from 3b.1 |
 | Secret | `CLOUDFLARE_ACCOUNT_ID` | from 3b.1 |
 

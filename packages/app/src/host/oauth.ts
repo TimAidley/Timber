@@ -1,5 +1,5 @@
 import type { GetToken } from '@timber/host';
-import { repoConfig } from './config.js';
+import { repoConfig, type HostKind } from './config.js';
 import { hostDescriptor } from './hostDescriptor.js';
 
 /**
@@ -96,10 +96,28 @@ export async function pkceChallenge(verifier: string): Promise<string> {
 
 // --- the flow ----------------------------------------------------------------
 
+/**
+ * Guard against the most common "Sign in with GitHub" 404: a GitHub App's settings page
+ * shows two easily-confused values — the numeric **App ID** and the **Client ID**
+ * (`Iv1.`/`Iv23…`). Only the Client ID resolves at the authorize endpoint; passing the App
+ * ID there just lands the user on GitHub's bare 404 with no hint why. So when the id is all
+ * digits, fail here with an explanation instead of redirecting into that dead end. Scoped to
+ * GitHub — Gitea/GitLab client ids aren't purely numeric, so we don't second-guess them.
+ */
+export function ensureUsableClientId(clientId: string, host: HostKind): void {
+  if (host === 'github' && /^\d+$/.test(clientId)) {
+    throw new Error(
+      `"${clientId}" looks like a GitHub App ID, not its Client ID (which starts with "Iv"). ` +
+        "Set GH_OAUTH_CLIENT_ID to the App's Client ID (GitHub App → General settings).",
+    );
+  }
+}
+
 /** Step 1: redirect to GitHub's authorize page with a fresh PKCE challenge + state. */
 export async function beginLogin(): Promise<void> {
   const { clientId } = repoConfig.oauth;
   if (!clientId) throw new Error('OAuth is not configured (missing client id).');
+  ensureUsableClientId(clientId, repoConfig.host);
 
   const verifier = randomToken(32);
   const state = randomToken(16);

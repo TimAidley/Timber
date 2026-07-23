@@ -9,6 +9,7 @@ vi.mock('../src/host/config.js', () => ({
 import {
   pkceChallenge,
   completeLogin,
+  ensureUsableClientId,
   isAuthenticated,
   signOut,
   getToken,
@@ -26,6 +27,21 @@ describe('PKCE (Web Crypto)', () => {
     // RFC 7636 Appendix B.
     const verifier = 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk';
     expect(await pkceChallenge(verifier)).toBe('E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM');
+  });
+});
+
+describe('ensureUsableClientId', () => {
+  it('rejects a numeric GitHub App ID with a helpful message (the App-ID-not-Client-ID 404)', () => {
+    expect(() => ensureUsableClientId('4247383', 'github')).toThrow(/App ID/i);
+  });
+
+  it('accepts a real GitHub App Client ID', () => {
+    expect(() => ensureUsableClientId('Iv23liABCDEF0000', 'github')).not.toThrow();
+  });
+
+  it('does not second-guess non-GitHub hosts (Gitea/GitLab ids may look different)', () => {
+    expect(() => ensureUsableClientId('123456', 'gitlab')).not.toThrow();
+    expect(() => ensureUsableClientId('123456', 'gitea')).not.toThrow();
   });
 });
 
