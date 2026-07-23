@@ -61,7 +61,13 @@ describe('renderSitePage', () => {
     expect(html).toContain('>About</a>');
     // Live title in <head>/<h1> and the rendered Markdown body.
     expect(html).toContain('Welcome');
-    expect(html).toContain('<strong>Timber</strong>');
+    // The home page body uses the `:timber-logo` shortcode (SPEC §7 → Brand wordmark):
+    // it renders the styled wordmark and injects its self-contained styling (rules +
+    // embedded font), so the logo works in preview with no theme setup.
+    expect(html).toContain(
+      '<span class="wordmark"><span class="wordmark__tim">Tim</span>ber</span>',
+    );
+    expect(html).toContain('@font-face');
   });
 
   it('reflects live front-matter edits, not the stored copy', async () => {
