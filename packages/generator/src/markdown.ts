@@ -8,6 +8,7 @@ import rehypeSanitize, { defaultSchema, type Options as SanitizeSchema } from 'r
 import rehypeHighlight from 'rehype-highlight';
 import rehypeStringify from 'rehype-stringify';
 import { remarkFigure } from './figureDirective.js';
+import { rehypeWordmarkStyle } from './wordmarkStyle.js';
 
 // remark-rehype already drops raw HTML (no `allowDangerousHtml`), but it does NOT
 // filter URL *protocols*, so a `[x](javascript:…)` link or a `data:` image would
@@ -45,6 +46,9 @@ const processor = unified()
   .use(remarkFigure)
   .use(remarkRehype)
   .use(rehypeSanitize, sanitizeSchema)
+  // Injects the self-contained `:timber-logo` styling (@font-face + rules) POST-sanitize,
+  // so the trusted `<style>` reaches output without allowing `<style>` on untrusted content.
+  .use(rehypeWordmarkStyle)
   .use(rehypeHighlight)
   .use(rehypeStringify);
 

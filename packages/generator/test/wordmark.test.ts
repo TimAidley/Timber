@@ -24,6 +24,25 @@ describe('timber-logo wordmark shortcode', () => {
     expect(html).toContain('class="wordmark__tim"');
   });
 
+  it('injects self-contained styling (rules + embedded font) so it needs no theme setup', async () => {
+    const html = await renderMarkdown('Built with :timber-logo.\n');
+    // A single <style> carrying the @font-face + .wordmark rules...
+    expect(html).toContain('<style>');
+    expect(html).toContain('@font-face');
+    expect(html).toContain(".wordmark{");
+    expect(html).toContain(".wordmark__tim{");
+    // ...with the Fraunces logo face embedded (base64 data URI), not a theme font path.
+    expect(html).toContain('data:font/woff2;base64,');
+  });
+
+  it('injects the style only once even with multiple logos, and not at all without one', async () => {
+    const two = await renderMarkdown('Made by :timber-logo and :timber-logo.\n');
+    expect(two.match(/<style>/g)?.length).toBe(1);
+    const none = await renderMarkdown('Just ordinary prose here.\n');
+    expect(none).not.toContain('wordmark');
+    expect(none).not.toContain('data:font/woff2');
+  });
+
   it('still neutralises other stray directives to text', async () => {
     const html = await renderMarkdown('Ship it :tada: and fix TODO:later please.\n');
     expect(html).toContain(':tada:');
