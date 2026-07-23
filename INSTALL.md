@@ -99,8 +99,16 @@ The broker is a tiny Cloudflare **Worker**. The free plan is plenty.
 2. **Workers & Pages** → ensure a **workers.dev subdomain** is enabled for your account
    (Workers & Pages → *Subdomain*). The setup fails without one.
 3. Copy your **Account ID** (Workers & Pages overview, right-hand side).
-4. Create an **API token**: My Profile → **API Tokens** → **Create Token** → use the
-   **"Edit Cloudflare Workers"** template → Create → copy the token.
+4. Create a **custom API token** (the **"Edit Cloudflare Workers"** template no longer
+   grants everything `wrangler deploy` needs). Go to My Profile → **API Tokens** →
+   **Create Token**, scroll past the templates to **Create Custom Token** → **Get
+   started**. Give it a name, then add these two **Permissions** rows:
+   - **Account** · **Workers Scripts** · **Edit** — deploys the Worker and sets its secret.
+   - **Account** · **Account Settings** · **Read** — reads your **workers.dev** subdomain.
+
+   Under **Account Resources**, choose **Include** → *your account*. Leave **Zone
+   Resources** untouched (a workers.dev deploy needs no zone). **Continue to summary** →
+   **Create Token** → copy it.
 
 Hold on to the **Account ID** and **API token** for 3b.3.
 
@@ -233,8 +241,11 @@ editor's publish status keeps working. To switch:
 1. **Skip §2.2 (Enable Pages)** — you're not using GitHub Pages.
 2. In your repo → **Settings → Secrets and variables → Actions**:
    - Variable **`TIMBER_DEPLOY_TARGET`** = `cloudflare`.
-   - Secret **`CLOUDFLARE_API_TOKEN`** (a token with **Cloudflare Pages: Edit**) and Secret
-     **`CLOUDFLARE_ACCOUNT_ID`**.
+   - Secret **`CLOUDFLARE_API_TOKEN`** — a **custom API token** (My Profile → API Tokens →
+     Create Token → **Create Custom Token**, *not* a template) with **Account · Cloudflare
+     Pages · Edit** and **Account · Account Settings · Read**, scoped under **Account
+     Resources → Include** → *your account*. Secret **`CLOUDFLARE_ACCOUNT_ID`** (Workers &
+     Pages overview, right-hand side).
    - Optional Variable **`TIMBER_CF_PAGES_PROJECT`** — the Pages project name (defaults to the
      repo name; the workflow creates it on the first run).
 3. **Base URL.** Set `baseUrl` in `content/settings/index.md` to your Pages **root** —

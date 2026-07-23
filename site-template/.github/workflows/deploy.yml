@@ -14,7 +14,8 @@ name: Build & deploy site
 #   * "cloudflare" — Cloudflare Pages (source stays on GitHub; GitHub Actions builds and
 #     publishes via wrangler). Served at your Pages project's root (<project>.pages.dev or a
 #     custom domain), editor at /edit/. One-time:
-#       - Secrets CLOUDFLARE_API_TOKEN (Cloudflare Pages: Edit) + CLOUDFLARE_ACCOUNT_ID.
+#       - Secrets CLOUDFLARE_API_TOKEN (a custom API token with Account · Cloudflare Pages ·
+#         Edit + Account · Account Settings · Read) + CLOUDFLARE_ACCOUNT_ID. See INSTALL.md.
 #       - Optional Variable TIMBER_CF_PAGES_PROJECT (the Pages project name; defaults to the
 #         repo name). The job creates the project on first run.
 #       - Set content/settings baseUrl to your Pages/custom-domain ROOT (no /<repo>/ path),
