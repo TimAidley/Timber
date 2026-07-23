@@ -116,6 +116,10 @@ const DIRECTIVE_CONTAINMENT: Record<string, string> = {
   'aspect ratio': 'Crop to 16:9 for the banner.\n',
   'stray leaf directive': '::note\n',
   'stray container directive': [':::warning', 'Not a figure.', ':::', ''].join('\n'),
+  // The `:timber-logo` wordmark shortcode renders in the build/preview (generator),
+  // but in the WYSIWYG it's a stray text directive like any other: neutralised back to
+  // its exact source text, so it round-trips byte-for-byte and never crashes the editor.
+  'timber-logo shortcode stays text': 'Built with :timber-logo today.\n',
 };
 
 describe('directive containment keeps colon prose byte-stable', () => {

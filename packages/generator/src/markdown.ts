@@ -19,6 +19,8 @@ import { remarkFigure } from './figureDirective.js';
 // The `:::figure` directive (SPEC §7) renders to <figure>/<figcaption>/<img>. Allow
 // those tags, the computed `fig*` layout classes on <figure>, and the lazy-loading
 // hints on <img> — everything else stays locked to the safe default schema.
+// The `:timber-logo` shortcode (SPEC §7 → Brand wordmark) renders to nested <span>s;
+// permit only its `wordmark`/`wordmark__tim` classes (<span> is already an allowed tag).
 const sanitizeSchema: SanitizeSchema = {
   ...defaultSchema,
   tagNames: [...(defaultSchema.tagNames ?? []), 'figure', 'figcaption'],
@@ -27,6 +29,7 @@ const sanitizeSchema: SanitizeSchema = {
     code: [...(defaultSchema.attributes?.code ?? []), ['className', /^language-./]],
     figure: [...(defaultSchema.attributes?.figure ?? []), ['className', /^fig(--[a-z-]+)?$/]],
     img: [...(defaultSchema.attributes?.img ?? []), 'loading', 'decoding'],
+    span: [...(defaultSchema.attributes?.span ?? []), ['className', /^wordmark(__tim)?$/]],
   },
 };
 

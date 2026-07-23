@@ -294,3 +294,13 @@ Cross-cutting things and every file they touch:
 - **Setup instructions** → **`INSTALL.md`** only (canonical); the template's README is a stub.
 - **Auth flow / mode** → `host/{auth,oauth,deviceFlow,token}.ts` + the sign-in components
   + `docs/auth-github-app.md`.
+- **The Timber wordmark → keep the two copies in lockstep.** The brand wordmark renders in two
+  documents from two vendored copies of the **subsetted Fraunces face** (`fraunces-timber.woff2`,
+  OFL-1.1): the **editor chrome** (`@timber/app` — `components/Wordmark.tsx` + `.wordmark` rules and
+  `@font-face` in `src/styles.css`, font in `src/fonts/`) and **published sites** via the
+  **`:timber-logo` shortcode** (SPEC §7 → Brand wordmark). The shortcode is rendered by the shared
+  generator's directive transform (`packages/generator/src/figureDirective.ts`, sanitiser widened in
+  `markdown.ts`) into `<span class="wordmark">…`, styled by the default theme
+  (`site-template/themes/default/assets/{theme.css,fonts/fraunces-timber.woff2}`). Change the font
+  file, the classes, or the "Tim"/"ber" split → update **both** the app and the theme copies (and any
+  other bundled theme) so header ≡ shortcode.

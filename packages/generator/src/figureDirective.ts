@@ -12,6 +12,14 @@ const SIZES = ['sm', 'md', 'lg'];
 const DEFAULT_LAYOUT = 'full-width';
 const DEFAULT_SIZE = 'md';
 
+/**
+ * The brand-wordmark shortcode (SPEC §7 → Brand wordmark). An inline `:timber-logo`
+ * directive renders the exact "Timber" wordmark used in the editor header — the same
+ * `<span class="wordmark"><span class="wordmark__tim">Tim</span>ber</span>` markup,
+ * styled by the theme's `.wordmark` rules + the vendored Fraunces face.
+ */
+const WORDMARK = 'timber-logo';
+
 /** Minimal mdast shape this transform reads/writes (avoids a hard `@types/mdast` dep). */
 interface MdNode {
   type: string;
@@ -82,6 +90,25 @@ function transformFigure(node: MdNode): void {
 }
 
 /**
+ * Rewrite a `timber-logo` text/leaf directive into the brand wordmark: two nested
+ * spans mirroring the editor's `<Wordmark />` component exactly — outer `.wordmark`
+ * holds "ber", inner `.wordmark__tim` holds "Tim". Classes only; the theme owns the
+ * font + weights (SPEC: compute in the generator, format in the template). Any body
+ * the author typed after the directive is discarded — the wordmark is fixed text.
+ */
+function transformWordmark(node: MdNode): void {
+  node.children = [
+    {
+      type: 'wordmarkTim',
+      data: { hName: 'span', hProperties: { className: ['wordmark__tim'] } },
+      children: [{ type: 'text', value: 'Tim' }],
+    },
+    { type: 'text', value: 'ber' },
+  ];
+  node.data = { hName: 'span', hProperties: { className: ['wordmark'] } };
+}
+
+/**
  * The remark transform. `figure` directives become `<figure>`; every OTHER directive
  * (stray `:x` / `::x` / `:::y`) is neutralised back to the plain text it was typed as,
  * mirroring the editor's sanitiser so hand-edited colon-bearing content renders as
@@ -98,6 +125,10 @@ export function remarkFigure() {
       }
       if (type === 'containerDirective' && node.name === FIGURE) {
         transformFigure(node);
+        return;
+      }
+      if ((type === 'textDirective' || type === 'leafDirective') && node.name === WORDMARK) {
+        transformWordmark(node);
         return;
       }
       const parent = rawParent as MdNode | undefined;

@@ -111,3 +111,32 @@ body {
   color: var(--muted);
   font-size: 0.9rem;
 }
+
+/* Timber brand wordmark — the `:timber-logo` shortcode (SPEC §7) renders the exact
+   editor-header wordmark into body content. Logo face subset to the glyphs "Timber"
+   (~7 KB), keeping the opsz/wght/SOFT/WONK axes; served from the theme's own /assets,
+   never a CDN. Never use this face for body or UI text. */
+@font-face {
+  font-family: 'Fraunces Timber';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('fonts/fraunces-timber.woff2') format('woff2');
+}
+
+/* Inline; inherits the surrounding text size. "Tim" reads heavier + full-ink, "ber"
+   lighter + muted, matching the editor header exactly. */
+.wordmark {
+  font-family: 'Fraunces Timber', Georgia, 'Times New Roman', serif;
+  font-optical-sizing: auto;
+  font-weight: 440;
+  letter-spacing: -0.005em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.wordmark__tim {
+  font-weight: 800;
+  color: var(--fg);
+  font-variation-settings: 'SOFT' 12, 'WONK' 1;
+}
