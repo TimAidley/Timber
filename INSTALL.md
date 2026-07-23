@@ -99,10 +99,9 @@ The broker is a tiny Cloudflare **Worker**. The free plan is plenty.
 2. **Workers & Pages** → ensure a **workers.dev subdomain** is enabled for your account
    (Workers & Pages → *Subdomain*). The setup fails without one.
 3. Copy your **Account ID** (Workers & Pages overview, right-hand side).
-4. Create a **custom API token** (the **"Edit Cloudflare Workers"** template no longer
-   grants everything `wrangler deploy` needs). Go to My Profile → **API Tokens** →
-   **Create Token**, scroll past the templates to **Create Custom Token** → **Get
-   started**. Give it a name, then add these two **Permissions** rows:
+4. Create a **custom API token**: My Profile → **API Tokens** → **Create Token**, scroll
+   past the templates to **Create Custom Token** → **Get started**. Give it a name, then
+   add these two **Permissions** rows:
    - **Account** · **Workers Scripts** · **Edit** — deploys the Worker and sets its secret.
    - **Account** · **Account Settings** · **Read** — reads your **workers.dev** subdomain.
 
