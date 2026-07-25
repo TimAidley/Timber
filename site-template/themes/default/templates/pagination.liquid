@@ -1,0 +1,19 @@
+{% comment %}
+  The pager for a paginated listing (SPEC §13). Rendered via `{% render %}`, which runs in
+  an ISOLATED scope, so it takes everything it needs as parameters:
+
+    {% render 'pagination', paginator: paginator, basePath: site.basePath %}
+
+  A single-page listing renders nothing at all.
+{% endcomment %}
+{% if paginator.totalPages > 1 %}
+<nav class="pagination" aria-label="Pagination">
+  {% if paginator.previousUrl %}<a class="pagination__step" rel="prev" href="{{ basePath }}{{ paginator.previousUrl }}">← Previous</a>{% else %}<span class="pagination__step pagination__step--off">← Previous</span>{% endif %}
+  <ol class="pagination__pages">
+    {% for p in paginator.pages %}
+    <li>{% if p.current %}<span class="pagination__page pagination__page--current" aria-current="page">{{ p.number }}</span>{% else %}<a class="pagination__page" href="{{ basePath }}{{ p.url }}">{{ p.number }}</a>{% endif %}</li>
+    {% endfor %}
+  </ol>
+  {% if paginator.nextUrl %}<a class="pagination__step" rel="next" href="{{ basePath }}{{ paginator.nextUrl }}">Next →</a>{% else %}<span class="pagination__step pagination__step--off">Next →</span>{% endif %}
+</nav>
+{% endif %}

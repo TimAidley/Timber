@@ -243,6 +243,20 @@ Cross-cutting things and every file they touch:
   optional `DeployBackend` capability (absent host — e.g. Gitea/Codeberg — ⇒ no stop).
   Storage level is **device-local metadata**
   (IndexedDB), publication is **front matter** — keep the two in their separate homes.
+- **Pagination** (SPEC §13 → Pagination) → the logic is one pure module, `@timber/content`
+  `pagination.ts` (`parsePaginate`/`validatePaginate`, `pageUrl`, `paginateEntries`,
+  `paginateObject`, `paginatedSeo`) + its `PageSeoOptions` hook in `seo.ts` (`url` /
+  `titleSuffix`, which also removed the build's homepage-canonical special case) + the
+  `paginate` check wired into `validate.ts`. The render side is `@timber/generator`
+  (`paginator` on `RenderPageInput`, exposed top-level — deliberately **undefined**, not
+  `{}`, so `{% if paginator %}` is false on ordinary pages). **Both callers loop over the
+  pages and must stay in lockstep** — `packages/cli/src/build.node.ts` (writes N
+  `index.html`) and `packages/app/src/preview/renderSitePage.ts` (renders page 1 from the
+  *live* front matter) — plus the default theme
+  (`site-template/themes/default/templates/default.liquid` listing +
+  `pagination.liquid` pager + `.listing`/`.pagination` in `theme.css`) and
+  `docs/pagination.md`. Change the URL shape or the paginator's keys → update the theme,
+  both callers, the docs, and SPEC §13 together.
 - **Multilingual / i18n** (SPEC §5 → Multilingual) → the model side is `@timber/content`
   (`assemble.ts` lang/path parsing + translation index, `references.ts` `urlFor`/
   `translationsOf`, `collections.ts` per-entry `lang`, `seo.ts` `hreflangAlternates`);

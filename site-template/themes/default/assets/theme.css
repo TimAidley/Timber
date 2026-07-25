@@ -103,6 +103,69 @@ body {
   font-size: 0.9em;
 }
 
+/* Paginated listings (SPEC §13): the entry list a page with `paginate` front matter
+   renders, and its pager. Both are absent on ordinary pages. */
+.listing {
+  list-style: none;
+  margin: 2rem 0 0;
+  padding: 0;
+}
+
+.listing__item {
+  padding: 1rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.listing__link {
+  font-family: var(--font-heading);
+  font-size: 1.25rem;
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.listing__link:hover {
+  color: var(--accent);
+}
+
+.listing__excerpt {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 2.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.95rem;
+}
+
+.pagination__pages {
+  display: flex;
+  gap: 0.5rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pagination__step,
+.pagination__page {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.pagination__step--off {
+  color: var(--border);
+}
+
+.pagination__page--current {
+  color: var(--fg);
+  font-weight: 700;
+}
+
 .site-footer {
   max-width: var(--maxw);
   margin: 0 auto;

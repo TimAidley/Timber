@@ -61,6 +61,7 @@ function engineFor(
  *   - `content`     — the rendered body HTML (emitted raw; see liquid.ts)
  *   - `site`        — optional site-wide context
  *   - `collections` — optional per-type collections (for listing loops)
+ *   - `paginator`   — optional pagination context, on one page of a paginated listing
  *
  * When `input.templates` is supplied, the `template` may `{% layout %}` / `{% render %}`
  * / `{% include %}` those templates (SPEC §6). Resolution is in-memory (no filesystem),
@@ -104,6 +105,10 @@ export async function renderPage(input: RenderPageInput): Promise<string> {
       site: input.site ?? {},
       collections: input.collections ?? {},
       seo: input.seo ?? {},
+      // One page of a paginated listing (SPEC §13). Deliberately left *undefined* rather
+      // than defaulted to `{}` for an ordinary page, so a theme can gate its listing markup
+      // on `{% if paginator %}` — an empty object would be truthy under `jsTruthy`.
+      paginator: input.paginator,
       // Layout-scoped data (Jekyll's `layout.*`), supplied by the import path. Omitted for
       // native pages, where `{{ layout.x }}` is simply empty.
       layout: input.layout ?? {},

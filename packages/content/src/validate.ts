@@ -2,6 +2,7 @@ import Ajv, { type ValidateFunction } from 'ajv';
 import addFormats from 'ajv-formats';
 import { fieldToJsonSchema } from './fields.js';
 import { validateFigureBlocks } from './figures.js';
+import { validatePaginate } from './pagination.js';
 import { parseVideoUrl } from './video.js';
 import type {
   ContentModel,
@@ -103,6 +104,11 @@ export class Validator {
     if (object.body) {
       errors.push(...validateFigureBlocks(object.body));
     }
+
+    // 4. Paginated listings (SPEC §13). `paginate` is an undeclared, tolerated front-matter
+    //    key, so nothing constrains it above — but a malformed block would emit a listing
+    //    page with nothing on it, so it blocks publish like any other error.
+    errors.push(...validatePaginate(object, this.schemas));
 
     return { valid: errors.length === 0, errors };
   }

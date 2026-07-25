@@ -24,7 +24,9 @@ function fixture(): { model: ReturnType<typeof assembleContent>; theme: SiteThem
   const schemas = loadSchemas(snapshot);
   const model = assembleContent(snapshot, schemas);
   const theme: SiteTheme = {
-    templates: new Map([['default.liquid', read('themes/default/templates/default.liquid')]]),
+    templates: new Map([
+      ['default.liquid', read('themes/default/templates/default.liquid')],
+    ]),
     stylesheets: new Map([['assets/theme.css', read('themes/default/assets/theme.css')]]),
     navigationYml: read('config/navigation.yml'),
     manifest: null,
@@ -109,8 +111,12 @@ describe('renderSitePage', () => {
     ]);
     const model = assembleContent(snapshot, loadSchemas(snapshot));
     const theme: SiteTheme = {
-      templates: new Map([['default.liquid', read('themes/default/templates/default.liquid')]]),
-      stylesheets: new Map([['assets/theme.css', read('themes/default/assets/theme.css')]]),
+      templates: new Map([
+        ['default.liquid', read('themes/default/templates/default.liquid')],
+      ]),
+      stylesheets: new Map([
+        ['assets/theme.css', read('themes/default/assets/theme.css')],
+      ]),
       navigationYml: null,
       manifest: null,
       objectUrls: [],
@@ -255,5 +261,98 @@ describe('renderSitePage', () => {
     expect(html).toContain('<title>Welcome Home</title>');
     expect(html).toContain('<p>by Ada</p>'); // {{ metadata.author }} from manifest globals
     expect(html).not.toContain('{{');
+  });
+
+  it('previews a paginated listing’s first page through the shipped theme (SPEC §13)', async () => {
+    // A listing page declaring `paginate` front matter renders with a `paginator`, exactly
+    // as the CLI build's first page does — same `paginateObject`/`paginatedSeo` helpers — so
+    // the author sees the real listing while editing (preview ≡ build).
+    const snapshot: RepoSnapshot = new Map([
+      ['config/schemas/pages.yml', read('config/schemas/pages.yml')],
+      [
+        'config/schemas/posts.yml',
+        'kind: collection\nhasBody: true\nfields:\n  title:\n    type: text\n  description:\n    type: text\n  date:\n    type: date\n',
+      ],
+      ['config/schemas/settings.yml', read('config/schemas/settings.yml')],
+      [
+        'content/settings/index.md',
+        '---\ntitle: Blogged\nbaseUrl: https://ex.test\nactiveTheme: default\n---\n',
+      ],
+      [
+        'content/pages/blog/index.md',
+        // No `paginate` on disk: the test supplies it as a *live* edit below, proving a
+        // just-typed block paginates the preview immediately.
+        '---\nid: PAGE-BLOG\ntitle: Blog\npublic: true\n---\nLatest writing.\n',
+      ],
+      [
+        'content/posts/one/index.md',
+        '---\nid: P1\ntitle: Post One\ndescription: First.\ndate: 2026-01-01\npublic: true\n---\nOne.\n',
+      ],
+      [
+        'content/posts/two/index.md',
+        '---\nid: P2\ntitle: Post Two\ndescription: Second.\ndate: 2026-02-01\npublic: true\n---\nTwo.\n',
+      ],
+      [
+        'content/posts/three/index.md',
+        '---\nid: P3\ntitle: Post Three\ndate: 2026-03-01\npublic: true\n---\nThree.\n',
+      ],
+    ]);
+    const model = assembleContent(snapshot, loadSchemas(snapshot));
+    const theme: SiteTheme = {
+      templates: new Map([
+        ['default.liquid', read('themes/default/templates/default.liquid')],
+        ['pagination.liquid', read('themes/default/templates/pagination.liquid')],
+      ]),
+      stylesheets: new Map([
+        ['assets/theme.css', read('themes/default/assets/theme.css')],
+      ]),
+      navigationYml: null,
+      manifest: null,
+      objectUrls: [],
+    };
+    const blog = model.objects.find((o) => o.path === 'content/pages/blog/index.md')!;
+    const html = await renderSitePage({
+      model,
+      object: blog,
+      schema: model.schemas.get('pages')!,
+      data: { ...blog.data, paginate: { collection: 'posts', size: 2 } },
+      body: blog.body,
+      theme,
+      assetStore: new AssetStore(),
+    });
+
+    // The listing itself, then the newest two posts (collections sort most-recent-first).
+    expect(html).toContain('<h1>Blog</h1>');
+    expect(html).toContain('Latest writing.');
+    expect(html).toContain('>Post Three</a>');
+    expect(html).toContain('>Post Two</a>');
+    expect(html).not.toContain('Post One');
+    expect(html).toContain('<p class="listing__excerpt">Second.</p>');
+
+    // The pager, rendered through the theme's own `{% render 'pagination' %}` partial.
+    expect(html).toContain('<nav class="pagination" aria-label="Pagination">');
+    expect(html).toContain('href="/pages/blog/page/2/"');
+    expect(html).toContain('aria-current="page">1</span>');
+    expect(html).toContain(
+      '<link rel="next" href="https://ex.test/pages/blog/page/2/" />',
+    );
+    expect(html).not.toContain('rel="prev"');
+    expect(html).not.toContain('{{');
+  });
+
+  it('leaves an ordinary page with no paginator, so listing markup is a no-op', async () => {
+    const { model, theme } = fixture();
+    const object = home(model);
+    const html = await renderSitePage({
+      model,
+      object,
+      schema: model.schemas.get(object.type)!,
+      data: object.data,
+      body: object.body,
+      theme,
+      assetStore: new AssetStore(),
+    });
+    expect(html).not.toContain('class="listing"');
+    expect(html).not.toContain('class="pagination"');
   });
 });

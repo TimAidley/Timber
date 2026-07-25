@@ -61,6 +61,12 @@ turns on per-language URLs (`/<lang>/…`), an **Add translation** action in the
 theme language switcher. It's a deliberate step (it moves existing page URLs under a
 language prefix), so read **[docs/multilingual.md](docs/multilingual.md)** before enabling.
 
+### 2.5 (Optional) A paginated listing
+Once a collection has more entries than fit on one page, add a `paginate` block to the page
+that lists it (`paginate: { collection: posts, size: 10 }`) and the build splits it across
+`/blog/`, `/blog/page/2/`, … with a pager the default theme already renders. See
+**[docs/pagination.md](docs/pagination.md)**.
+
 That's all three methods share. Now follow **the one section below** for your choice.
 
 ---

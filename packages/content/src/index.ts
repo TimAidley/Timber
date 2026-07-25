@@ -33,7 +33,18 @@ export {
   buildRobots,
   hreflangAlternates,
 } from './seo.js';
-export type { SiteContext, PageSeo, HreflangAlternate } from './seo.js';
+export type { SiteContext, PageSeo, PageSeoOptions, HreflangAlternate } from './seo.js';
+export {
+  PAGINATE_KEY,
+  DEFAULT_PAGE_SIZE,
+  parsePaginate,
+  validatePaginate,
+  pageUrl,
+  paginateEntries,
+  paginateObject,
+  paginatedSeo,
+} from './pagination.js';
+export type { PaginateSpec, Paginator, PaginatorPageLink } from './pagination.js';
 export { themeStyle } from './theme.js';
 export { loadNavigation } from './navigation.js';
 export type { NavItem } from './navigation.js';

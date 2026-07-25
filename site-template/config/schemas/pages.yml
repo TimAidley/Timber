@@ -1,5 +1,12 @@
 kind: collection
 hasBody: true
+# Any page can become a paginated listing by adding a `paginate` block to its own front
+# matter (not here) — e.g.
+#   paginate:
+#     collection: posts
+#     size: 10
+# The build then emits it as /<page>/, /<page>/page/2/, … and the default theme renders the
+# entries plus a pager. See docs/pagination.md.
 fields:
   title:
     type: text

@@ -6,6 +6,8 @@ import {
   pageSeo,
   hreflangAlternates,
   loadNavigation,
+  paginateObject,
+  paginatedSeo,
   translationsOf,
   urlFor,
   type ContentModel,
@@ -90,7 +92,16 @@ export async function renderSitePage(input: RenderSitePageInput): Promise<string
 
   // Preview the *live* edits: SEO (title/description) and URL reflect the current form.
   const liveObject: ContentObject = { ...object, data };
-  const seo = pageSeo(liveObject, schema, site);
+  const url = effectiveUrl(liveObject, schema);
+
+  // Paginated listing (SPEC §13): read straight off the *live* front matter, so adding a
+  // `paginate:` block in the Markdown tab shows its listing immediately. The preview renders
+  // the page being edited — page 1 — through the same `paginateObject`/`paginatedSeo` the CLI
+  // build uses, so what you see is byte-identical to the deployed first page (preview ≡ build).
+  const paginator = paginateObject(liveObject, collections, url)?.[0];
+  const seo = paginator
+    ? paginatedSeo(liveObject, schema, site, paginator)
+    : pageSeo(liveObject, schema, site, { url });
 
   // Multilingual (SPEC §5 → Multilingual): mirror the CLI build so the previewed page
   // shows the language switcher + hreflang exactly as the deployed page will (preview ≡ build).
@@ -107,6 +118,7 @@ export async function renderSitePage(input: RenderSitePageInput): Promise<string
     site,
     collections,
     seo,
+    url,
     now: clock.now,
     today: clock.today,
     // Per-theme runtime (SPEC §2 → Tier A), matching the CLI build (build.node.ts) so preview ≡
@@ -119,6 +131,7 @@ export async function renderSitePage(input: RenderSitePageInput): Promise<string
   if (runtime.globals) renderInput.globals = runtime.globals;
   if (liveObject.lang !== undefined) renderInput.lang = liveObject.lang;
   if (translations.length > 0) renderInput.translations = translations;
+  if (paginator) renderInput.paginator = paginator;
   let html = await renderPage(renderInput);
 
   // Inline every committed stylesheet the page `<link>`s, in place of its (unreachable) href —

@@ -18,7 +18,28 @@ export interface PageSeo {
   ogDescription: string;
   ogType: string;
   ogImage?: string;
+  /** Absolute URL of the previous page of a paginated listing (SPEC §13), if any. */
+  prev?: string;
+  /** Absolute URL of the next page of a paginated listing (SPEC §13), if any. */
+  next?: string;
   [key: string]: unknown;
+}
+
+/** Caller-supplied adjustments to an object's derived SEO (see {@link pageSeo}). */
+export interface PageSeoOptions {
+  /**
+   * The page's resolved URL, used for the canonical. Pass the URL the caller's routing
+   * produced — homepage-at-root (`/`), a language prefix, or one page of a paginated
+   * listing (`/blog/page/2/`) — so the canonical always matches where the page is
+   * actually written. Omit to fall back to the object's own {@link urlFor}.
+   */
+  url?: string;
+  /**
+   * Appended to the page title *before* the site-title suffix, giving
+   * `Blog · Page 2 of 5 · My Site`. Used by paginated listings so pages 2+ don't all
+   * share one title.
+   */
+  titleSuffix?: string;
 }
 
 function str(value: unknown): string | undefined {
@@ -72,7 +93,10 @@ function absolute(baseUrl: string | undefined, ref: string): string {
 }
 
 /** The first `image`-kind field on the object that has a value (for the OG image). */
-function firstImage(object: ContentObject, schema: ContentTypeSchema): string | undefined {
+function firstImage(
+  object: ContentObject,
+  schema: ContentTypeSchema,
+): string | undefined {
   for (const [name, field] of Object.entries(schema.fields)) {
     if (field.type === 'image') {
       const value = str(object.data[name]);
@@ -88,15 +112,25 @@ function firstImage(object: ContentObject, schema: ContentTypeSchema): string | 
  * canonical URL is `site.baseUrl` + the object's URL; the OG image is the first image
  * field, absolutized.
  */
-export function pageSeo(object: ContentObject, schema: ContentTypeSchema, site: SiteContext): PageSeo {
+export function pageSeo(
+  object: ContentObject,
+  schema: ContentTypeSchema,
+  site: SiteContext,
+  options?: PageSeoOptions,
+): PageSeo {
   const data = object.data;
   const siteTitle = str(site.title);
-  const pageTitle = str(data.seoTitle) ?? str(data.title) ?? object.slug;
-  const title = siteTitle && pageTitle !== siteTitle ? `${pageTitle} · ${siteTitle}` : pageTitle;
+  const ownTitle = str(data.seoTitle) ?? str(data.title) ?? object.slug;
+  const pageTitle = options?.titleSuffix
+    ? `${ownTitle} · ${options.titleSuffix}`
+    : ownTitle;
+  const title =
+    siteTitle && pageTitle !== siteTitle ? `${pageTitle} · ${siteTitle}` : pageTitle;
 
-  const description = str(data.description) ?? str(data.excerpt) ?? str(site.description) ?? '';
+  const description =
+    str(data.description) ?? str(data.excerpt) ?? str(site.description) ?? '';
   const baseUrl = str(site.baseUrl);
-  const path = urlFor(object, schema);
+  const path = options?.url ?? urlFor(object, schema);
   const canonical = baseUrl ? `${baseUrl}${path}` : path;
 
   const image = firstImage(object, schema);
@@ -137,7 +171,10 @@ export function hreflangAlternates(
   if (translations.length < 2) return [];
   const baseUrl = str(site.baseUrl);
   const abs = (url: string): string => (baseUrl ? `${baseUrl}${url}` : url);
-  const out: HreflangAlternate[] = translations.map((t) => ({ lang: t.lang, href: abs(t.url) }));
+  const out: HreflangAlternate[] = translations.map((t) => ({
+    lang: t.lang,
+    href: abs(t.url),
+  }));
   const fallback = translations[0]!;
   const def =
     (defaultLanguage && translations.find((t) => t.lang === defaultLanguage)) || fallback;

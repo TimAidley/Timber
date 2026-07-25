@@ -15,6 +15,8 @@ import {
   hreflangAlternates,
   isPublic,
   pageSeo,
+  paginateObject,
+  paginatedSeo,
   redirectStubHtml,
   siteContext,
   translationsOf,
@@ -243,11 +245,6 @@ export async function buildSite(repoDir: string, outDir: string): Promise<BuildR
     const template = resolveTemplate(object.type);
     const markdown = await readFile(join(repoDir, object.path), 'utf8');
     const url = effectiveUrl(object, schema);
-    const seo = pageSeo(object, schema, site);
-    if (homepageId && object.id === homepageId) {
-      const baseUrl = typeof site.baseUrl === 'string' ? site.baseUrl : '';
-      seo.canonical = baseUrl ? `${baseUrl}/` : '/';
-    }
 
     // Multilingual (SPEC §5 → Multilingual): the sibling set drives `page.translations`
     // (language switcher) and the `hreflang` alternates in `<head>`. Both use `effectiveUrl`
@@ -256,34 +253,60 @@ export async function buildSite(repoDir: string, outDir: string): Promise<BuildR
     const defaultLanguage =
       typeof site.defaultLanguage === 'string' ? site.defaultLanguage : undefined;
     const alternates = hreflangAlternates(translations, site, defaultLanguage);
-    if (alternates.length > 0) seo.alternates = alternates;
 
-    const renderInput: Parameters<typeof renderPage>[0] = {
-      markdown,
-      template,
-      templates,
-      site,
-      collections,
-      seo,
-      now: clock.now,
-      today: clock.today,
-      // Per-theme runtime (SPEC §2 → Tier A): the compat filters for the active theme's engine
-      // (Jekyll ecosystem for native/Jekyll, Eleventy filters for an Eleventy theme) plus, for
-      // Eleventy, the flat data cascade + `_data` globals. All additive; a native Timber site is
-      // unaffected. The engine is cached per (templates, extend).
-      extend: runtime.extend,
-      flattenData: runtime.flattenData,
-    };
-    if (runtime.globals) renderInput.globals = runtime.globals;
-    if (object.lang !== undefined) renderInput.lang = object.lang;
-    if (translations.length > 0) renderInput.translations = translations;
-    const html = await renderPage(renderInput);
+    // Paginated listing (SPEC §13): an object declaring `paginate` front matter renders as
+    // several pages — page 1 at its own URL, the rest at `<url>/page/<n>/` — each with its
+    // own `paginator`, canonical, and title. `undefined` for an ordinary page, which then
+    // renders exactly once, as before pagination existed. The same helper drives the browser
+    // preview (`renderSitePage.ts`), so preview ≡ build.
+    const paginators = paginateObject(object, collections, url);
 
+    for (const paginator of paginators ?? [undefined]) {
+      const pageUrl = paginator ? paginator.url : url;
+      const seo = paginator
+        ? paginatedSeo(object, schema, site, paginator)
+        : pageSeo(object, schema, site, { url });
+      // hreflang alternates only on page 1: a sibling language's listing may have a
+      // different number of pages, so `/en/blog/page/2/` has no reliable equivalent to
+      // point at. The switcher (`page.translations`) stays on every page and links to the
+      // sibling listing's first page, which is always right.
+      if (alternates.length > 0 && (!paginator || paginator.page === 1)) {
+        seo.alternates = alternates;
+      }
+
+      const renderInput: Parameters<typeof renderPage>[0] = {
+        markdown,
+        template,
+        templates,
+        site,
+        collections,
+        seo,
+        url: pageUrl,
+        now: clock.now,
+        today: clock.today,
+        // Per-theme runtime (SPEC §2 → Tier A): the compat filters for the active theme's engine
+        // (Jekyll ecosystem for native/Jekyll, Eleventy filters for an Eleventy theme) plus, for
+        // Eleventy, the flat data cascade + `_data` globals. All additive; a native Timber site is
+        // unaffected. The engine is cached per (templates, extend).
+        extend: runtime.extend,
+        flattenData: runtime.flattenData,
+      };
+      if (runtime.globals) renderInput.globals = runtime.globals;
+      if (object.lang !== undefined) renderInput.lang = object.lang;
+      if (translations.length > 0) renderInput.translations = translations;
+      if (paginator) renderInput.paginator = paginator;
+      const html = await renderPage(renderInput);
+
+      const pageDir = urlToDir(pageUrl);
+      await mkdir(join(outDir, pageDir), { recursive: true });
+      await writeFile(join(outDir, pageDir, 'index.html'), html, 'utf8');
+      pages += 1;
+      sitemapUrls.push(seo.canonical);
+    }
+
+    // Aliases and colocated assets belong to the *object*, so they're emitted once — next
+    // to its page-1 output — however many pages a paginated listing produced.
     const dir = urlToDir(url);
-    await mkdir(join(outDir, dir), { recursive: true });
-    await writeFile(join(outDir, dir, 'index.html'), html, 'utf8');
-    pages += 1;
-    sitemapUrls.push(seo.canonical);
 
     // Redirect stubs (SPEC §5): a renamed object keeps working URLs — each old slug
     // in `aliases` gets a meta-refresh page pointing at the object's current URL.

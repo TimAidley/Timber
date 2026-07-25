@@ -1,0 +1,6 @@
+kind: collection
+hasBody: true
+fields:
+  title:
+    type: text
+    required: true

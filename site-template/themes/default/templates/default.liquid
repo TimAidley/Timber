@@ -13,6 +13,9 @@
     {% comment %} hreflang alternates for translated pages (empty on single-language sites) {% endcomment %}
     {% for alt in seo.alternates %}<link rel="alternate" hreflang="{{ alt.lang }}" href="{{ alt.href }}" />
     {% endfor %}
+    {% comment %} Paginated listings only (SPEC §13) — absent on ordinary pages {% endcomment %}
+    {% if seo.prev %}<link rel="prev" href="{{ seo.prev }}" />{% endif %}
+    {% if seo.next %}<link rel="next" href="{{ seo.next }}" />{% endif %}
     <link rel="stylesheet" href="{{ site.basePath }}/assets/theme.css" />
     {% comment %}themeStyle is generator-validated CSS (hex colours, fixed font/width maps),
        so it's emitted raw — HTML-escaping would corrupt quoted font names inside <style>.{% endcomment %}
@@ -41,6 +44,24 @@
         <h1>{{ page.title }}</h1>
         {{ content }}
       </article>
+      {% comment %}
+        A paginated listing (SPEC §13): a page whose front matter declares
+        `paginate: { collection: posts, size: 10 }` gets a `paginator` — this page's slice
+        of that collection, plus the links for a pager. Ordinary pages have no `paginator`,
+        so everything below is a no-op for them.
+      {% endcomment %}
+      {% if paginator %}
+      <ul class="listing">
+        {% for item in paginator.items %}
+        <li class="listing__item">
+          <a class="listing__link" href="{{ site.basePath }}{{ item.url }}">{{ item.title | default: item.slug }}</a>
+          {% if item.description %}<p class="listing__excerpt">{{ item.description }}</p>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% comment %}`{% render %}` is an isolated scope, so the pager takes what it needs.{% endcomment %}
+      {% render 'pagination', paginator: paginator, basePath: site.basePath %}
+      {% endif %}
       {% endblock %}
     </main>
     <footer class="site-footer">

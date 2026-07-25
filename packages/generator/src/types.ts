@@ -62,6 +62,15 @@ export interface RenderPageInput {
   /** Optional per-page derived data (e.g. SEO) exposed as `{{ seo }}` (SPEC §13). */
   seo?: Record<string, unknown>;
   /**
+   * Optional pagination context for one page of a paginated listing, exposed at the top
+   * level as `{{ paginator }}` (SPEC §13) — this page's slice of a collection plus the
+   * links a pager needs. Assembled by `@timber/content`'s `paginateObject` (which also
+   * decides how many pages the listing has); kept loose here so the core needn't know the
+   * content model. Omitted for an ordinary page, where `{% if paginator %}` is simply
+   * false, so a theme's listing markup is a no-op.
+   */
+  paginator?: Record<string, unknown>;
+  /**
    * Optional resolved URL of this page, merged into the page context as `{{ page.url }}`
    * (Tier-1). Supplied by the caller (which owns routing — homepage-at-root, base paths),
    * so the core stays pure. Powers canonical/self links, active-nav highlighting, and the
