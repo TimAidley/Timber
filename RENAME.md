@@ -20,10 +20,13 @@ Candidates under consideration: **Timpress**, **Timpact**, **VerbaTim**, **Timpr
 | `.yml` / `.yaml` | 217 | CI workflows (ours + the four site-template variants) |
 | `.css` / `.html` | 13 | `@font-face` family, `.wordmark` rules, page title |
 
-**But the count is misleading.** ~95% is a mechanical find/replace with zero blast radius.
-The plan below is really about the ~15 identifiers that are *not* free, because they are
-baked into **user data**, **users' committed repo files**, or **deployed external
-infrastructure**. Those are the whole job.
+**But the count is misleading**, in both directions. ~95% is a mechanical find/replace with
+zero blast radius. A further ~15 identifiers are persisted — in browser storage, in users'
+committed repo files, in deployed infrastructure — and would normally each need a compat
+shim; **with no installs to protect (see Tier 3), they collapse into the same sweep.**
+
+That leaves exactly one piece of real work: **the wordmark**, which is neither mechanical
+nor reversible-by-grep.
 
 ---
 
@@ -124,12 +127,11 @@ Not affected, worth confirming: the `<username>_wip` branch convention, the cont
 bundle layout, front-matter keys, and the `id`/slug model carry **no** product name.
 `CLAUDE.md` never names the product at all.
 
-### Tier 2 — coordinated (needs action outside the repo, but no user breakage)
+### Tier 2 — coordinated (needs action outside the repo)
 
-- **Repo rename `TimAidley/Timber` → `TimAidley/<Name>`.** GitHub permanently redirects
-  the old URL, and the site-template's `deploy.yml` clones over HTTPS, so **existing
-  deployed sites keep building** through the redirect. Same for
-  `TimAidley/Timber-site-template`. Still update `VITE_TIMBER_UPSTREAM_REPO`'s default in
+- **Repo rename `TimAidley/Timber` → `TimAidley/<Name>`.** GitHub permanently redirects the
+  old URL, and the site-template's `deploy.yml` clones over HTTPS, so anything still
+  pointing at the old name keeps working. Update `VITE_TIMBER_UPSTREAM_REPO`'s default in
   `vite.config.ts:46` and `TEMPLATE_REPO` in `.github/workflows/sync-template.yml` so the
   update-banner check and the template mirror point at the canonical name.
 - **`TimAidley/Timber-test-sandbox`** — the live-test repo. 6 source references and ~120
@@ -139,68 +141,35 @@ bundle layout, front-matter keys, and the `id`/slug model carry **no** product n
 - **The `sync-template` push token** is scoped to the template repo by name — re-scope the
   fine-grained PAT after renaming.
 
-### Tier 3 — breaking (needs a compat shim, a migration, or a deliberate decision)
+### Tier 3 — persisted identifiers (no longer a migration; rename them all)
 
-These are the ones that cost real thought. Each touches something a user already has.
+> **Resolved.** Only two tiny test sites exist, and they will be deleted and recreated
+> rather than migrated. That removes the entire compat burden: **no fallback reads, no
+> dual-key lookups, no deprecation window, no upgrade notes.** Everything below drops to a
+> plain find/replace and can ride along in the Tier 1 sweep.
 
-**a. IndexedDB `timber-drafts` — highest risk.**
-`packages/app/src/state/localDraft.ts:17`. This holds **continuous autosave of unpublished
-work**. Renaming the DB silently orphans every in-flight draft — the editor would open to
-an empty store and the user's uncommitted edits would be gone with no error.
-→ **Recommendation: do not rename it.** A DB name is invisible; the cost of changing it is
-unbounded and the benefit is zero. If it must change, ship a one-time migration that opens
-the old DB, copies records, and only then deletes — never a bare rename.
+Recording what these *were* going to cost, so the reasoning survives if the project ever
+does acquire installs it can't just recreate:
 
-**b. `:timber-logo` shortcode — authored into users' content.**
-`figureDirective.ts:21`, and used in `site-template/content/pages/{home,about}/index.md`.
-Any user page containing `:timber-logo` degrades to **literal text on the page** if the
-directive name changes (stray directives are neutralised back to source by design).
-→ **Recommendation: rename it to the name-neutral `:logo`** and keep `timber-logo` as a
-silent alias forever. This makes the shortcode immune to *this* rename and any future one.
-Update the two template pages; the `roundtrip.test.ts` byte-stability fixture asserts on
-the old spelling.
+| Identifier | Location | Would have broken | Now |
+|---|---|---|---|
+| IndexedDB `timber-drafts` | `state/localDraft.ts:17` | silently orphans every unpublished autosaved draft | rename freely — worst case is losing your own local dev drafts, so **clear site data after the switch** rather than debugging an empty store |
+| `:timber-logo` shortcode | `figureDirective.ts:21` + 2 template pages | authored pages render the literal text `:timber-logo` | rename — **see below, still worth doing differently** |
+| `.timber-broker-url` | 4 CI variants | new `deploy.yml` can't find it → sign-in silently drops | plain rename |
+| `window.__TIMBER_CONFIG__` | `public/config.js`, `host/config.ts` | self-hosted editor configs stop being read | plain rename |
+| `TIMBER_*` repo Variables (~20) | 4 CI variants | user-set config silently reverts to defaults | plain rename |
+| `VITE_TIMBER_*` build vars | `vite.config.ts`, `buildInfo.ts` | — (always compiled in by our CI) | plain rename |
+| Cloudflare worker `timber-oauth-broker` | `wrangler.toml:16` | worker name *is* its URL → hard sign-in failure for existing sites | rename, then **delete the old worker** so it doesn't linger and confuse |
+| Token/layout storage keys | `hostDescriptor.ts:78`, `oauth.ts:22-24`, `deviceFlow.ts:18`, `layout.ts:21-23` | logs everyone out; PAT users must re-paste | plain rename — expect to re-paste your own dev PAT once |
 
-**c. `.timber-broker-url` — a committed file in every site repo.**
-Written by `setup-broker.yml`, read by `deploy.yml`, in all four CI variants. An existing
-site has the old filename committed; a *new* `deploy.yml` looking for `.<name>-broker-url`
-finds nothing and **silently drops sign-in** on the next deploy.
-→ Read both, old as fallback, for at least one release. Cheap: one `elif [ -f ... ]`.
+**One item is still worth handling on its own merits, not for compat:**
 
-**d. `window.__TIMBER_CONFIG__` — edited by self-hosting users.**
-`packages/app/public/config.js`, read in `packages/app/src/host/config.ts`. Users who host
-the editor themselves hand-edit this file.
-→ Read `window.__<NAME>_CONFIG__` first, fall back to `window.__TIMBER_CONFIG__`, and note
-the deprecation in the file's comment block.
-
-**e. `TIMBER_*` / `VITE_TIMBER_*` — ~20 distinct names, set as GitHub repo Variables.**
-`TIMBER_REPO`, `TIMBER_REF`, `TIMBER_DEPLOY_TARGET`, `TIMBER_EDITOR_PATH`,
-`TIMBER_EDITOR_ORIGIN`, `TIMBER_OAUTH_*`, `TIMBER_BASE`, and the `VITE_TIMBER_*` build vars.
-Users set these **in their repo settings**, not in a file we control. Existing sites are
-safe while their old `deploy.yml` sits unchanged, but the moment they pull a template
-update their variables stop being read — a config that silently reverts to defaults.
-→ In the workflow, read `${{ vars.<NAME>_X || vars.TIMBER_X }}` for one release, and put
-the rename in INSTALL.md's upgrade notes. `VITE_TIMBER_*` is compiled in by our own CI, so
-those can be renamed freely alongside `vite.config.ts` and `buildInfo.ts`.
-
-**f. Cloudflare worker `timber-oauth-broker`.**
-`packages/oauth-broker/wrangler.toml:16`. The worker **name determines its URL**
-(`https://timber-oauth-broker.<subdomain>.workers.dev`), which is what got committed into
-every existing site's `.timber-broker-url`. Renaming deploys a *new* worker at a *new* URL
-and leaves every existing site pointing at the old one.
-→ **Recommendation: do not rename the worker**, or rename it and leave the old one
-deployed indefinitely. The name is near-invisible (it appears once in a URL nobody types)
-and the breakage is a hard sign-in failure.
-
-**g. Token storage keys** — `timber.host.pat` (localStorage), `timber.oauth.{token,state,verifier}`
-and `timber.device.token` (sessionStorage), plus `timber:layout:*`.
-Renaming logs everyone out and, for the PAT path, forces a re-paste of a token the user
-may not still have.
-→ Low stakes but zero benefit. Leave them, or migrate-then-delete on first read.
-
-**The pattern across Tier 3:** every one of these is an *identifier the user never sees*.
-The general rule I'd apply — rename what is **visible** (docs, wordmark, page title, repo,
-package scope) and leave what is merely **internal but persisted** (DB names, storage keys,
-the worker name) unless there's a reason beyond tidiness.
+`:timber-logo` is the only name-bearing identifier that gets **typed into content by
+authors**. Renaming it to `:timprint-logo` means a *future* rename breaks content all over
+again. Rename it to the name-neutral **`:logo`** instead and the shortcode never has to
+change again. This is now cheaper than it was — no alias to keep, since there's no content
+in the wild to preserve. Update the two template pages and the `roundtrip.test.ts`
+byte-stability fixture.
 
 ---
 
@@ -208,26 +177,28 @@ the worker name) unless there's a reason beyond tidiness.
 
 Small reviewable commits, riskiest-first, per the repo's own working style:
 
+With no installs to protect, this is now four commits, not eight.
+
 1. **Decide the name.** Everything below is blocked on it.
-2. **Neutralise the shortcode** (`:timber-logo` → `:logo` + alias). Independent of the
-   name choice, lands first, removes item (b) from the critical path entirely.
-3. **Add the font subsetting script** and regenerate for the new name; update both
-   `@font-face` copies, both wordmark emitters, and the tests. Eyeball the result at
-   banner and sign-in sizes before going further. *This is the only step with genuine
-   design risk — do it early enough to change the name if the wordmark doesn't work.*
-4. **Compat shims** for `.timber-broker-url`, `window.__TIMBER_CONFIG__`, and the
-   `vars.TIMBER_*` reads — merged **before** the sweep, so no window exists where a
-   template update breaks a live site.
-5. **The mechanical sweep**: `@timber/*` scope, prose, comments, plugin names, page title.
-   One large but boring diff; keep it separate from everything above so review is
-   `git diff --stat` plus spot-checks.
-6. **Rename the GitHub repos**, update `TEMPLATE_REPO`, the provenance defaults, the
-   sandbox secrets, and re-scope the sync PAT.
-7. **Explicitly do not rename**: the IndexedDB store, the storage keys, the Cloudflare
-   worker. Record the decision in SPEC.md so it doesn't get "tidied up" later.
-8. **Update SPEC.md / ARCHITECTURE.md / INSTALL.md** in the same PRs that change behaviour
-   (SPEC is authoritative — it can't lag), and add an INSTALL.md upgrade note for existing
-   site owners covering the repo-variable rename.
+2. **Neutralise the shortcode** (`:timber-logo` → `:logo`). Independent of the name
+   choice, so it can land first and never needs revisiting.
+3. **The wordmark.** Add the font subsetting script, regenerate for the new glyph set,
+   update both `@font-face` copies, both emitters, and the tests. Eyeball the result at
+   banner *and* sign-in sizes. **This is the only step with genuine design risk — do it
+   before the sweep, while changing your mind about the name is still cheap.**
+4. **The mechanical sweep.** Everything else in one boring diff: `@timber/*` scope, all
+   Tier 3 identifiers, prose, comments, plugin names, page title. Review is
+   `git diff --stat` plus spot-checks. Update SPEC.md and ARCHITECTURE.md **in this
+   commit** — SPEC is authoritative and can't lag.
+5. **Rename the GitHub repos**, update `TEMPLATE_REPO`, the provenance defaults, the
+   sandbox secrets, and re-scope the sync PAT. Then recreate the two test sites from the
+   renamed template — which doubles as the end-to-end verification that the sweep is
+   complete.
+6. **Redeploy the broker** under its new name and delete the old worker.
+
+Afterwards, the check that matters: `grep -ri timber .` should return **only**
+`RENAME.md`, this repo's own git history, and the `LICENSE-Fraunces.txt` filename if the
+subset artifact keeps its old name by accident.
 
 ## 6. Open questions
 
@@ -235,5 +206,5 @@ Small reviewable commits, riskiest-first, per the repo's own working style:
   WordPress-adjacent confusion for a stronger one, and that **VerbaTim** costs a wordmark
   redesign plus an npm collision.)
 - Do we want a domain / GitHub org for the new name before committing to it?
-- Is there any published site in the wild besides the sandbox? If not, most of Tier 3
-  collapses to Tier 1 and this gets much cheaper — worth confirming before building shims.
+- ~~Is there any published site in the wild?~~ **Answered: no — two test sites, to be
+  deleted and recreated.** Tier 3 collapses into the sweep; no shims needed.
