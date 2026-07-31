@@ -67,6 +67,30 @@ that lists it (`paginate: { collection: posts, size: 10 }`) and the build splits
 `/blog/`, `/blog/page/2/`, … with a pager the default theme already renders. See
 **[docs/pagination.md](docs/pagination.md)**.
 
+### 2.6 (Recommended) Require the content checks
+The template ships **`.github/workflows/validate.yml`**, which runs two checks on every pull
+request (and on pushes to branches other than `main` and your `*_wip` editor branch):
+
+- **`timber validate .`** — schemas, required fields, references, duplicate ids.
+- **`timber fmt --check .`** — every content file matches the exact form the editor writes.
+  A file that doesn't (a hand-written or imported one) is still *valid* and builds fine, but
+  the editor re-serializes it on load and shows it as modified before you've typed anything
+  — and reverting doesn't clear it. See **[AUTHORING.md](https://github.com/TimAidley/Timber-site-template/blob/main/AUTHORING.md)**.
+
+Those run automatically, but a workflow can only *report* a result — **it can't refuse a
+push on its own.** To make a failing check actually block a merge:
+
+**Settings → Rules → Rulesets → New ruleset → New branch ruleset.** Target the default
+branch, tick **Require status checks to pass**, and add **Validate content** to the list.
+(On the older UI: **Settings → Branches → Add branch protection rule** → *Require status
+checks to pass before merging*.)
+
+The check only appears in that picker **after it has run at least once**, so open a
+throwaway pull request first if the list is empty.
+
+This is GitHub-only today — the Codeberg and GitLab setups below deploy fine but don't yet
+ship an equivalent content check.
+
 That's all three methods share. Now follow **the one section below** for your choice.
 
 ---

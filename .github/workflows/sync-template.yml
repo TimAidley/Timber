@@ -6,7 +6,13 @@ name: Sync site template
 # site-template/ here.
 #
 # Requires a repo secret TEMPLATE_SYNC_TOKEN: a fine-grained PAT scoped to
-# TimAidley/Timber-site-template with Contents: Read and write.
+# TimAidley/Timber-site-template with BOTH:
+#   * Contents:  Read and write
+#   * Workflows: Read and write
+# The second is easy to miss and only bites when site-template/ adds or changes a file
+# under .github/workflows/ — GitHub rejects the whole push with "refusing to allow a
+# fine-grained personal access token to create or update workflow ... without 'workflows'
+# permission", so the template silently stops tracking this repo until the token is fixed.
 
 on:
   push:
@@ -39,8 +45,9 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${TOKEN:-}" ]; then
-            echo "TEMPLATE_SYNC_TOKEN is not set. Add a fine-grained PAT with Contents:" >&2
-            echo "Read & write on ${TEMPLATE_REPO}, then re-run this workflow." >&2
+            echo "TEMPLATE_SYNC_TOKEN is not set. Add a fine-grained PAT on" >&2
+            echo "${TEMPLATE_REPO} with Contents: Read & write AND Workflows: Read &" >&2
+            echo "write, then re-run this workflow." >&2
             exit 1
           fi
 
@@ -58,5 +65,14 @@ jobs:
             echo "Template already in sync — nothing to push."
           else
             git commit -m "chore: sync from Timber site-template@${GITHUB_SHA:0:12}"
-            git push
+            if ! git push 2>push.log; then
+              cat push.log >&2
+              if grep -q "workflows' permission" push.log; then
+                echo >&2
+                echo "TEMPLATE_SYNC_TOKEN is missing the Workflows permission, which is" >&2
+                echo "needed because this sync touches .github/workflows/. Add Workflows:" >&2
+                echo "Read and write to the PAT and re-run." >&2
+              fi
+              exit 1
+            fi
           fi

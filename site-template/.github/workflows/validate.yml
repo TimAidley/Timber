@@ -12,8 +12,8 @@ name: Validate content
 # non-canonical bytes and the phantom diff comes straight back. See AUTHORING.md.
 #
 # NOTE: a workflow reports a status; it cannot by itself refuse a push. To actually block
-# merges, go to Settings → Branches → add a rule for `main` and mark "Validate content"
-# as a required status check.
+# merges, mark "Validate content" as a required status check on your default branch —
+# Settings → Rules → Rulesets (or the older Settings → Branches). See INSTALL.md §2.6.
 
 on:
   pull_request:
@@ -41,6 +41,9 @@ env:
 
 jobs:
   validate:
+    # Explicit, so the name in the branch-protection "required status checks" picker is
+    # this rather than the bare job id — INSTALL.md §2.6 tells people to look for it.
+    name: Validate content
     runs-on: ubuntu-latest
     steps:
       - name: Check out this content repo
