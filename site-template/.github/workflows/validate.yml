@@ -1,0 +1,81 @@
+name: Validate content
+
+# Checks your content before it reaches the live site. Two separate checks:
+#
+#   timber validate .   — schemas, required fields, references, duplicate ids
+#   timber fmt --check . — every object is in the exact form the editor writes
+#
+# The second one exists because a hand-authored or script-generated `index.md` can be
+# perfectly valid and still be a problem: if its bytes don't match what the editor would
+# write, the editor re-serialises it on load and the object shows as modified before you
+# have typed anything — and reverting doesn't help, because that restores the
+# non-canonical bytes and the phantom diff comes straight back. See AUTHORING.md.
+#
+# NOTE: a workflow reports a status; it cannot by itself refuse a push. To actually block
+# merges, go to Settings → Branches → add a rule for `main` and mark "Validate content"
+# as a required status check.
+
+on:
+  pull_request:
+  push:
+    branches-ignore:
+      # `main` is already gated by deploy.yml, whose build fails on invalid public
+      # content (so a broken site never deploys and the last good deploy stays live).
+      - main
+      # The editor commits to `<login>_wip` every few seconds while you type. Running CI
+      # per keystroke would burn Actions minutes for no benefit — WIP is checkpoint
+      # storage, and the publish path validates the whole branch before it merges anyway.
+      - '*_wip'
+
+permissions:
+  contents: read
+
+# A newer push supersedes an in-flight run on the same ref.
+concurrency:
+  group: validate-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TIMBER_REPO: TimAidley/Timber
+  TIMBER_REF: main # keep in step with deploy.yml, so CI and the build agree
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out this content repo
+        uses: actions/checkout@v4
+
+      - name: Check out Timber (pinned)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.TIMBER_REPO }}
+          ref: ${{ env.TIMBER_REF }}
+          path: .timber
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: .timber/pnpm-lock.yaml
+
+      - name: Install Timber deps
+        working-directory: .timber
+        run: pnpm install --frozen-lockfile
+
+      - name: Build the Timber CLI
+        working-directory: .timber
+        run: pnpm --filter "@timber/cli..." build
+
+      - name: Validate content
+        run: node .timber/packages/cli/dist/index.js validate .
+
+      # Runs even when validate failed, so one push reports both problems rather than
+      # making you fix them in two rounds.
+      - name: Check content formatting
+        if: ${{ !cancelled() }}
+        run: node .timber/packages/cli/dist/index.js fmt --check .

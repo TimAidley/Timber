@@ -7,7 +7,17 @@ in-browser editor at `/<repo>/edit/`.
   holds site-wide settings.
 - **`templates/`** + **`assets/`** — the theme (Liquid templates + CSS).
 - **`config/`** — content-type schemas and the top navigation.
-- **`.github/workflows/`** — build/deploy to GitHub Pages, plus one-time broker setup.
+- **`.github/workflows/`** — build/deploy to GitHub Pages, content validation, plus
+  one-time broker setup.
+
+## Editing by hand
+
+Editing in the browser needs no special knowledge. But if you import content, script a bulk
+change, or have an AI assistant write files for you, read **[`AUTHORING.md`](AUTHORING.md)**
+first — content files have a canonical on-disk form, and a file that doesn't match it shows
+up as permanently "modified" in the editor. `timber fmt .` fixes it;
+`.github/workflows/validate.yml` checks it. ([`AGENTS.md`](AGENTS.md) is the short version
+for AI assistants.)
 
 ## Setup
 

@@ -293,6 +293,19 @@ Cross-cutting things and every file they touch:
   folder** (§13) and **activate** it by patching `settings.activeTheme` (`setFrontMatterScalar`).
   Guide: `docs/importing-themes.md`. **Change an engine's transform → keep the manifest's
   `engine` id, `themeRuntime`, and the render-mode wiring in lockstep.**
+- **The `index.md` byte format → change it in exactly one place, and re-run `timber fmt`
+  everywhere.** `serializeDocument` (`@timber/generator`, `document.ts`) is the sole writer of
+  the on-disk form and the exact inverse of `parseFrontMatter` beside it; `formatDocument` /
+  `isCanonicalDocument` are derived from it, `timber fmt` (`packages/cli/src/fmt.node.ts`)
+  applies it to a repo, and the app's `content/document.ts` is now a **re-export**, not a second
+  copy — `reassembleDocument` is that alias, so the editor cannot drift from the CLI. If you
+  change the format, you must also re-normalize **`site-template/content/**`** and every
+  **test fixture** (`packages/{cli,content}/test/fixtures/*`), or every site created from the
+  template ships an object that the editor immediately reports as modified. The rule and its
+  failure mode are documented for site owners in `site-template/AUTHORING.md` + `AGENTS.md`,
+  and enforced by `site-template/.github/workflows/validate.yml`. **Keep `fmt` out of
+  `validate`:** a non-canonical object is valid, and merging the two would report a working
+  page as broken.
 - **Themes as folders → also update the resolver + every advanced path helper.** Which repo
   dirs are "the theme" is one seam: **`resolveThemePaths(activeTheme, exists)`** in
   `@timber/content` (`themePaths.ts`) → `{ templatesDir, assetsDir, sassLoadPaths }`, plus

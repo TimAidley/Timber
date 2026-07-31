@@ -10,6 +10,7 @@ import {
 import { NodeFileSource, NodeOutputSink } from './fileSource.node.js';
 import { buildSnapshotFromDir } from './snapshot.node.js';
 import { buildSite, BuildError } from './build.node.js';
+import { formatRepo } from './fmt.node.js';
 import {
   importThemeToRepo,
   parseImportArgs,
@@ -23,6 +24,7 @@ const USAGE = `timber — Timber static-site generator CLI
 Usage:
   timber render <contentDir> <templateFile> <outFile>
   timber validate <repoDir>
+  timber fmt <repoDir> [--check]
   timber build <repoDir> <outDir>
   timber import-theme <themeDir> <repoDir> [--engine jekyll|eleventy] [--name <theme>] [--map <type>=<layout> ...]
 
@@ -30,6 +32,12 @@ render   — reads <contentDir>/index.md and <templateFile>, renders the page
            through the shared generator, and writes the HTML to <outFile>.
 validate — loads a content repo's schemas + objects, reports invalid objects,
            dangling references, and duplicate ids, and exits non-zero if any.
+fmt      — rewrites every content object into the exact form the editor writes,
+           so a hand-authored or imported file doesn't show up as modified the
+           moment the editor loads it. --check reports what would change and
+           exits non-zero instead of writing. Formatting only: the built site is
+           byte-identical either way, which is why this is separate from
+           validate (a non-canonical file is valid, just untidy).
 build    — renders the whole site: every public object through its
            templates/<type>.liquid (fallback templates/default.liquid) into
            <outDir>, copying assets and omitting drafts. Fails (non-zero) if any
@@ -99,6 +107,32 @@ async function validateCommand(repoDir: string): Promise<number> {
     `\n${model.objects.length} object(s), ${schemas.size} type(s), ${problems} problem(s)\n`,
   );
   return problems === 0 ? 0 : 1;
+}
+
+/** Normalise (or check) every content object's on-disk form; returns an exit code. */
+async function fmtCommand(repoDir: string, check: boolean): Promise<number> {
+  const { changed, checked } = await formatRepo(repoDir, { write: !check });
+  const out = process.stdout;
+
+  if (changed.length === 0) {
+    out.write(`${checked} object(s) checked, all in canonical form\n`);
+    return 0;
+  }
+
+  for (const path of changed) out.write(`${check ? '✗' : 'formatted'} ${path}\n`);
+
+  if (!check) {
+    out.write(`\n${changed.length} of ${checked} object(s) formatted\n`);
+    return 0;
+  }
+
+  // The check leg is what CI runs, so say plainly what to do about it.
+  process.stderr.write(
+    `\n${changed.length} of ${checked} object(s) are not in the form the editor writes.\n` +
+      `These files are valid and build correctly, but the editor will show them as\n` +
+      `modified as soon as it loads them. Fix with:\n\n  timber fmt <repoDir>\n`,
+  );
+  return 1;
 }
 
 /** Build the whole site to <outDir>; returns an exit code (non-zero on build failure). */
@@ -191,6 +225,16 @@ async function main(argv: string[]): Promise<number> {
       return 1;
     }
     return validateCommand(repoDir);
+  }
+
+  if (command === 'fmt') {
+    const check = rest.includes('--check');
+    const [repoDir] = rest.filter((a) => a !== '--check');
+    if (!repoDir) {
+      process.stderr.write(`error: fmt needs <repoDir>\n\n${USAGE}\n`);
+      return 1;
+    }
+    return fmtCommand(repoDir, check);
   }
 
   if (command === 'build') {
