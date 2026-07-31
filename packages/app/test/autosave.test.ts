@@ -121,6 +121,56 @@ describe('Autosaver', () => {
     expect(states.at(-1)).toBe('saved');
   });
 
+  it('reports the cause of a failed commit, then reports the recovery', async () => {
+    // A retry loop that only records failures can't distinguish "still broken" from
+    // "blipped once and went through" — which is exactly the question the header's
+    // "Save failed — retrying" raises. Both edges are reported.
+    const boom = Object.assign(new Error('HTTP 401'), { status: 401 });
+    const commit = vi.fn<CommitFn>().mockRejectedValueOnce(boom).mockResolvedValueOnce(undefined);
+    const errors: unknown[] = [];
+    const recovered: number[] = [];
+    const saver = new Autosaver({
+      commit,
+      assetBytes: async () => new Uint8Array([1]),
+      onState: () => undefined,
+      onError: (e) => errors.push(e),
+      onRecovered: (n) => recovered.push(n),
+      idleMs: 2000,
+      retryMs: 5000,
+    });
+
+    saver.markObjectDirty('content/events/a/index.md', { title: 'A' }, 'body');
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(errors).toEqual([boom]);
+    expect(recovered).toEqual([]);
+
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(recovered).toEqual([1]); // succeeded after exactly one failed attempt
+  });
+
+  it('warns when staged asset bytes have vanished — a save that quietly loses a file', async () => {
+    // The commit still lands (the rest of the edit is fine), so this failure is
+    // invisible in the UI: the page just ends up missing its image. It must be logged.
+    const commit = vi.fn<CommitFn>(async () => undefined);
+    const warnings: { message: string; detail?: Record<string, unknown> }[] = [];
+    const saver = new Autosaver({
+      commit,
+      assetBytes: async () => undefined, // staged bytes gone (reload between stage + flush)
+      onState: () => undefined,
+      onWarn: (message, detail) => warnings.push({ message, ...(detail ? { detail } : {}) }),
+      idleMs: 2000,
+    });
+
+    saver.markObjectDirty('content/events/a/index.md', { title: 'A' }, 'body');
+    saver.markAssetDirty('content/events/a/images/p.webp');
+    await vi.advanceTimersByTimeAsync(2000);
+
+    const [files] = commit.mock.calls[0]!;
+    expect(files.map((f) => f.path)).toEqual(['content/events/a/index.md']); // asset dropped
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]!.detail).toEqual({ path: 'content/events/a/images/p.webp' });
+  });
+
   it('backs off exponentially on repeated failures (5s, 10s, …)', async () => {
     const commit = vi
       .fn<CommitFn>()

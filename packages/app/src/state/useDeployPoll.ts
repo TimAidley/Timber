@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { DeployBackend } from '@timber/host';
 import { deployState, type DeployState } from './deploy.js';
+import { diagnostics } from './diagnostics.js';
 
 const POLL_MS = 5000;
 
@@ -39,8 +40,11 @@ export function useDeployPoll(
         // hasn't started yet, so keep showing "building".
         const isOurs = run !== undefined && (since === undefined || run.createdAt > since);
         next = isOurs ? deployState(run) : 'building';
-      } catch {
-        next = 'building'; // transient error → keep waiting
+      } catch (err) {
+        // Treated as transient (keep showing "building"), but a poll that fails every
+        // time looks identical to a build that never finishes — so record why.
+        diagnostics.record('warn', 'deploy', 'deploy status poll failed', err);
+        next = 'building';
       }
       if (cancelled) return;
       setState(next);

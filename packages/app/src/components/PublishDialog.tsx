@@ -9,6 +9,8 @@ import {
 } from '../state/publish.js';
 import { PathDiff } from '../diff/PathDiff.js';
 import type { RefTextClient } from '../diff/useRefText.js';
+import { diagnostics } from '../state/diagnostics.js';
+import { summarizeHostError } from '@timber/host';
 
 interface PublishDialogProps {
   /** A HostProvider satisfies both structurally (planning + per-file diffs). */
@@ -53,7 +55,9 @@ export function PublishDialog({ client, ctx, onClose, onPublished }: PublishDial
         if (p.ok) setMessage(describePublish(p.changed));
       })
       .catch((e: unknown) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+        // Say what failed and what fixes it; the raw host message goes to the log.
+        const info = diagnostics.error('publish', 'could not plan the publish', e);
+        if (!cancelled) setError(`${summarizeHostError(info)} — ${info.hint}`);
       });
     return () => {
       cancelled = true;
@@ -69,7 +73,8 @@ export function PublishDialog({ client, ctx, onClose, onPublished }: PublishDial
       setPublishedSha(sha);
       onPublished(sha);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      const info = diagnostics.error('publish', 'squash-merge to the default branch failed', e);
+      setError(`${summarizeHostError(info)} — ${info.hint}`);
     } finally {
       setPublishing(false);
     }

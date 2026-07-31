@@ -41,10 +41,41 @@ export interface GitLabClientOptions {
 
 interface GitLabError extends Error {
   status: number;
+  /** Octokit-shaped, so `describeHostError` reads status/headers the same way for every host. */
+  response?: { status: number; headers: Headers; data?: unknown };
 }
 
 function gitlabError(status: number, message: string): GitLabError {
   return Object.assign(new Error(message), { status });
+}
+
+/**
+ * Build the thrown error for a non-2xx response, carrying the server's own explanation
+ * (GitLab answers with `{ message }` or `{ error }`) and the response headers. Without
+ * the body a failed save can only ever be reported as a bare status code — see
+ * `describeHostError`.
+ */
+async function gitlabResponseError(
+  method: string,
+  path: string,
+  res: Response,
+): Promise<GitLabError> {
+  const body = await res.text().catch(() => '');
+  let detail = body.slice(0, 300);
+  try {
+    const parsed = JSON.parse(body) as { message?: unknown; error?: unknown };
+    const message = parsed?.message ?? parsed?.error;
+    if (typeof message === 'string' && message) detail = message;
+    else if (message !== undefined) detail = JSON.stringify(message).slice(0, 300);
+  } catch {
+    // Not JSON (an HTML error page from a proxy) — the truncated text is the detail.
+  }
+  const error = gitlabError(
+    res.status,
+    `GitLab ${method} ${path} -> ${res.status}${detail ? `: ${detail}` : ''}`,
+  );
+  error.response = { status: res.status, headers: res.headers, data: { message: detail } };
+  return error;
 }
 
 function isStatus(err: unknown, status: number): boolean {
@@ -137,10 +168,7 @@ export class GitLabClient implements HostProvider {
     };
     const res = await this.fetchImpl(`${this.apiRoot}${path}`, { ...init, headers });
     if (!res.ok) {
-      throw gitlabError(
-        res.status,
-        `GitLab ${init?.method ?? 'GET'} ${path} -> ${res.status}`,
-      );
+      throw await gitlabResponseError(init?.method ?? 'GET', path, res);
     }
     return res;
   }

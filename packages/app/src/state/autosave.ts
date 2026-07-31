@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { FileWrite, MoveEntry } from '@timber/host';
+import type { FileWrite, HostErrorInfo, MoveEntry } from '@timber/host';
 import type { FrontMatter } from '@timber/generator';
 import { reassembleDocument } from '../content/document.js';
 import type { AssetStore } from './assets.js';
 import type { RepoSession } from './repoSession.js';
+import { diagnostics } from './diagnostics.js';
 
 export type SyncState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
 
@@ -28,6 +29,18 @@ export interface AutosaverDeps {
   onDirtyObjects?: (paths: string[]) => void;
   /** Notified on a failed flush (before the backoff retry) — surfaces the cause. */
   onError?: (error: unknown) => void;
+  /**
+   * Notified when a flush succeeds after one or more failures, with the number of
+   * failed attempts. A log that only records failures can't tell "still broken" from
+   * "blipped and recovered" — which is exactly the question a retry loop raises.
+   */
+  onRecovered?: (failedAttempts: number) => void;
+  /**
+   * Notified about a non-fatal oddity worth recording (currently: staged asset bytes
+   * that vanished before the commit). These don't fail the save, which is precisely
+   * why they need a log — otherwise the commit lands quietly missing a file.
+   */
+  onWarn?: (message: string, detail?: Record<string, unknown>) => void;
   /**
    * Whether an object path is parked **On this device** (SPEC §5/§8 storage axis).
    * Device-only objects are held out of the WIP commit entirely — their durable copy
@@ -323,7 +336,14 @@ export class Autosaver {
       const assetFiles = await Promise.all(
         assets.map(async (path): Promise<FileWrite | null> => {
           const bytes = await this.deps.assetBytes(path);
-          return bytes ? { path, bytes } : null;
+          if (!bytes) {
+            // Dropping the file silently would land a commit whose page is simply
+            // missing its image — a "successful" save that lost data. It can't fail the
+            // commit (the rest of the edit is fine), so it must at least be diagnosable.
+            this.deps.onWarn?.('staged asset bytes unavailable — not committed', { path });
+            return null;
+          }
+          return { path, bytes };
         }),
       );
       const files: FileWrite[] = [
@@ -347,6 +367,7 @@ export class Autosaver {
         deletions,
         moves,
       );
+      if (this.failures > 0) this.deps.onRecovered?.(this.failures);
       this.failures = 0; // success resets the backoff
       this.flushingObjects = new Set(); // landed → these become "saved", not "editing"
       this.notifyDirtyObjects();
@@ -379,6 +400,12 @@ export class Autosaver {
 
 export interface Autosave {
   syncState: SyncState;
+  /**
+   * Why the last flush failed, normalised through the host port — `null` once a save
+   * succeeds. Drives the header's "Save failed — <reason>" and, for a non-retryable
+   * cause like an expired session, the offer to sign in again instead of retrying.
+   */
+  lastError: HostErrorInfo | null;
   /** Object paths with local-only (uncommitted) edits — drives the "Editing" badges. */
   editingPaths: ReadonlySet<string>;
   markObjectDirty: (path: string, data: FrontMatter, body: string) => void;
@@ -407,6 +434,7 @@ export function useAutosave(
 ): Autosave {
   const [syncState, setSyncState] = useState<SyncState>('idle');
   const [editingPaths, setEditingPaths] = useState<ReadonlySet<string>>(new Set());
+  const [lastError, setLastError] = useState<HostErrorInfo | null>(null);
 
   const isDeviceOnlyRef = useRef(isDeviceOnly);
   isDeviceOnlyRef.current = isDeviceOnly;
@@ -427,11 +455,23 @@ export function useAutosave(
         assetBytes: (path) => assetStore.bytes(path),
         isDeviceOnly: (path) => isDeviceOnlyRef.current?.(path) ?? false,
         onError: (error) => {
-          // Surface why a save failed so it's diagnosable from DevTools; the backoff
-          // handles the retry cadence.
-          console.warn('[timber] autosave failed; retrying with backoff:', error);
+          // Normalise + record the cause, and keep the verdict for the UI: a 401 means
+          // the retry loop can never succeed, and the header should say so rather than
+          // showing "retrying" forever.
+          setLastError(diagnostics.error('autosave', 'save to your branch failed', error));
         },
-        onState: setSyncState,
+        onRecovered: (failedAttempts) => {
+          diagnostics.info('autosave', `save succeeded after ${failedAttempts} failed attempt(s)`);
+        },
+        onWarn: (message, detail) => {
+          diagnostics.warn('autosave', message, detail);
+        },
+        onState: (state) => {
+          // A landed commit clears the failure; 'saving' deliberately doesn't, so the
+          // reason stays readable while the retry is in flight.
+          if (state === 'saved' || state === 'idle') setLastError(null);
+          setSyncState(state);
+        },
         onDirtyObjects: (paths) => setEditingPaths(new Set(paths)),
       }),
     [session, assetStore],
@@ -447,6 +487,7 @@ export function useAutosave(
 
   return {
     syncState,
+    lastError,
     editingPaths,
     markObjectDirty: (path, data, body) => saver.markObjectDirty(path, data, body),
     markFileDirty: (path, content) => saver.markFileDirty(path, content),

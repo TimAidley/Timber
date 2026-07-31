@@ -46,6 +46,20 @@ Developer settings → Fine-grained tokens) scoped to your repo with **Contents:
 write** (add **Actions: Read & write** for deploy status/retry). No Cloudflare, no App.
 The token is kept in `localStorage`.
 
+## When a save fails
+
+The header names the cause (**"Save failed — signed out (401)"**) and its **Details**
+button opens the diagnostics panel: the recent failures with status, request id and the
+host's own message, plus **Copy** for a bug report. The same log is reachable from the
+console — `__timber.dump()` — which is the quickest way to see *why* a commit is being
+retried without reproducing it with DevTools already open.
+
+Two things it will tell you that are easy to misread otherwise: a **401** means the
+session expired (retrying can never fix it — sign in again), and a **404** on save
+usually means the token lacks **Contents: write**, not that the repo is missing. The log
+is per-tab, capped in size, never persisted, and token-shaped strings are redacted before
+they reach it — so it's safe to paste.
+
 ## Build a site by hand
 
 ```sh

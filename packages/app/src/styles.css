@@ -2154,6 +2154,150 @@ button.langmenu__row {
   margin-top: 0.5rem;
 }
 
+/* The action that actually fixes a non-retryable failure (e.g. "Sign in again"). */
+.changes__save--primary {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+/* -----------------------------------------------------------------------------
+   Diagnostics panel — the log behind "Save failed — <reason>"
+   ----------------------------------------------------------------------------- */
+.diag-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 40;
+  width: min(680px, 92vw);
+  max-height: min(70vh, 560px);
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-pop);
+}
+
+.diag-panel__head {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.6rem 0.8rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.diag-panel__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.diag-panel__btn {
+  padding: 0.15rem 0.45rem;
+  font-size: 0.7rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.diag-panel__btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.diag-panel__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.diag-panel__item {
+  border-bottom: 1px solid var(--border);
+}
+
+.diag-panel__item:last-child {
+  border-bottom: none;
+}
+
+.diag-panel__row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.4rem 0.8rem;
+  border: none;
+  background: none;
+  text-align: left;
+  font: inherit;
+  font-size: 0.78rem;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.diag-panel__row:disabled {
+  cursor: default;
+}
+
+.diag-panel__row:not(:disabled):hover {
+  background: var(--surface-sunken);
+}
+
+.diag-panel__glyph--error {
+  color: var(--danger);
+}
+
+.diag-panel__glyph--warn {
+  color: var(--warning);
+}
+
+.diag-panel__glyph--info {
+  color: var(--text-faint);
+}
+
+.diag-panel__time,
+.diag-panel__scope {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.diag-panel__msg {
+  flex: 1;
+}
+
+.diag-panel__chevron {
+  color: var(--text-faint);
+  font-size: 0.7em;
+}
+
+.diag-panel__detail {
+  margin: 0;
+  padding: 0.4rem 0.8rem 0.6rem 2.2rem;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  background: var(--surface-sunken);
+}
+
+.diag-panel__foot {
+  position: sticky;
+  bottom: 0;
+  padding: 0.45rem 0.8rem;
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
 /* Per-item lifecycle badge (glyph + colour + label; never colour alone). */
 .cbadge {
   display: inline-block;

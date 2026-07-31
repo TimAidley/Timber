@@ -1,3 +1,4 @@
+import { summarizeHostError, type HostErrorInfo } from '@timber/host';
 import type { SyncState } from '../state/autosave.js';
 import type { ChangeState } from '../state/changes.js';
 import { Spinner } from './Spinner.js';
@@ -63,6 +64,16 @@ interface ChangesSummaryProps {
   device: number;
   syncState: SyncState;
   onSaveNow: () => void;
+  /**
+   * Why the last save failed, normalised by the host port. Without it the error state
+   * can only say *that* it failed; with it the header names the cause and offers the
+   * action that can actually fix it.
+   */
+  saveError?: HostErrorInfo | null | undefined;
+  /** Open the diagnostics panel (the full log behind the one-line reason). */
+  onShowDiagnostics?: (() => void) | undefined;
+  /** Re-authenticate — the only real fix when the session has expired. */
+  onSignIn?: (() => void) | undefined;
   /** Toggle the changes panel (the counts become a button when there's anything to show). */
   onToggle?: (() => void) | undefined;
   /** Whether the changes panel is currently open (drives aria-expanded + the caret). */
@@ -72,7 +83,7 @@ interface ChangesSummaryProps {
 /**
  * The header's aggregate change indicator. Normally shows the counts
  * ("✎ Editing 1 · ☁ Saved 4"); while a coalesced commit is in flight it becomes the
- * live save-status (Saving… / Save failed — retrying), absorbing the old standalone
+ * live save-status (Saving… / Save failed — <why>), absorbing the old standalone
  * sync indicator so there's one thing in this slot, not two. When `onToggle` is given
  * and there are changes, the counts are a button that opens the changes panel.
  */
@@ -83,6 +94,9 @@ export function ChangesSummary({
   device,
   syncState,
   onSaveNow,
+  saveError,
+  onShowDiagnostics,
+  onSignIn,
   onToggle,
   expanded,
 }: ChangesSummaryProps): React.JSX.Element {
@@ -94,12 +108,33 @@ export function ChangesSummary({
     );
   }
   if (syncState === 'error') {
+    // "Retrying" is only true when a retry could actually work. An expired session or a
+    // missing permission fails identically forever, so the honest thing is to name the
+    // cause and offer the fix (sign in again) instead of promising a retry that can't
+    // succeed. Unknown cause (no `saveError`) keeps the old, safe wording.
+    const retryable = saveError?.retryable ?? true;
+    const signInFixesIt = saveError?.kind === 'auth' && onSignIn !== undefined;
     return (
-      <div className="changes changes--error">
-        <span className="changes__dot" aria-hidden="true" /> Save failed — retrying
-        <button type="button" className="changes__save" onClick={onSaveNow}>
-          Save now
-        </button>
+      <div className="changes changes--error" role="status" title={saveError?.hint}>
+        <span className="changes__dot" aria-hidden="true" />
+        <span>
+          Save failed{saveError ? ` — ${summarizeHostError(saveError)}` : ''}
+          {retryable ? ', retrying' : ''}
+        </span>
+        {signInFixesIt ? (
+          <button type="button" className="changes__save changes__save--primary" onClick={onSignIn}>
+            Sign in again
+          </button>
+        ) : (
+          <button type="button" className="changes__save" onClick={onSaveNow}>
+            Save now
+          </button>
+        )}
+        {onShowDiagnostics ? (
+          <button type="button" className="changes__save" onClick={onShowDiagnostics}>
+            Details
+          </button>
+        ) : null}
       </div>
     );
   }

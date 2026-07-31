@@ -34,10 +34,39 @@ export interface GiteaClientOptions {
 
 interface GiteaError extends Error {
   status: number;
+  /** Octokit-shaped, so `describeHostError` reads status/headers the same way for every host. */
+  response?: { status: number; headers: Headers; data?: unknown };
 }
 
 function giteaError(status: number, message: string): GiteaError {
   return Object.assign(new Error(message), { status });
+}
+
+/**
+ * Build the thrown error for a non-2xx response, carrying the server's own explanation
+ * (Gitea answers with `{ message }`) and the response headers. Without the body a failed
+ * save can only ever be reported as a bare status code — see `describeHostError`.
+ */
+async function giteaResponseError(
+  method: string,
+  path: string,
+  res: Response,
+): Promise<GiteaError> {
+  const body = await res.text().catch(() => '');
+  let detail = body.slice(0, 300);
+  try {
+    const parsed: unknown = JSON.parse(body);
+    const message = (parsed as { message?: unknown })?.message;
+    if (typeof message === 'string' && message) detail = message;
+  } catch {
+    // Not JSON (an HTML error page from a proxy) — the truncated text is the detail.
+  }
+  const error = giteaError(
+    res.status,
+    `Gitea ${method} ${path} -> ${res.status}${detail ? `: ${detail}` : ''}`,
+  );
+  error.response = { status: res.status, headers: res.headers, data: { message: detail } };
+  return error;
 }
 
 function isStatus(err: unknown, status: number): boolean {
@@ -128,10 +157,7 @@ export class GiteaClient implements HostProvider {
     };
     const res = await this.fetchImpl(`${this.apiRoot}${path}`, { ...init, headers });
     if (!res.ok) {
-      throw giteaError(
-        res.status,
-        `Gitea ${init?.method ?? 'GET'} ${path} -> ${res.status}`,
-      );
+      throw await giteaResponseError(init?.method ?? 'GET', path, res);
     }
     return res;
   }

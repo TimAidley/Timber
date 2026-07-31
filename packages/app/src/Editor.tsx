@@ -50,6 +50,8 @@ import {
 } from './state/layout.js';
 import { PublishDialog } from './components/PublishDialog.js';
 import { ChangesPanel, type ChangeEntry } from './components/ChangesPanel.js';
+import { DiagnosticsPanel } from './components/DiagnosticsPanel.js';
+import { diagnostics } from './state/diagnostics.js';
 import { kindOf } from './advanced/loadAdvancedFiles.js';
 import { objectChangeState, summarizeChanges } from './state/changes.js';
 import { useDeployPoll } from './state/useDeployPoll.js';
@@ -89,7 +91,17 @@ interface EditState {
  * body (Milkdown), see live preview + validation. Persistence to the WIP branch is
  * layered on in Slice 5a's autosave step; here edits live in memory.
  */
-export function Editor({ session }: { session: RepoSession }): React.JSX.Element {
+export function Editor({
+  session,
+  onReauth,
+}: {
+  session: RepoSession;
+  /**
+   * Drop the current credentials and return to sign-in. The header offers this when a
+   * save fails with an expired/revoked session — the one failure a retry can never fix.
+   */
+  onReauth?: (() => void) | undefined;
+}): React.JSX.Element {
   const { model } = session;
   // Stop a stray Backspace / Back from navigating away and losing unsaved edits.
   useBackNavigationGuard();
@@ -119,7 +131,11 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
       .then((v) => {
         if (!cancelled) setRepoVisibility(v);
       })
-      .catch(() => undefined);
+      .catch((err: unknown) => {
+        // Non-fatal — the readout stays conservative — but it's a host call failing,
+        // which is worth seeing next to a failing save.
+        diagnostics.record('warn', 'host', 'could not read repo visibility', err);
+      });
     return () => {
       cancelled = true;
     };
@@ -236,6 +252,8 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
   const [baseSha, setBaseSha] = useState(session.baseSha);
   // Header changes panel (the "N changes" dropdown).
   const [showChanges, setShowChanges] = useState(false);
+  // Diagnostics panel (the log behind "Save failed — <reason>"), same header anchor.
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
 
   // The Publish button's morph state (idle → publishing → building → done/failed) and,
   // for the deploy poll, the created-time of the newest run seen *before* we publish —
@@ -308,7 +326,7 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
       await session.client.deploy?.triggerDeploy(session.defaultBranch);
       setUpdateArmed(true);
     } catch (err) {
-      console.warn('[timber] editor update failed to dispatch', err);
+      diagnostics.error('update', 'editor update failed to dispatch', err);
       setUpdatePhase('failed');
     }
   }
@@ -338,8 +356,11 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
             .map((c) => c.path),
         ),
       );
-    } catch {
-      // WIP branch may not exist yet (nothing saved) — nothing published-pending.
+    } catch (err) {
+      // Usually benign: the WIP branch doesn't exist yet (nothing saved), so there's
+      // nothing published-pending. But the same catch hides a real host failure, which
+      // would quietly zero the change counts — so record it either way, at `warn`.
+      diagnostics.record('warn', 'changes', 'could not compare branches for the change counts', err);
       setSavedPaths(new Set());
       setAddedIndexPaths(new Set());
     } finally {
@@ -454,7 +475,11 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
           }
         }
       })
-      .catch(() => undefined);
+      .catch((err: unknown) => {
+        // Draft recovery failing is invisible by design (the branch copy still loads),
+        // but it means local work wasn't restored — never let that pass unrecorded.
+        diagnostics.record('warn', 'drafts', 'local draft recovery failed', err);
+      });
     return () => {
       cancelled = true;
     };
@@ -710,8 +735,10 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
           session.wipBranch,
         );
         bundleChanges = changed.filter((c) => c.path.startsWith(`${bundleDir}/`));
-      } catch {
+      } catch (err) {
         // No WIP branch yet → nothing committed to revert; only local edits to drop.
+        // A *real* failure here silently narrows the discard, so record it.
+        diagnostics.record('warn', 'discard', 'could not list the bundle’s committed changes', err);
       }
 
       // Is there a published version to revert to?
@@ -778,7 +805,7 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
       void draftStore.current?.delete(repoKey, target.path);
       await refreshSaved();
     } catch (err) {
-      console.warn('[timber] discard changes failed', err);
+      diagnostics.error('discard', 'discard changes failed', err);
       await refreshSaved(); // resync the badges to the true branch state
     } finally {
       setDiscarding(false);
@@ -984,7 +1011,7 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
       setDeploySince(latest?.createdAt);
       await session.client.deploy?.triggerDeploy(session.defaultBranch);
     } catch (err) {
-      console.warn('[timber] deploy retry failed to dispatch', err);
+      diagnostics.error('deploy', 'deploy retry failed to dispatch', err);
       setPublishPhase('failed');
     }
   }
@@ -1435,6 +1462,12 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
               device={deviceCount}
               syncState={autosave.syncState}
               onSaveNow={autosave.saveNow}
+              saveError={autosave.lastError}
+              onShowDiagnostics={() => {
+                setShowChanges(false);
+                setShowDiagnostics((open) => !open);
+              }}
+              onSignIn={onReauth}
               onToggle={
                 hasChanges
                   ? () => {
@@ -1457,6 +1490,18 @@ export function Editor({ session }: { session: RepoSession }): React.JSX.Element
                 headRef={session.wipBranch}
                 bustKey={String(saveSeq)}
                 onClose={() => setShowChanges(false)}
+              />
+            ) : null}
+            {showDiagnostics ? (
+              <DiagnosticsPanel
+                onClose={() => setShowDiagnostics(false)}
+                header={{
+                  repo: `${repoConfig.owner}/${repoConfig.repo}`,
+                  branch: session.wipBranch,
+                  loadedRef: session.loadedRef,
+                  timber: buildInfo.sha ?? 'unknown',
+                  userAgent: navigator.userAgent,
+                }}
               />
             ) : null}
           </div>

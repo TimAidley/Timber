@@ -5,6 +5,7 @@ import { getStoredToken, setStoredToken, clearStoredToken } from './host/token.j
 import * as oauth from './host/oauth.js';
 import * as device from './host/deviceFlow.js';
 import { loadRepoSession, type RepoSession } from './state/repoSession.js';
+import { diagnostics, installDiagnosticsHandle } from './state/diagnostics.js';
 import { TokenGate } from './components/TokenGate.js';
 import { SignIn } from './components/SignIn.js';
 import { DeviceSignIn } from './components/DeviceSignIn.js';
@@ -43,6 +44,7 @@ export function App(): React.JSX.Element {
         if (!cancelled && handled) setAuthed(true);
       })
       .catch((e: unknown) => {
+        diagnostics.error('auth', 'completing the OAuth sign-in failed', e);
         if (!cancelled) setAuthError(e instanceof Error ? e.message : String(e));
       })
       .finally(() => {
@@ -63,7 +65,8 @@ export function App(): React.JSX.Element {
         if (!cancelled) setSession(s);
       })
       .catch((e: unknown) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+        const info = diagnostics.error('load', 'loading the repo session failed', e);
+        if (!cancelled) setError(`${info.message}${info.hint ? ` — ${info.hint}` : ''}`);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -73,7 +76,12 @@ export function App(): React.JSX.Element {
     };
   }, [authed]);
 
+  // Expose the diagnostics log on `window` for console access in a production build,
+  // where the panel may not be open when the interesting failure happens.
+  useEffect(() => installDiagnosticsHandle(), []);
+
   function signOut(): void {
+    diagnostics.info('auth', `signing out (${authMode})`);
     if (authMode === 'oauth') oauth.signOut();
     else if (authMode === 'device') device.signOut();
     else clearStoredToken();
@@ -133,5 +141,8 @@ export function App(): React.JSX.Element {
     );
   }
 
-  return <Editor session={session} />;
+  // `signOut` doubles as the re-auth path: when a save fails because the session
+  // expired, the editor offers "Sign in again", which drops the dead credentials and
+  // returns here — the sign-in screen — rather than retrying a doomed commit forever.
+  return <Editor session={session} onReauth={signOut} />;
 }
