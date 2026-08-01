@@ -53,6 +53,9 @@ and `*_wip`.
 - **Fields are schema-defined.** Check `config/schemas/<type>.yml` before inventing a
   front-matter key. Undeclared keys pass through rather than erroring, so a typo fails
   silently — it just never renders.
+- **`<!--more-->` ends the excerpt.** Listing pages show the first paragraph of a post
+  unless the body carries that marker, in which case they show everything before it. It
+  renders as nothing. Add one when a post's opening should be more than one paragraph.
 - **Don't commit built HTML.** There is no `_site/` in git; the Action builds it.
 - **Don't edit `themes/<name>/` to change content**, or `content/` to change layout. The
   theme is Liquid templates + CSS; the content is data.

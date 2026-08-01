@@ -259,6 +259,16 @@ Cross-cutting things and every file they touch:
   `pagination.liquid` pager + `.listing`/`.pagination` in `theme.css`) and
   `docs/pagination.md`. Change the URL shape or the paginator's keys → update the theme,
   both callers, the docs, and SPEC §13 together.
+- **Listing excerpts** (SPEC §6 → Collections in templates) → the split + render live in
+  `@timber/generator` (`excerpt.ts`: `splitExcerpt` cuts the Markdown source at `<!--more-->`
+  or the first paragraph, `renderExcerpt` runs the prefix through the normal pipeline,
+  `rebaseHtml` re-points relative refs at the object's own URL). `@timber/content`
+  (`collections.ts` `attachExcerpts`) puts `excerpt`/`truncated` on each entry — it is
+  **async**, unlike `assembleCollections`, and takes the site's `basePath`. **Both callers
+  must call it right after assembling** — `packages/cli/src/build.node.ts` and
+  `packages/app/src/preview/renderSitePage.ts` — or the preview and the build disagree about
+  what a listing shows. Change the cut rule → update both callers, `site-template/AUTHORING.md`
+  (authors need to know the marker) and SPEC §6 together.
 - **Multilingual / i18n** (SPEC §5 → Multilingual) → the model side is `@timber/content`
   (`assemble.ts` lang/path parsing + translation index, `references.ts` `urlFor`/
   `translationsOf`, `collections.ts` per-entry `lang`, `seo.ts` `hreflangAlternates`);

@@ -327,7 +327,10 @@ describe('renderSitePage', () => {
     expect(html).toContain('>Post Three</a>');
     expect(html).toContain('>Post Two</a>');
     expect(html).not.toContain('Post One');
-    expect(html).toContain('<p class="listing__excerpt">Second.</p>');
+    // The listing shows each post's own opening (SPEC §6), not its meta description —
+    // and the preview must agree with the build about that.
+    expect(html).toContain('<div class="listing__excerpt"><p>Two.</p>');
+    expect(html).not.toContain('Second.');
 
     // The pager, rendered through the theme's own `{% render 'pagination' %}` partial.
     expect(html).toContain('<nav class="pagination" aria-label="Pagination">');

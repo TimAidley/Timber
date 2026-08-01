@@ -106,6 +106,28 @@ The body starts here, after the blank line.
 - **Don't hand-wrap long values.** Let `timber fmt` decide where lines break, or your file
   won't match what the editor writes.
 
+## Where a post's excerpt ends
+
+A listing page — a blog home page, say — shows the *opening* of each post rather than the
+whole thing. By default that's the **first paragraph**. To show more than that, put an
+explicit marker where you want the cut:
+
+```markdown
+The opening of the post, which is what the home page shows.
+
+It can be several paragraphs, and can include an image.
+
+<!--more-->
+
+The rest of the post, which only appears on the post's own page.
+```
+
+`<!--more-->` is the same marker Hugo, Jekyll and WordPress use, and it renders as nothing
+— it exists only to mark the cut.
+
+Themes show a "Read more" link only when there is actually more to read, so a short post
+whose whole body fits in the excerpt renders complete, with no link.
+
 ## Images in the body
 
 Use the `figure` directive rather than a bare Markdown image when you want a caption or a

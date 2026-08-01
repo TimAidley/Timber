@@ -7,6 +7,10 @@
  */
 export { renderPage } from './render.js';
 export { renderMarkdown } from './markdown.js';
+// Listing-page excerpts (SPEC §6): a theme can't reach another object's body, so the
+// "opening of each post" a blog home page shows is computed here and carried on
+// `collections`. See @timber/content's `attachExcerpts`.
+export { renderExcerpt, splitExcerpt, rebaseHtml } from './excerpt.js';
 export { parseFrontMatter } from './frontmatter.js';
 // The on-disk `index.md` format (SPEC §4). Any producer of content — the editor, an
 // importer, a migration script — must write through these so it matches what the editor

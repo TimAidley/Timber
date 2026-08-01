@@ -132,6 +132,19 @@ body {
   color: var(--muted);
 }
 
+/* An excerpt is rendered Markdown, so it arrives as its own block elements. */
+.listing__excerpt > :first-child {
+  margin-top: 0;
+}
+
+.listing__excerpt > :last-child {
+  margin-bottom: 0;
+}
+
+.listing__more {
+  font-size: 0.9rem;
+}
+
 .pagination {
   display: flex;
   align-items: center;

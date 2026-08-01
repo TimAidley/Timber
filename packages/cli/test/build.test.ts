@@ -446,7 +446,9 @@ describe('buildSite', () => {
       expect(one).toContain('<h1>Blog</h1>');
       expect(one).toContain('class="listing__link"');
       expect(one).toContain('>Post 3</a>');
-      expect(one).toContain('<p class="listing__excerpt">About post 3.</p>');
+      // The listing shows the post's own opening (SPEC §6), not its meta description.
+      expect(one).toContain('<div class="listing__excerpt"><p>Body 3.</p>');
+      expect(one).not.toContain('About post 3.');
       expect(one).toContain('<nav class="pagination" aria-label="Pagination">');
       expect(one).toContain('aria-current="page"');
       expect(one).toContain('Next →');

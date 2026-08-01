@@ -1,13 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { assembleCollections, urlFor } from '../src/index.js';
-import type {
-  ContentModel,
-  ContentObject,
-  ContentTypeSchema,
-} from '../src/types.js';
+import { SafeHtml } from '@timber/generator';
+import { assembleCollections, attachExcerpts, urlFor } from '../src/index.js';
+import type { ContentModel, ContentObject, ContentTypeSchema } from '../src/types.js';
 
 /** Minimal collection-type schema with the given fields. */
-function schema(name: string, fields: ContentTypeSchema['fields'] = {}): ContentTypeSchema {
+function schema(
+  name: string,
+  fields: ContentTypeSchema['fields'] = {},
+): ContentTypeSchema {
   return { name, kind: 'collection', fields };
 }
 
@@ -30,10 +30,7 @@ function obj(
   };
 }
 
-function model(
-  schemas: ContentTypeSchema[],
-  objects: ContentObject[],
-): ContentModel {
+function model(schemas: ContentTypeSchema[], objects: ContentObject[]): ContentModel {
   return {
     schemas: new Map(schemas.map((s) => [s.name, s])),
     objects,
@@ -133,5 +130,74 @@ describe('assembleCollections', () => {
     const bySlug = Object.fromEntries(collections.pages.map((p) => [p.slug, p.url]));
     expect(bySlug.home).toBe('/');
     expect(bySlug.about).toBe('/pages/about/');
+  });
+});
+
+describe('attachExcerpts', () => {
+  /** `obj` with a Markdown body, which excerpts are computed from. */
+  function withBody(type: string, slug: string, body: string): ContentObject {
+    return { ...obj(type, slug, { title: slug }), body };
+  }
+
+  it('attaches the rendered excerpt and truncation flag', async () => {
+    const m = model(
+      [schema('posts')],
+      [withBody('posts', 'long', 'The opening.\n\n<!--more-->\n\nThe rest.\n')],
+    );
+    const collections = assembleCollections(m, urlFor);
+    await attachExcerpts(m, collections);
+
+    const entry = collections.posts[0]!;
+    expect(String(entry.excerpt)).toContain('The opening.');
+    expect(String(entry.excerpt)).not.toContain('The rest.');
+    expect(entry.truncated).toBe(true);
+  });
+
+  it('marks a post whose body is entirely its excerpt as untruncated', async () => {
+    const m = model([schema('posts')], [withBody('posts', 'short', 'All of it.\n')]);
+    const collections = assembleCollections(m, urlFor);
+    await attachExcerpts(m, collections);
+
+    expect(collections.posts[0]!.truncated).toBe(false);
+  });
+
+  it('leaves a body-less object without an excerpt at all', async () => {
+    // `{% if post.excerpt %}` must distinguish "no body" from "an empty one", so a
+    // theme can fall back to a description field rather than rendering a blank card.
+    const m = model([schema('projects')], [withBody('projects', 'thing', '')]);
+    const collections = assembleCollections(m, urlFor);
+    await attachExcerpts(m, collections);
+
+    expect(collections.projects[0]!.excerpt).toBeUndefined();
+    expect(collections.projects[0]!.truncated).toBeUndefined();
+  });
+
+  it('resolves colocated images against the object URL, base path included', async () => {
+    // The excerpt is shown at some *other* URL (a listing), where a bare filename would
+    // 404. This is the whole reason excerpts cannot just be raw rendered Markdown.
+    const m = model(
+      [schema('posts')],
+      [withBody('posts', 'hello', '![Alt](photo.jpg)\n')],
+    );
+    const collections = assembleCollections(m, urlFor);
+    await attachExcerpts(m, collections, '/repo');
+
+    expect(String(collections.posts[0]!.excerpt)).toContain(
+      'src="/repo/posts/hello/photo.jpg"',
+    );
+  });
+
+  it('marks the excerpt as trusted HTML so a template emits it unescaped', async () => {
+    const m = model(
+      [schema('posts')],
+      [withBody('posts', 'hello', 'A **bold** thing.\n')],
+    );
+    const collections = assembleCollections(m, urlFor);
+    await attachExcerpts(m, collections);
+
+    // Auto-escaping is on for every other output; the excerpt comes from the same
+    // sanitising pipeline as `{{ content }}`, so it carries the same marker.
+    expect(collections.posts[0]!.excerpt).toBeInstanceOf(SafeHtml);
+    expect(String(collections.posts[0]!.excerpt)).toContain('<strong>bold</strong>');
   });
 });

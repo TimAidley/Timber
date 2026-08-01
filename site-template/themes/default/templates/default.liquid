@@ -55,7 +55,13 @@
         {% for item in paginator.items %}
         <li class="listing__item">
           <a class="listing__link" href="{{ site.basePath }}{{ item.url }}">{{ item.title | default: item.slug }}</a>
-          {% if item.description %}<p class="listing__excerpt">{{ item.description }}</p>{% endif %}
+          {% comment %}
+            The opening of the item itself (SPEC §6) — its body up to `<!--more-->`, or
+            its first paragraph. `description` is the fallback for a body-less type.
+          {% endcomment %}
+          {% if item.excerpt %}<div class="listing__excerpt">{{ item.excerpt }}</div>
+          {% elsif item.description %}<p class="listing__excerpt">{{ item.description }}</p>{% endif %}
+          {% if item.truncated %}<a class="listing__more" href="{{ site.basePath }}{{ item.url }}">Read more</a>{% endif %}
         </li>
         {% endfor %}
       </ul>

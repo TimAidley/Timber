@@ -2,6 +2,7 @@ import { renderPage, buildClock, type FrontMatter } from '@timber/generator';
 import { themeRuntime } from '@timber/eleventy-compat';
 import {
   assembleCollections,
+  attachExcerpts,
   siteContext,
   pageSeo,
   hreflangAlternates,
@@ -89,6 +90,11 @@ export async function renderSitePage(input: RenderSitePageInput): Promise<string
   // Per-type collections for listing loops (SPEC §6), assembled exactly as the CLI build
   // does — same `effectiveUrl`, same @timber/content helper — so preview ≡ build.
   const collections = assembleCollections(model, effectiveUrl);
+  await attachExcerpts(
+    model,
+    collections,
+    typeof site.basePath === 'string' ? site.basePath : '',
+  );
 
   // Preview the *live* edits: SEO (title/description) and URL reflect the current form.
   const liveObject: ContentObject = { ...object, data };

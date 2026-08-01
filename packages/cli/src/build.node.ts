@@ -7,6 +7,7 @@ import {
   aliasUrls,
   assembleCollections,
   assembleContent,
+  attachExcerpts,
   loadSchemas,
   loadNavigation,
   buildRobots,
@@ -179,6 +180,13 @@ export async function buildSite(repoDir: string, outDir: string): Promise<BuildR
   // time-relative content ("upcoming") stays correct without runtime logic.
   const clock = buildClock(new Date());
   const collections = assembleCollections(model, effectiveUrl);
+  // Listing excerpts (SPEC §6): a listing template sees only other objects' front matter,
+  // so the opening of each post is rendered here and carried on the entries.
+  await attachExcerpts(
+    model,
+    collections,
+    typeof site.basePath === 'string' ? site.basePath : '',
+  );
 
   let pages = 0;
   let drafts = 0;

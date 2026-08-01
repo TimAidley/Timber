@@ -17,7 +17,11 @@ export {
   translationsOf,
 } from './references.js';
 export type { Translation } from './references.js';
-export { assembleCollections, withCollectionAliases } from './collections.js';
+export {
+  assembleCollections,
+  attachExcerpts,
+  withCollectionAliases,
+} from './collections.js';
 export type { Collections, CollectionEntry } from './collections.js';
 export { slugify, uniqueSlug } from './identity.js';
 export { redirectStubHtml, aliasUrls } from './redirects.js';
