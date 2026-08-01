@@ -7,7 +7,12 @@ name: Setup OAuth broker
 #   3. kicks off a site deploy so the /edit/ editor goes live.
 #
 # Prerequisites (repo Settings → Secrets and variables → Actions):
-#   Secrets:   CLOUDFLARE_API_TOKEN   (Workers Scripts: Edit)
+#   Secrets:   CLOUDFLARE_API_TOKEN   (Account · Workers Scripts: Edit, plus Account ·
+#                                     Account Settings: Read to read your workers.dev
+#                                     subdomain. If you ALSO deploy the site to
+#                                     Cloudflare Pages, deploy.yml reads this same
+#                                     secret — add Cloudflare Pages: Edit too, or one
+#                                     of the two workflows fails on authentication.)
 #              CLOUDFLARE_ACCOUNT_ID
 #              GH_OAUTH_CLIENT_SECRET (from your GitHub App — or a classic OAuth App)
 #   Variables: GH_OAUTH_CLIENT_ID     (from your GitHub App — public)

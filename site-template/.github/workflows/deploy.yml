@@ -20,6 +20,8 @@ name: Build & deploy site
 #     custom domain), editor at /edit/. One-time:
 #       - Secrets CLOUDFLARE_API_TOKEN (a custom API token with Account · Cloudflare Pages ·
 #         Edit + Account · Account Settings · Read) + CLOUDFLARE_ACCOUNT_ID. See INSTALL.md.
+#         NOTE: setup-broker.yml reads the SAME secret and needs Account · Workers Scripts ·
+#         Edit. If you use both, give the one token all three permissions.
 #       - Optional Variable TIMBER_CF_PAGES_PROJECT (the Pages project name; defaults to the
 #         repo name). The job creates the project on first run.
 #       - Set content/settings baseUrl to your Pages/custom-domain ROOT (no /<repo>/ path),

@@ -172,6 +172,9 @@ The broker is a tiny Cloudflare **Worker**. The free plan is plenty.
    add these two **Permissions** rows:
    - **Account** · **Workers Scripts** · **Edit** — deploys the Worker and sets its secret.
    - **Account** · **Account Settings** · **Read** — reads your **workers.dev** subdomain.
+   - **Account** · **Cloudflare Pages** · **Edit** — *only if* you also deploy the site to
+     Cloudflare Pages (see "Alternative: deploy to Cloudflare Pages"). Both workflows read
+     this same `CLOUDFLARE_API_TOKEN` secret, so one token has to cover both jobs.
 
    Under **Account Resources**, choose **Include** → *your account*. Leave **Zone
    Resources** untouched (a workers.dev deploy needs no zone). **Continue to summary** →
@@ -315,6 +318,11 @@ editor's publish status keeps working. To switch:
      Pages · Edit** and **Account · Account Settings · Read**, scoped under **Account
      Resources → Include** → *your account*. Secret **`CLOUDFLARE_ACCOUNT_ID`** (Workers &
      Pages overview, right-hand side).
+     > **If you also use the GitHub App sign-in (3b), this is the same secret both
+     > workflows read** — so the one token needs the union of the permissions: add
+     > **Account · Workers Scripts · Edit** as well. A Pages-only token deploys the site
+     > fine and then fails "Setup OAuth broker" with `Authentication error [code: 10000]`
+     > while uploading the Worker's secrets.
    - Optional Variable **`TIMBER_CF_PAGES_PROJECT`** — the Pages project name (defaults to the
      repo name; the workflow creates it on the first run).
 3. **Base URL.** Set `baseUrl` in `content/settings/index.md` to your Pages **root** —
