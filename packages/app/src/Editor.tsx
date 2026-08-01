@@ -22,7 +22,7 @@ import { useAutosave } from './state/autosave.js';
 import { LocalDraftStore } from './state/localDraft.js';
 import { reassembleDocument } from './content/document.js';
 import { mergeEditIntoObjects } from './content/editState.js';
-import { livePageUrl } from './content/liveUrl.js';
+import { livePageUrl, siteHomeUrl } from './content/liveUrl.js';
 import { repoConfig } from './host/config.js';
 import { buildInfo, canCheckForUpdate } from './host/buildInfo.js';
 import { getToken } from './host/auth.js';
@@ -948,6 +948,10 @@ export function Editor({
     () => (selected && schema ? livePageUrl(workingModel, selected, schema) : undefined),
     [workingModel, selected, schema],
   );
+  // The site's own front door, for the banner link. Site-wide, so it sits in the banner
+  // (present in both Content and Advanced) rather than in the per-page header, and it
+  // survives having no page selected at all.
+  const siteUrl = useMemo(() => siteHomeUrl(workingModel), [workingModel]);
   // Whether the selected type carries a Markdown body. A config singleton like
   // `settings` sets `hasBody: false`; the generator strips its body on assemble, so
   // showing the body editor would only invite edits that get silently discarded.
@@ -1532,6 +1536,21 @@ export function Editor({
           </div>
         </div>
         <div className="app__banner-right">
+          {siteUrl ? (
+            <a
+              className="app__site-link"
+              href={siteUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              // The label is hidden on a narrow banner, so name the link explicitly —
+              // the bare ↗ glyph is decorative and would leave it nameless.
+              aria-label="View site"
+              title={`Open the live site in a new tab — ${siteUrl}`}
+            >
+              <span className="app__site-link-label">View site</span>
+              <span aria-hidden="true">↗</span>
+            </a>
+          ) : null}
           <PreviewControls
             mode={layout.previewMode}
             effectiveMode={effectivePreviewMode}

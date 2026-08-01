@@ -469,6 +469,31 @@ body {
   background: var(--accent-soft);
 }
 
+/* "View site ↗" — the banner's site-wide link to the deployed website (SPEC §8). It sits
+   with the other banner actions and is styled like the sidebar toggle: a quiet outline
+   that picks up the accent on hover, so it never competes with Publish. */
+.app__site-link {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-muted);
+  border-radius: var(--radius);
+  padding: 0.35rem 0.7rem;
+  font-size: 0.8rem;
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: border-color var(--ease), color var(--ease), background var(--ease);
+}
+
+.app__site-link:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .app__repo--banner {
   font-family: var(--font-mono);
   font-size: 0.75rem;
@@ -619,6 +644,17 @@ body {
 
   .app__repo--banner {
     display: none;
+  }
+
+  /* Narrow banner: the site link keeps its ↗ but drops the words (it stays named for
+     assistive tech via aria-label), so Publish keeps the room it needs. */
+  .app__site-link-label {
+    display: none;
+  }
+
+  .app__site-link {
+    padding: 0.35rem 0.6rem;
+    font-size: 0.95rem;
   }
 
   .app__banner {

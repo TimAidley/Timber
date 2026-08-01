@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { ContentModel, ContentObject, ContentTypeSchema } from '@timber/content';
-import { livePageUrl } from '../src/content/liveUrl.js';
+import { livePageUrl, siteHomeUrl } from '../src/content/liveUrl.js';
 
 /**
- * The header's "View live" link must point where the *build* actually writes the page —
- * same `baseUrl` + routing (homepage-at-root, language prefix) — or not be offered at all.
+ * The editor's links to the deployed site — the banner's site-wide one and the per-page
+ * "View live" — must point where the *build* actually writes things (same `baseUrl` +
+ * routing: homepage-at-root, language prefix), or not be offered at all.
  */
 
 const pages: ContentTypeSchema = {
@@ -107,5 +108,28 @@ describe('livePageUrl', () => {
     for (const baseUrl of ['javascript:alert(1)', 'data:text/html,<b>x', 'not a url']) {
       expect(livePageUrl(model({ baseUrl }, about), about, pages)).toBeUndefined();
     }
+  });
+});
+
+describe('siteHomeUrl', () => {
+  it('is the site root, with exactly one trailing slash', () => {
+    expect(siteHomeUrl(model({ baseUrl: 'https://example.test' }))).toBe(
+      'https://example.test/',
+    );
+    expect(siteHomeUrl(model({ baseUrl: 'https://example.test/' }))).toBe(
+      'https://example.test/',
+    );
+  });
+
+  it('keeps a project-Pages base path', () => {
+    expect(siteHomeUrl(model({ baseUrl: 'https://example.github.io/mysite' }))).toBe(
+      'https://example.github.io/mysite/',
+    );
+  });
+
+  it('offers nothing without a usable baseUrl', () => {
+    expect(siteHomeUrl(model({ title: 'No base URL' }))).toBeUndefined();
+    expect(siteHomeUrl(model({ baseUrl: 'javascript:alert(1)' }))).toBeUndefined();
+    expect(siteHomeUrl(model({ baseUrl: 'not a url' }))).toBeUndefined();
   });
 });
