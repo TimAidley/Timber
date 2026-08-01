@@ -21,6 +21,13 @@ import { parseFrontMatter, type TemplateMap } from '@timber/generator';
  *      it's just no longer escaped twice. (We keep auto-escape ON rather than disable it,
  *      because disabling Timber's safe default for imported themes would reintroduce the
  *      injection risk §6 removes.)
+ *   5. `| markdownify` → `| markdownify_block` — both render Markdown, but Jekyll's filter is
+ *      block-level while Timber's `markdownify` renders a lone paragraph inline (the common
+ *      case there being a one-line settings field). A Jekyll theme calls it on a page-shaped
+ *      value — a comment body, an excerpt — and expects the `<p>`, so point it at Timber's
+ *      block-level form. Rewriting at import (rather than overriding the filter for Jekyll
+ *      themes) is what keeps `registerJekyllCompat` purely additive: it registers for native
+ *      themes too, so an override there would change `markdownify` for every site.
  */
 
 export interface ImportOptions {
@@ -82,7 +89,7 @@ function convertIncludes(body: string): string {
   );
 }
 
-/** Import one Jekyll template into Timber-compatible Liquid (see the four rewrites above). */
+/** Import one Jekyll template into Timber-compatible Liquid (see the five rewrites above). */
 export function importJekyllTemplate(source: string, opts: ImportOptions = {}): string {
   const { layout, body: raw } = splitFrontMatter(source);
   // (2) + (3): include syntax and the include.* namespace, on every template.
@@ -92,6 +99,9 @@ export function importJekyllTemplate(source: string, opts: ImportOptions = {}): 
   // in an HTML template each would double-escape. (`xml_escape` in a genuine feed.xml is a
   // non-issue: Timber defers RSS, so those files aren't rendered here.)
   body = body.replace(/\s*\|\s*(escape|escape_once|xml_escape)\b/g, '');
+  // (5): Jekyll's `markdownify` is block-level; Timber's renders a lone paragraph inline.
+  // Point imported calls at the block-level form so a comment body or excerpt keeps its <p>.
+  body = body.replace(/\|(\s*)markdownify\b(?!_)/g, '|$1markdownify_block');
 
   if (layout) {
     // (1) child: its whole body becomes the `main` block of the named parent layout.

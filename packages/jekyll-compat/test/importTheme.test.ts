@@ -64,6 +64,22 @@ describe('importJekyllTemplate', () => {
     // a non-escape filter is untouched
     expect(importJekyllTemplate('{{ x | upcase }}')).toBe('{{ x | upcase }}');
   });
+
+  it('points markdownify at the block-level form Jekyll themes expect', () => {
+    // Jekyll's markdownify is block-level; Timber's renders a lone paragraph inline, so a
+    // ported comment body / excerpt would lose its <p> without this.
+    expect(importJekyllTemplate('{{ message | markdownify }}')).toBe(
+      '{{ message | markdownify_block }}',
+    );
+    expect(importJekyllTemplate('{{ x|markdownify }}')).toBe('{{ x|markdownify_block }}');
+    // chained after another filter, and re-running the import stays put (not _block_block)
+    expect(importJekyllTemplate('{{ x | strip | markdownify }}')).toBe(
+      '{{ x | strip | markdownify_block }}',
+    );
+    expect(importJekyllTemplate('{{ x | markdownify_block }}')).toBe(
+      '{{ x | markdownify_block }}',
+    );
+  });
 });
 
 describe('importJekyllTheme', () => {
