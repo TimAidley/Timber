@@ -41,8 +41,16 @@ jobs:
           ref: ${{ env.TIMBER_REF }}
           path: .timber
 
-      # ALLOWED_ORIGINS is the exact origin of your editor site (the editor is served at
-      # https://<owner>.github.io/<repo>/edit/, whose origin is https://<owner>.github.io).
+      # ALLOWED_ORIGINS is the exact origin your editor is served from — origin only, so no
+      # path and no trailing slash. It defaults to https://<owner>.github.io, which is right
+      # for a stock GitHub Pages site (the editor lives at /<repo>/edit/ under that origin).
+      #
+      # On a CUSTOM DOMAIN or Cloudflare Pages the editor is somewhere else, so set the repo
+      # Variable TIMBER_EDITOR_ORIGIN (e.g. https://www.example.com) and this uses it. That
+      # override has to live here rather than only in the Cloudflare dashboard: this workflow
+      # rewrites the variable on every run, so a dashboard-only edit is silently reverted the
+      # next time anyone runs Setup.
+      #
       # The Worker-side names are OAUTH_* (not GITHUB_*), which the broker reads directly;
       # the workflow env var can't use a GITHUB_ prefix (reserved by Actions) anyway.
       - name: Deploy the broker to Cloudflare
@@ -56,7 +64,7 @@ jobs:
           command: >-
             deploy
             --var OAUTH_CLIENT_ID:${{ vars.GH_OAUTH_CLIENT_ID }}
-            --var ALLOWED_ORIGINS:https://${{ github.repository_owner }}.github.io
+            --var ALLOWED_ORIGINS:${{ vars.TIMBER_EDITOR_ORIGIN || format('https://{0}.github.io', github.repository_owner) }}
         env:
           OAUTH_CLIENT_SECRET: ${{ secrets.GH_OAUTH_CLIENT_SECRET }}
 

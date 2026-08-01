@@ -83,9 +83,14 @@ The old `<you>.github.io/<repo>/` URL redirects to the new domain, so existing l
 working.
 
 > **If you use the GitHub App sign-in (3b), the editor URL changes too.** Update the App's
-> **Callback URL** to `https://<your-domain>/edit/`, and set the broker's `ALLOWED_ORIGINS`
-> to `https://<your-domain>` and re-run **Setup OAuth broker** — otherwise sign-in fails
-> with a `redirect_uri` mismatch or `origin_not_allowed`.
+> **Callback URL** to `https://<your-domain>/edit/`, add a repo **Variable**
+> `TIMBER_EDITOR_ORIGIN` = `https://<your-domain>` (origin only — no path, no trailing
+> slash), and re-run **Setup OAuth broker** so the Worker picks it up. Otherwise sign-in
+> fails with a `redirect_uri` mismatch or `origin_not_allowed`.
+>
+> Set the *variable* rather than editing `ALLOWED_ORIGINS` in the Cloudflare dashboard:
+> Setup rewrites that value on every run, so a dashboard-only edit is silently reverted
+> the next time it runs.
 
 ### 2.5 (Optional) Multiple languages
 Timber is single-language unless you opt in. To run the site in more than one language,
@@ -239,9 +244,11 @@ allows your `https://<you>.github.io` origin.
   Pages → Subdomain), then re-run "Setup OAuth broker."
 - **Sign-in `redirect_uri` mismatch** (redirect flow) → the App's callback must equal
   `https://<you>.github.io/<repo>/edit/` exactly (trailing slash, lowercase host).
-- **`origin_not_allowed` on sign-in** → the broker's allowed origin didn't match; it's
-  derived as `https://<you>.github.io`. On a **custom domain**, set the broker's
-  `ALLOWED_ORIGINS` to that origin (see `packages/oauth-broker/README.md`) and re-run Setup.
+- **`origin_not_allowed` on sign-in** → the broker's allowed origin didn't match the origin
+  the editor is served from. It defaults to `https://<you>.github.io`; on a **custom domain**
+  or Cloudflare Pages, set the repo Variable `TIMBER_EDITOR_ORIGIN` to the editor's origin
+  (scheme + host only) and re-run **Setup OAuth broker**. Editing `ALLOWED_ORIGINS` in the
+  Cloudflare dashboard works until the next Setup run overwrites it.
 - **Deploy fails at "Check out Timber"** → the `TimAidley/Timber` repo must be public.
 - **CSS/links 404 on the live site** → confirm `baseUrl` includes the `/<repo>` subpath (2.3).
 - **Pages 404 after a green deploy** → confirm **Settings → Pages → Source = GitHub Actions**
