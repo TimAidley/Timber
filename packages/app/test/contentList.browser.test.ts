@@ -68,6 +68,9 @@ afterEach(() => {
   root = null;
   host?.remove();
   host = null;
+  // Collapsed groups persist in localStorage, which a real browser keeps between
+  // specs — clear it so each test starts with every group expanded.
+  localStorage.removeItem('timber:contentList:collapsed');
 });
 
 async function waitFor<T>(fn: () => T | null | undefined, timeout = 4000): Promise<T> {
@@ -149,6 +152,72 @@ describe('ContentList (rendered)', () => {
     await tick();
     // descending
     expect(titlesIn(0)).toEqual(['Gala', 'Auction', 'Meetup']);
+  });
+});
+
+describe('ContentList (collapsible type groups)', () => {
+  const headingOf = (type: string): HTMLButtonElement =>
+    [...document.querySelectorAll<HTMLButtonElement>('.object-group__name')].find(
+      (b) => b.textContent?.trim().replace(/\d+$/, '').trim() === type,
+    )!;
+  const listCount = (): number =>
+    document.querySelectorAll('.object-group ul.object-list').length;
+
+  it('folds a group down to its heading when the heading is clicked, and unfolds it again', async () => {
+    mount();
+    await waitFor(() => document.querySelector('.object-group'));
+    expect(listCount()).toBe(2);
+
+    const events = headingOf('events');
+    expect(events.getAttribute('aria-expanded')).toBe('true');
+    events.click();
+    await tick();
+
+    // The heading stays (both groups still listed); only the events list is gone.
+    expect(groupNames()).toEqual(['events', 'pages']);
+    expect(headingOf('events').getAttribute('aria-expanded')).toBe('false');
+    const group = document.querySelectorAll('.object-group')[0];
+    expect(group?.querySelector('ul.object-list')).toBeNull();
+    expect(listCount()).toBe(1);
+    // A collapsed group also drops its sort control — the heading is all that's left.
+    expect(group?.querySelector('.object-group__sort')).toBeNull();
+
+    headingOf('events').click();
+    await tick();
+    expect(titlesIn(0)).toEqual(['Auction', 'Gala', 'Meetup']);
+  });
+
+  it('remembers the collapsed groups across a remount (persisted per device)', async () => {
+    mount();
+    await waitFor(() => document.querySelector('.object-group'));
+    headingOf('events').click();
+    await tick();
+
+    root!.unmount();
+    host!.remove();
+    mount();
+    await waitFor(() => document.querySelector('.object-group'));
+    expect(headingOf('events').getAttribute('aria-expanded')).toBe('false');
+    expect(headingOf('pages').getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('opens a collapsed group while a search is active, so matches can never hide', async () => {
+    mount();
+    const search = await waitFor(() =>
+      document.querySelector<HTMLInputElement>('.object-list__search-input'),
+    );
+    headingOf('events').click();
+    await tick();
+    expect(listCount()).toBe(1);
+
+    set(search, 'gala');
+    await tick();
+    expect(titlesIn(0)).toEqual(['Gala']);
+
+    // Clearing the search restores the fold — the stored preference was never touched.
+    set(search, '');
+    await tick();
+    expect(headingOf('events').getAttribute('aria-expanded')).toBe('false');
   });
 });
 

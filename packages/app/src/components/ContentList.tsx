@@ -17,6 +17,11 @@ import {
   type SortState,
   type TranslationCluster,
 } from '../content/contentList.js';
+import {
+  readCollapsedGroups,
+  toggleCollapsedGroup,
+  writeCollapsedGroups,
+} from '../content/collapsedGroups.js';
 
 interface ContentListProps {
   objects: ContentObject[];
@@ -100,7 +105,23 @@ export function ContentList({
   // listener closes it on an outside click or Escape; the control and its rows stopPropagation
   // so their own clicks don't immediately re-close it.
   const [openLangMenu, setOpenLangMenu] = useState<string | null>(null);
+  // Types the author has folded down to their heading, persisted per device so a long
+  // sidebar stays the shape they left it in.
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(readCollapsedGroups);
   const i18n = languages.length > 0;
+
+  // While a filter is active every group opens regardless of its stored state: a search
+  // that silently hid its matches inside a folded group would read as "no results". The
+  // stored preference is untouched, so clearing the filter restores the fold.
+  const filtering = query.trim() !== '' || incompleteOnly;
+  const isCollapsed = (type: string): boolean => !filtering && collapsed.has(type);
+  function toggleCollapsed(type: string): void {
+    setCollapsed((prev) => {
+      const next = toggleCollapsedGroup(prev, type);
+      writeCollapsedGroups(next);
+      return next;
+    });
+  }
 
   useEffect(() => {
     if (openLangMenu === null) return;
@@ -337,50 +358,68 @@ export function ContentList({
       {rendered.length === 0 ? (
         <p className="object-list__empty">{incompleteOnly ? 'Everything is translated.' : 'No matches.'}</p>
       ) : (
-        rendered.map((group) => (
-          <section className="object-group" key={group.type}>
-            <div className="object-group__head">
-              <span className="object-group__name">
-                {group.type}
-                <span className="object-group__count">{group.count}</span>
-              </span>
-              {group.objects.length > 1 ? (
-                <div className="object-group__sort">
-                  <label className="visually-hidden" htmlFor={`sort-${group.type}`}>
-                    Sort {group.type} by
-                  </label>
-                  <select
-                    id={`sort-${group.type}`}
-                    className="object-group__sort-key"
-                    value={group.sort.key}
-                    onChange={(e) => setSortKey(group.type, e.target.value)}
-                  >
-                    {sortOptions(group.schema).map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    className="object-group__sort-dir"
-                    onClick={() => toggleDir(group.type)}
-                    aria-label={group.sort.dir === 'asc' ? 'Sort ascending' : 'Sort descending'}
-                    title={group.sort.dir === 'asc' ? 'Ascending' : 'Descending'}
-                  >
-                    {group.sort.dir === 'asc' ? '▲' : '▼'}
-                  </button>
-                </div>
-              ) : null}
-            </div>
+        rendered.map((group) => {
+          const folded = isCollapsed(group.type);
+          const listId = `object-group-${group.type}`;
+          return (
+            <section
+              className={`object-group${folded ? ' is-collapsed' : ''}`}
+              key={group.type}
+            >
+              <div className="object-group__head">
+                <button
+                  type="button"
+                  className="object-group__name"
+                  aria-expanded={!folded}
+                  aria-controls={listId}
+                  onClick={() => toggleCollapsed(group.type)}
+                  title={folded ? `Expand ${group.type}` : `Collapse ${group.type}`}
+                >
+                  {group.type}
+                  <span className="object-group__count">{group.count}</span>
+                </button>
+                {!folded && group.objects.length > 1 ? (
+                  <div className="object-group__sort">
+                    <label className="visually-hidden" htmlFor={`sort-${group.type}`}>
+                      Sort {group.type} by
+                    </label>
+                    <select
+                      id={`sort-${group.type}`}
+                      className="object-group__sort-key"
+                      value={group.sort.key}
+                      onChange={(e) => setSortKey(group.type, e.target.value)}
+                    >
+                      {sortOptions(group.schema).map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="object-group__sort-dir"
+                      onClick={() => toggleDir(group.type)}
+                      aria-label={
+                        group.sort.dir === 'asc' ? 'Sort ascending' : 'Sort descending'
+                      }
+                      title={group.sort.dir === 'asc' ? 'Ascending' : 'Descending'}
+                    >
+                      {group.sort.dir === 'asc' ? '▲' : '▼'}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
 
-            <ul className="object-list">
-              {'clusters' in group
-                ? group.clusters.map((c) => clusterRow(c, group.sort))
-                : group.items.map((o) => objectRow(o, group.sort))}
-            </ul>
-          </section>
-        ))
+              {folded ? null : (
+                <ul className="object-list" id={listId}>
+                  {'clusters' in group
+                    ? group.clusters.map((c) => clusterRow(c, group.sort))
+                    : group.items.map((o) => objectRow(o, group.sort))}
+                </ul>
+              )}
+            </section>
+          );
+        })
       )}
     </>
   );

@@ -22,6 +22,7 @@ import { useAutosave } from './state/autosave.js';
 import { LocalDraftStore } from './state/localDraft.js';
 import { reassembleDocument } from './content/document.js';
 import { mergeEditIntoObjects } from './content/editState.js';
+import { livePageUrl } from './content/liveUrl.js';
 import { repoConfig } from './host/config.js';
 import { buildInfo, canCheckForUpdate } from './host/buildInfo.js';
 import { getToken } from './host/auth.js';
@@ -938,6 +939,15 @@ export function Editor({
   // Whether the selected type renders as a page — visibility (Draft/Public) only
   // applies to those; a config singleton (page: false) has no public presence.
   const isPageType = schema ? schema.page !== false : false;
+  // Where this page lives on the deployed site, for the header's "View live" link — the
+  // build's own routing (homepage-at-root, `urlFor`) composed onto the settings `baseUrl`.
+  // Undefined when there's no honest answer (no `baseUrl`, or a non-page type), and the
+  // link then simply isn't offered. Derived from `workingModel` so a rename or a settings
+  // edit moves the link in the same beat as the change.
+  const liveUrl = useMemo(
+    () => (selected && schema ? livePageUrl(workingModel, selected, schema) : undefined),
+    [workingModel, selected, schema],
+  );
   // Whether the selected type carries a Markdown body. A config singleton like
   // `settings` sets `hasBody: false`; the generator strips its body on assemble, so
   // showing the body editor would only invite edits that get silently discarded.
@@ -1278,6 +1288,21 @@ export function Editor({
             <code>{selected.path}</code>
           </div>
           <div className="editor-header__actions">
+            {liveUrl ? (
+              <a
+                className={`editor-header__live${edit.data.public === true ? '' : ' is-draft'}`}
+                href={liveUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={
+                  edit.data.public === true
+                    ? `Open the live page in a new tab — ${liveUrl}`
+                    : `Open where this page will live, in a new tab — it's a draft, so it isn't on the site yet (${liveUrl})`
+                }
+              >
+                View live <span aria-hidden="true">↗</span>
+              </a>
+            ) : null}
             {deviceOnlyPaths.has(selected.path) ? (
               <button
                 type="button"

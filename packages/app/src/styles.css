@@ -946,16 +946,51 @@ button.langmenu__row {
 }
 
 /* Darker and heavier than the item titles beneath it — the parent out-ranks its
-   children again, so the hierarchy reads the right way up. */
+   children again, so the hierarchy reads the right way up. It is also the group's fold
+   toggle (click the heading to collapse the type down to just this line), so it's a real
+   button: transparent, inheriting the heading's type, with a caret that points at what
+   it does. */
 .object-group__name {
   display: flex;
   align-items: center;
   gap: 0.4rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font-family: inherit;
   font-size: 0.74rem;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text);
+  transition: color var(--ease);
+}
+
+.object-group__name:hover {
+  color: var(--accent);
+}
+
+/* Purely decorative, so it's a pseudo-element: the heading's text stays just the type
+   name (for its accessible name, and for anything reading the DOM). */
+.object-group__name::before {
+  content: '▾';
+  display: inline-block;
+  font-size: 0.6rem;
+  line-height: 1;
+  color: var(--text-muted);
+  transition: transform var(--ease);
+}
+
+/* Collapsed: the caret points right (at the hidden list) and the head drops its rule and
+   gap, so a stack of folded types reads as a tidy list of headings, not empty boxes. */
+.object-group.is-collapsed .object-group__name::before {
+  transform: rotate(-90deg);
+}
+
+.object-group.is-collapsed .object-group__head {
+  margin-bottom: 0;
+  border-bottom-color: transparent;
 }
 
 .object-group__count {
@@ -2438,6 +2473,34 @@ button.langmenu__row {
   border-color: color-mix(in srgb, var(--success) 55%, transparent);
   color: var(--success);
   background: var(--success-soft);
+}
+
+/* "View live ↗" — a real link (new tab) to this page on the deployed site. A quiet
+   sibling of the other header buttons; the draft variant is dashed, since a draft's URL
+   is where the page *will* live rather than where it is. */
+.editor-header__live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  font: inherit;
+  font-size: 0.8rem;
+  text-decoration: none;
+  white-space: nowrap;
+  background: var(--surface);
+  color: var(--text-muted);
+  transition: border-color var(--ease), color var(--ease), background var(--ease);
+}
+
+.editor-header__live:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.editor-header__live.is-draft {
+  border-style: dashed;
 }
 
 /* The primary action for an on-device page (SPEC §5/§8): commit it to the repo. */
