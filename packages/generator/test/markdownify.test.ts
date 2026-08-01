@@ -50,6 +50,23 @@ describe('markdownify', () => {
     expect(html).toContain('<p>Second line.</p>');
   });
 
+  it('renders a newline as a line break, the only thing it can mean in a field', async () => {
+    // Standard Markdown makes a lone newline a soft break (a space) — a prose convention for
+    // hard-wrapped source. A field is not prose, and the workaround (two invisible trailing
+    // spaces) is undiscoverable through a form input. Matches Liquid's `newline_to_br`.
+    const html = await render('{{ s | markdownify }}', {
+      s: '© 2026 Acme\nAll rights reserved',
+    });
+    expect(html).toBe('© 2026 Acme<br>\nAll rights reserved');
+  });
+
+  it('still separates paragraphs on a blank line', async () => {
+    const html = await render('{{ s | markdownify }}', { s: 'One.\n\nTwo.' });
+    expect(html).toContain('<p>One.</p>');
+    expect(html).toContain('<p>Two.</p>');
+    expect(html).not.toContain('<br>');
+  });
+
   it('does not unwrap a single block that is not a paragraph', async () => {
     const html = await render('{{ s | markdownify }}', { s: '- one\n- two\n' });
     expect(html).toContain('<ul>');
@@ -97,5 +114,10 @@ describe('markdownify_block', () => {
     const block = await render('{{ s | markdownify_block }}', scope);
     const inline = await render('{{ s | markdownify }}', scope);
     expect(block).toBe(inline);
+  });
+
+  it('keeps standard soft-break semantics — the newline rule is inline-only', async () => {
+    const html = await render('{{ s | markdownify_block }}', { s: 'One\nTwo' });
+    expect(html).not.toContain('<br>');
   });
 });

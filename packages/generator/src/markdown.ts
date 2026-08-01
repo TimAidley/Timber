@@ -3,6 +3,7 @@ import remarkParse from 'remark-parse';
 import remarkGfm from 'remark-gfm';
 import remarkFrontmatter from 'remark-frontmatter';
 import remarkDirective from 'remark-directive';
+import remarkBreaks from 'remark-breaks';
 import remarkRehype from 'remark-rehype';
 import rehypeSanitize, { defaultSchema, type Options as SanitizeSchema } from 'rehype-sanitize';
 import rehypeHighlight from 'rehype-highlight';
@@ -39,7 +40,7 @@ const sanitizeSchema: SanitizeSchema = {
 // rehype-highlight is swappable for shiki later without touching callers.
 // Built by a factory so the block and inline variants below are the SAME pipeline —
 // they must not drift, since both render author content under the same guarantees.
-function pipeline() {
+function pipeline({ breaks = false }: { breaks?: boolean } = {}) {
   return (
     unified()
       .use(remarkParse)
@@ -47,6 +48,9 @@ function pipeline() {
       .use(remarkFrontmatter, ['yaml'])
       .use(remarkDirective)
       .use(remarkFigure)
+      // Newline → <br>, for the inline variant only (see `renderMarkdownInline`). Must run
+      // before the remark→rehype bridge, being an mdast transform.
+      .use(breaks ? [remarkBreaks] : [])
       .use(remarkRehype)
       .use(rehypeSanitize, sanitizeSchema)
       // The `:timber-logo` styling (@font-face + rules) is NOT injected here: a wordmark can
@@ -88,7 +92,9 @@ function rehypeUnwrapParagraph() {
 }
 
 const processor = pipeline().use(rehypeStringify);
-const inlineProcessor = pipeline().use(rehypeUnwrapParagraph).use(rehypeStringify);
+const inlineProcessor = pipeline({ breaks: true })
+  .use(rehypeUnwrapParagraph)
+  .use(rehypeStringify);
 
 /**
  * Render a Markdown body to an HTML fragment. The input may be either the raw
@@ -102,9 +108,25 @@ export async function renderMarkdown(markdown: string): Promise<string> {
 
 /**
  * Render a short Markdown *fragment* — a settings field, not a page body — to inline
- * HTML. Identical to {@link renderMarkdown} (same directives, same sanitising) except
- * that a single paragraph loses its `<p>` wrapper, so the result drops straight into
- * surrounding template markup. This is what backs the `markdownify` Liquid filter.
+ * HTML. Same directives and same sanitising as {@link renderMarkdown}, with two
+ * deliberate differences for the shape of content a *field* holds:
+ *
+ *   - a single paragraph loses its `<p>` wrapper, so the result drops straight into
+ *     surrounding template markup rather than nesting a block inside it;
+ *   - a newline becomes a `<br>` rather than a soft break.
+ *
+ * The second is a departure from standard Markdown, and deliberate. Rendering a newline
+ * as a space is a *prose* convention — it lets a body be hard-wrapped in source without
+ * affecting output. A field is not prose: it is a two-line address or a copyright notice
+ * typed into a form, where a newline can only mean a line break. Standard behaviour would
+ * make a site owner discover that a lone newline does nothing and that the fix is two
+ * invisible trailing spaces — through a `text` input that cannot produce a newline anyway,
+ * and YAML that folds one in a plain scalar. This is the same rule Liquid's
+ * `newline_to_br` gives, which is what themes reach for here.
+ *
+ * Bodies keep standard semantics: {@link renderMarkdown} is untouched.
+ *
+ * This is what backs the `markdownify` Liquid filter.
  */
 export async function renderMarkdownInline(markdown: string): Promise<string> {
   const file = await inlineProcessor.process(markdown);
