@@ -6,7 +6,9 @@
  * Everything exported here is pure and isomorphic — no `fs`, DOM, or framework.
  */
 export { renderPage } from './render.js';
-export { renderMarkdown } from './markdown.js';
+// `renderMarkdown` returns a body fragment; `renderMarkdownInline` the same thing without a
+// lone paragraph's `<p>`, for the short fields the `markdownify` filter renders (SPEC §13).
+export { renderMarkdown, renderMarkdownInline } from './markdown.js';
 // Listing-page excerpts (SPEC §6): a theme can't reach another object's body, so the
 // "opening of each post" a blog home page shows is computed here and carried on
 // `collections`. See @timber/content's `attachExcerpts`.

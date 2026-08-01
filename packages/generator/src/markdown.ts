@@ -37,19 +37,58 @@ const sanitizeSchema: SanitizeSchema = {
 // browser and Node. remark-frontmatter is included so a stray front-matter block
 // in the body is recognised and dropped rather than rendered as a `---` rule.
 // rehype-highlight is swappable for shiki later without touching callers.
-const processor = unified()
-  .use(remarkParse)
-  .use(remarkGfm)
-  .use(remarkFrontmatter, ['yaml'])
-  .use(remarkDirective)
-  .use(remarkFigure)
-  .use(remarkRehype)
-  .use(rehypeSanitize, sanitizeSchema)
-  // The `:timber-logo` styling (@font-face + rules) is NOT injected here: a wordmark can
-  // reach a page from a body, an excerpt, or a `markdownify`-ed setting, so it is injected
-  // once over the assembled page instead (`injectWordmarkStyle`, applied by `renderPage`).
-  .use(rehypeHighlight)
-  .use(rehypeStringify);
+// Built by a factory so the block and inline variants below are the SAME pipeline —
+// they must not drift, since both render author content under the same guarantees.
+function pipeline() {
+  return (
+    unified()
+      .use(remarkParse)
+      .use(remarkGfm)
+      .use(remarkFrontmatter, ['yaml'])
+      .use(remarkDirective)
+      .use(remarkFigure)
+      .use(remarkRehype)
+      .use(rehypeSanitize, sanitizeSchema)
+      // The `:timber-logo` styling (@font-face + rules) is NOT injected here: a wordmark can
+      // reach a page from a body, an excerpt, or a `markdownify`-ed setting, so it is injected
+      // once over the assembled page instead (`injectWordmarkStyle`, applied by `renderPage`).
+      .use(rehypeHighlight)
+  );
+}
+
+/** Minimal hast shape this transform reads (avoids a hard `@types/hast` dep). */
+interface HastNode {
+  type: string;
+  tagName?: string;
+  value?: string;
+  children?: HastNode[];
+}
+
+/**
+ * Unwrap a lone `<p>`, so a one-line fragment renders as inline HTML.
+ *
+ * Markdown has no notion of "just this text": `© 2026 Acme` parses to a paragraph, and
+ * the `<p>` it produces would nest inside whatever markup the value is dropped into.
+ * A document with any more structure than a single paragraph (two paragraphs, a list,
+ * a heading) keeps its blocks — this only removes a wrapper that has nothing to wrap.
+ */
+function rehypeUnwrapParagraph() {
+  return (tree: unknown): void => {
+    const root = tree as HastNode;
+    const children = root.children ?? [];
+    // Whitespace between blocks is a text node in hast; a trailing newline must not
+    // count as a second child and defeat the unwrap.
+    const blocks = children.filter(
+      (child) => !(child.type === 'text' && !(child.value ?? '').trim()),
+    );
+    const only = blocks[0];
+    if (blocks.length !== 1 || only?.type !== 'element' || only.tagName !== 'p') return;
+    root.children = only.children ?? [];
+  };
+}
+
+const processor = pipeline().use(rehypeStringify);
+const inlineProcessor = pipeline().use(rehypeUnwrapParagraph).use(rehypeStringify);
 
 /**
  * Render a Markdown body to an HTML fragment. The input may be either the raw
@@ -58,5 +97,16 @@ const processor = unified()
  */
 export async function renderMarkdown(markdown: string): Promise<string> {
   const file = await processor.process(markdown);
+  return String(file);
+}
+
+/**
+ * Render a short Markdown *fragment* — a settings field, not a page body — to inline
+ * HTML. Identical to {@link renderMarkdown} (same directives, same sanitising) except
+ * that a single paragraph loses its `<p>` wrapper, so the result drops straight into
+ * surrounding template markup. This is what backs the `markdownify` Liquid filter.
+ */
+export async function renderMarkdownInline(markdown: string): Promise<string> {
+  const file = await inlineProcessor.process(markdown);
   return String(file);
 }

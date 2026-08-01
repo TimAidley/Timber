@@ -1,21 +1,11 @@
 import { Liquid } from 'liquidjs';
 import { registerComparisonFilters } from './filters.js';
+import { registerContentFilters } from './contentFilters.js';
 import { registerUrlFilters } from './urlFilters.js';
+import { SafeHtml } from './safeHtml.js';
 import type { TemplateMap } from './types.js';
 
-/**
- * Marker for pre-sanitized, trusted HTML (the rendered Markdown body) that must NOT
- * be re-escaped on output. Wrapping the value — rather than requiring templates to
- * write `{{ content | raw }}` — keeps a bare `{{ content }}` working (the form every
- * existing theme already uses) while still escaping every *other* output. Any string
- * that is genuinely trusted HTML can be wrapped in this; nothing else is.
- */
-export class SafeHtml {
-  constructor(readonly value: string) {}
-  toString(): string {
-    return this.value;
-  }
-}
+export { SafeHtml };
 
 // LiquidJS's built-in `escape` filter map — matched exactly so escaped output is
 // byte-identical to what `outputEscape: 'escape'` would produce.
@@ -72,6 +62,9 @@ export function createEngine(
   // Comparison query filters (SPEC §6) — `where` is equality-only, so these add
   // `where_gt`/`where_gte`/`where_lt`/`where_lte`/`where_ne`/`where_between` + `days_between`.
   registerComparisonFilters(engine);
+  // Content filters: `markdownify`, for the fields a site owner writes as Markdown
+  // (SPEC §13) — kept apart from the query filters above, which are pure and synchronous.
+  registerContentFilters(engine);
   // URL filters: `relative_url` / `absolute_url` (prefix `site.basePath` / `site.baseUrl`).
   // A cleaner link idiom for Timber's own themes, and the highest-frequency Jekyll filters.
   registerUrlFilters(engine);
