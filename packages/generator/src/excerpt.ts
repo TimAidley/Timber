@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm';
 import remarkFrontmatter from 'remark-frontmatter';
 import remarkDirective from 'remark-directive';
 import { renderMarkdown } from './markdown.js';
+import { rebaseHtml, type RebaseOptions } from './links.js';
 
 /**
  * Post excerpts for listing pages (SPEC §6). A listing template only ever sees other
@@ -88,46 +89,18 @@ export function splitExcerpt(body: string): { markdown: string; truncated: boole
   return { markdown: body, truncated: false };
 }
 
-// Attribute values rehype-stringify emits for links and media. It always double-quotes,
-// so a double-quote-delimited match is exact rather than a general HTML-parsing attempt.
-const REF_ATTR = /\b(src|href)="([^"]*)"/gi;
-
-/**
- * Re-point an excerpt's **relative** links and images at the page they came from.
- *
- * A colocated asset is written bare — `![…](photo.jpg)` next to its `index.md` — which
- * resolves correctly on the object's own page and nowhere else. Lift that markup onto a
- * listing at `/` and the browser looks for `/photo.jpg`. So each relative reference is
- * resolved against the object's URL, exactly as the browser would have resolved it there.
- *
- * Root-relative (`/…`), absolute (`https://…`), scheme (`mailto:`) and fragment (`#…`)
- * references are already unambiguous and pass through untouched.
- */
-export function rebaseHtml(html: string, base: string): string {
-  if (!base) return html;
-  return html.replace(REF_ATTR, (whole, attr: string, value: string) => {
-    if (value === '' || /^[/#]/.test(value) || /^[a-z][a-z0-9+.-]*:/i.test(value)) {
-      return whole;
-    }
-    // A throwaway origin makes the standard resolver do the `./` and `../` work; only
-    // the path parts are kept, so the origin never reaches the output.
-    const url = new URL(value, `https://timber.invalid${base}`);
-    return `${attr}="${url.pathname}${url.search}${url.hash}"`;
-  });
-}
-
 /**
  * Render a body's excerpt to an HTML fragment. See {@link splitExcerpt} for the rule.
  * The HTML is a prefix of what the full page renders, produced by the same pipeline.
  *
- * `base` is the URL the body's own page is served at (including any site base path);
- * relative references are resolved against it — see {@link rebaseHtml} — so the excerpt
- * is safe to drop into a listing at any other URL.
+ * References are rewritten for the listing this will be shown on — see {@link rebaseHtml}:
+ * `base` is the URL the body's own page is served at (base path included), against which
+ * relative references resolve, and `basePath` is prefixed onto root-relative ones.
  */
 export async function renderExcerpt(
   body: string,
-  base = '',
+  options: RebaseOptions = {},
 ): Promise<{ html: string; truncated: boolean }> {
   const { markdown, truncated } = splitExcerpt(body);
-  return { html: rebaseHtml(await renderMarkdown(markdown), base), truncated };
+  return { html: rebaseHtml(await renderMarkdown(markdown), options), truncated };
 }

@@ -1,6 +1,7 @@
 import { Liquid } from 'liquidjs';
 import { parseFrontMatter } from './frontmatter.js';
 import { renderMarkdown } from './markdown.js';
+import { rebaseHtml } from './links.js';
 import { engine, createEngine, SafeHtml } from './liquid.js';
 import type { RenderPageInput, TemplateMap } from './types.js';
 
@@ -69,7 +70,13 @@ function engineFor(
  */
 export async function renderPage(input: RenderPageInput): Promise<string> {
   const { data, body } = parseFrontMatter(input.markdown);
-  const content = await renderMarkdown(body);
+  // A body has no `relative_url` to reach for, so an author writes `[About](/about)` and
+  // means the site root. On a project-Pages site served under `/repo/` that is not the
+  // server root, so the base path is applied here — the body-side counterpart of the
+  // filter templates use. No-op on a root site (`basePath` is ''), where it is already
+  // correct as written.
+  const basePath = typeof input.site?.basePath === 'string' ? input.site.basePath : '';
+  const content = rebaseHtml(await renderMarkdown(body), { basePath });
 
   const html = await engineFor(input.templates, input.extend).parseAndRender(
     input.template,

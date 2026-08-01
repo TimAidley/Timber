@@ -10,7 +10,10 @@ export { renderMarkdown } from './markdown.js';
 // Listing-page excerpts (SPEC §6): a theme can't reach another object's body, so the
 // "opening of each post" a blog home page shows is computed here and carried on
 // `collections`. See @timber/content's `attachExcerpts`.
-export { renderExcerpt, splitExcerpt, rebaseHtml } from './excerpt.js';
+export { renderExcerpt, splitExcerpt } from './excerpt.js';
+// Body-link rewriting: base path for root-relative refs, object URL for relative ones.
+export { rebaseHtml } from './links.js';
+export type { RebaseOptions } from './links.js';
 export { parseFrontMatter } from './frontmatter.js';
 // The on-disk `index.md` format (SPEC §4). Any producer of content — the editor, an
 // importer, a migration script — must write through these so it matches what the editor

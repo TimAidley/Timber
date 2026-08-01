@@ -106,6 +106,21 @@ The body starts here, after the blank line.
 - **Don't hand-wrap long values.** Let `timber fmt` decide where lines break, or your file
   won't match what the editor writes.
 
+## Linking to other pages
+
+Write internal links from the **site root**, with a trailing slash:
+
+```markdown
+See the [portfolio](/portfolio/) or [that post](/posts/hello/).
+```
+
+You don't need to worry about where the site is served from — if it lives under a subpath
+(a GitHub project-Pages site at `/<repo>/`), the build adds that prefix for you. Writing
+the prefix yourself is what breaks: it would be doubled.
+
+Images and files that belong to the object are the exception — those are referenced by
+bare filename, because they sit in the same folder (see [Object layout](#object-layout)).
+
 ## Where a post's excerpt ends
 
 A listing page — a blog home page, say — shows the *opening* of each post rather than the

@@ -259,10 +259,14 @@ Cross-cutting things and every file they touch:
   `pagination.liquid` pager + `.listing`/`.pagination` in `theme.css`) and
   `docs/pagination.md`. Change the URL shape or the paginator's keys → update the theme,
   both callers, the docs, and SPEC §13 together.
+- **Body links** (SPEC §6 → Links inside a Markdown body) → `@timber/generator`'s
+  `links.ts` (`rebaseHtml`: `basePath` onto root-relative refs, `base` to resolve relative
+  ones). `renderPage` applies it to every body with `site.basePath`; `attachExcerpts` applies
+  it with both options. Change the rule → both call sites and SPEC §6.
 - **Listing excerpts** (SPEC §6 → Collections in templates) → the split + render live in
   `@timber/generator` (`excerpt.ts`: `splitExcerpt` cuts the Markdown source at `<!--more-->`
-  or the first paragraph, `renderExcerpt` runs the prefix through the normal pipeline,
-  `rebaseHtml` re-points relative refs at the object's own URL). `@timber/content`
+  or the first paragraph, `renderExcerpt` runs the prefix through the normal pipeline and
+  `links.ts`'s `rebaseHtml` re-points its references). `@timber/content`
   (`collections.ts` `attachExcerpts`) puts `excerpt`/`truncated` on each entry — it is
   **async**, unlike `assembleCollections`, and takes the site's `basePath`. **Both callers
   must call it right after assembling** — `packages/cli/src/build.node.ts` and

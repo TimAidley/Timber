@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { splitExcerpt, renderExcerpt, rebaseHtml } from '../src/excerpt.js';
+import { splitExcerpt, renderExcerpt } from '../src/excerpt.js';
 import { renderMarkdown } from '../src/markdown.js';
 
 /**
@@ -81,39 +81,6 @@ describe('splitExcerpt', () => {
   });
 });
 
-describe('rebaseHtml', () => {
-  const base = '/repo/posts/hello/';
-
-  it('resolves a colocated asset against the object URL', () => {
-    expect(rebaseHtml('<img src="photo.jpg">', base)).toBe(
-      '<img src="/repo/posts/hello/photo.jpg">',
-    );
-  });
-
-  it('resolves ./ and ../ segments', () => {
-    expect(rebaseHtml('<img src="./a/../b.png">', base)).toBe(
-      '<img src="/repo/posts/hello/b.png">',
-    );
-  });
-
-  it('leaves root-relative, absolute, scheme and fragment refs alone', () => {
-    const html =
-      '<a href="/about"></a><a href="https://x.test/y"></a>' +
-      '<a href="mailto:a@b.test"></a><a href="#section"></a>';
-    expect(rebaseHtml(html, base)).toBe(html);
-  });
-
-  it('preserves query and hash on a rebased ref', () => {
-    expect(rebaseHtml('<a href="doc.pdf?v=2#page3"></a>', base)).toBe(
-      '<a href="/repo/posts/hello/doc.pdf?v=2#page3"></a>',
-    );
-  });
-
-  it('is a no-op without a base', () => {
-    expect(rebaseHtml('<img src="photo.jpg">', '')).toBe('<img src="photo.jpg">');
-  });
-});
-
 describe('renderExcerpt', () => {
   it('produces a prefix of what the full page renders', async () => {
     // The point of splitting the *source* rather than the HTML: the excerpt is what the
@@ -125,8 +92,18 @@ describe('renderExcerpt', () => {
   });
 
   it('rebases relative refs onto the given base', async () => {
-    const { html } = await renderExcerpt('![Alt](photo.jpg)\n', '/repo/posts/hello/');
+    const { html } = await renderExcerpt('![Alt](photo.jpg)\n', {
+      base: '/repo/posts/hello/',
+    });
     expect(html).toContain('src="/repo/posts/hello/photo.jpg"');
+  });
+
+  it('applies the base path to a root-relative link', async () => {
+    const { html } = await renderExcerpt('See [the portfolio](/portfolio).\n', {
+      base: '/repo/posts/hello/',
+      basePath: '/repo',
+    });
+    expect(html).toContain('href="/repo/portfolio"');
   });
 
   it('drops the marker from the output', async () => {

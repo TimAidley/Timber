@@ -53,6 +53,9 @@ and `*_wip`.
 - **Fields are schema-defined.** Check `config/schemas/<type>.yml` before inventing a
   front-matter key. Undeclared keys pass through rather than erroring, so a typo fails
   silently — it just never renders.
+- **Internal links are written from the site root** — `[portfolio](/portfolio/)`. The build
+  adds the subpath prefix for a project-Pages site; writing it yourself doubles it.
+  Colocated images are the exception, referenced by bare filename.
 - **`<!--more-->` ends the excerpt.** Listing pages show the first paragraph of a post
   unless the body carries that marker, in which case they show everything before it. It
   renders as nothing. Add one when a post's opening should be more than one paragraph.
