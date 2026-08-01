@@ -11,6 +11,11 @@ fields:
   homepage:
     type: reference
     referenceType: pages
+  # Footer copyright line. Rendered as Markdown by the theme (`| markdownify`), so it can
+  # carry a link — `[contact](/contact)` — or the Timber wordmark via `:timber-logo`.
+  copyright:
+    type: text
+    label: Copyright (Markdown)
   # Active theme (SPEC §13): the name of the folder under `themes/` to render the site
   # with. Each theme is self-contained (`themes/<name>/templates` + `themes/<name>/assets`),
   # so switching is just changing this value and deleting one is removing its folder. Leave

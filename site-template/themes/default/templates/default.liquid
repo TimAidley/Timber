@@ -71,7 +71,14 @@
       {% endblock %}
     </main>
     <footer class="site-footer">
+      {% comment %}The `copyright` setting is written in Markdown, so it can carry a link or
+         the Timber wordmark (`:timber-logo`); `markdownify` renders it inline, no <p> of its
+         own. Unset — as on a site that predates the setting — falls back to the site title.{% endcomment %}
+      {% if site.copyright %}
+      <p>{{ site.copyright | markdownify }}</p>
+      {% else %}
       <p>© {{ site.title }}{% if site.description %} — {{ site.description }}{% endif %}</p>
+      {% endif %}
     </footer>
   </body>
 </html>
