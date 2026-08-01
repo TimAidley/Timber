@@ -14,12 +14,13 @@ name: Build & deploy site
 #     For a CUSTOM DOMAIN, commit a `CNAME` file at the repo root holding just the domain
 #     (e.g. "www.example.com") and set content/settings baseUrl to that domain's ROOT — the
 #     site then serves at / instead of /<repo>/, and the editor moves to /edit/. See
-#     INSTALL.md "Use your own domain".
+#     https://timaidley.github.io/Timber/install.html?domain=custom
 #   * "cloudflare" — Cloudflare Pages (source stays on GitHub; GitHub Actions builds and
 #     publishes via wrangler). Served at your Pages project's root (<project>.pages.dev or a
 #     custom domain), editor at /edit/. One-time:
 #       - Secrets CLOUDFLARE_API_TOKEN (a custom API token with Account · Cloudflare Pages ·
-#         Edit + Account · Account Settings · Read) + CLOUDFLARE_ACCOUNT_ID. See INSTALL.md.
+#         Edit + Account · Account Settings · Read) + CLOUDFLARE_ACCOUNT_ID. See
+#         https://timaidley.github.io/Timber/install.html?deploy=cloudflare
 #         NOTE: setup-broker.yml reads the SAME secret and needs Account · Workers Scripts ·
 #         Edit. If you use both, give the one token all three permissions.
 #       - Optional Variable TIMBER_CF_PAGES_PROJECT (the Pages project name; defaults to the

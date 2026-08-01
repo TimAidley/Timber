@@ -20,7 +20,7 @@ The broker can be run for free on Cloudflare as a Cloudflare worker.
 
 | Doc | What it's for |
 |---|---|
-| **[INSTALL.md](INSTALL.md)** | **Set up a hosted site** — create a repo from the template, choose a sign-in method, deploy. No local tooling. |
+| **[Setup guide](https://timaidley.github.io/Timber/install.html)** | **Set up a hosted site** — pick your git host, sign-in method and deploy target and it shows only the steps you need. No local tooling. ([`docs/install.html`](docs/install.html); [INSTALL.md](INSTALL.md) points here.) |
 | **[DEVELOPMENT.md](DEVELOPMENT.md)** | **Run Timber locally** or hack on it — run the editor on your machine, build a site by hand, deploy the broker directly. |
 | **[ARCHITECTURE.md](ARCHITECTURE.md)** | How the pieces fit — repos, packages, the dependency graph, auth modes, the workflows. |
 | **[SPEC.md](SPEC.md)** | The authoritative design and rationale. |
@@ -29,7 +29,7 @@ The broker can be run for free on Cloudflare as a Cloudflare worker.
 
 A public website at `https://<you>.github.io/<repo>/` plus an in-browser editor co-hosted at
 `/<repo>/edit/`. The editor signs in to GitHub (paste-a-PAT, or a GitHub App via a redirect
-or device flow — see [INSTALL.md](INSTALL.md)), commits your edits, and a GitHub Action
+or device flow — see the [setup guide](https://timaidley.github.io/Timber/install.html)), commits your edits, and a GitHub Action
 rebuilds and deploys the site.
 
 ## Repo layout

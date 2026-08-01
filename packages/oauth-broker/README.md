@@ -53,7 +53,7 @@ still honoured.)
 ### 3. Point the app at the broker
 The editor needs the broker URL + client id in its config. **Fork-and-go** sites do this
 automatically — the deploy workflow bakes them in from the `GH_OAUTH_CLIENT_ID` variable
-and the committed broker URL (see `INSTALL.md`), so there's nothing to edit here. If you
+and the committed broker URL (see the setup guide, `docs/install.html`), so there's nothing to edit here. If you
 **self-host** the editor, configure it at runtime via `config.js` (a copy of
 `packages/app/public/config.js`, which ships empty, served next to the editor):
 ```js

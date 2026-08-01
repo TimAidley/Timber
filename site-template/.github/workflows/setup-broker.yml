@@ -18,7 +18,8 @@ name: Setup OAuth broker
 #   Variables: GH_OAUTH_CLIENT_ID     (from your GitHub App — public)
 #
 # The secret/variable names use the GH_ prefix because GitHub Actions reserves the
-# GITHUB_ prefix. See README.md (and INSTALL.md in the Timber repo) for the full runbook,
+# GITHUB_ prefix. See README.md (and https://timaidley.github.io/Timber/install.html)
+# for the full runbook,
 # including registering + installing the GitHub App.
 
 on:

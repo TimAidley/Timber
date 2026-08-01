@@ -1,7 +1,8 @@
 # Running Timber locally / developing
 
 For running the editor on your own machine, building a site by hand, or hacking on Timber
-itself. To stand up a **hosted** site with no local tooling, see **`INSTALL.md`** instead.
+itself. To stand up a **hosted** site with no local tooling, see the
+**[setup guide](https://timaidley.github.io/Timber/install.html)** instead.
 
 **Prerequisites:** Node ≥ 20, pnpm 10 (`npm i -g pnpm@10`), git, and a clone of this repo.
 

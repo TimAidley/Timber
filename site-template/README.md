@@ -22,8 +22,8 @@ for AI assistants.)
 ## Setup
 
 All setup instructions — register a GitHub App, deploy the OAuth broker, enable the
-editor — live in one place: **Timber's
-[`INSTALL.md`](https://github.com/TimAidley/Timber/blob/main/INSTALL.md)**.
+editor — live in one place: **Timber's [setup guide](https://timaidley.github.io/Timber/install.html)**. Pick your git host, sign-in
+method and deploy target and it shows only the steps that apply to you.
 
 ---
 <sub>This template repo is generated automatically from

@@ -1,0 +1,52 @@
+name: Publish docs
+
+# Serves `docs/` from this repo on GitHub Pages, so `docs/install.html` — the canonical
+# setup instructions — has a URL to link to. GitHub renders Markdown but shows HTML as
+# source, so the page is useless until something serves it.
+#
+# ONE-TIME SETUP: Settings → Pages → Source: "GitHub Actions". Until that's done every
+# run fails at "Deploy to GitHub Pages" with "Pages site not found" — the workflow can
+# enable nothing on its own.
+#
+# TEMPORARY: this exists only until the Timber-built docs site is up. When it is, move
+# docs/install.html into that site's content and delete this file.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two deploys race; a superseded run is safe to drop.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Check out Timber
+        uses: actions/checkout@v4
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload docs/
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

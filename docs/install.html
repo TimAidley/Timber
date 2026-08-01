@@ -1,0 +1,1255 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Set up a Timber site</title>
+<meta name="description" content="Interactive setup instructions for a hosted Timber site — pick your git host, sign-in method and deploy target, and see only the steps that apply.">
+<style>
+/* ---------------------------------------------------------------------------
+   docs/install.html — the canonical Timber setup instructions.
+
+   Everything here is hand-authored: no build step, no dependencies, one file.
+   Two mechanisms do all the work:
+
+     data-when="host:github auth:app-redirect,app-device"
+         Show this element only for those selections. Space-separated terms are
+         ANDed; comma-separated values inside a term are ORed. An axis that
+         isn't mentioned places no constraint. Applied to *any* element —
+         sections, list items, inline spans, and the option pills themselves
+         (which is how the choices stay dependent on each other).
+
+     data-var="editorUrl"
+         Replaced with a value derived from the identity fields. The literal
+         text in the file is the <you>/<repo> placeholder, so with JavaScript
+         off the page reads exactly like the old Markdown.
+
+   With no JavaScript every block is visible and badged with its data-when, so
+   the page degrades to "the whole matrix, in order" — which is what INSTALL.md
+   used to be.
+--------------------------------------------------------------------------- */
+
+:root {
+  --bg: #fff;
+  --fg: #1b1f24;
+  --muted: #5a6472;
+  --line: #d8dee6;
+  --accent: #1f6feb;
+  --accent-fg: #fff;
+  --code-bg: #f2f4f7;
+  --note-bg: #f6f8fa;
+  --warn-bg: #fff8e6;
+  --warn-line: #e3b341;
+  --done: #1a7f37;
+  --radius: 8px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1117;
+    --fg: #e6edf3;
+    --muted: #9198a1;
+    --line: #30363d;
+    --accent: #4493f8;
+    --accent-fg: #0d1117;
+    --code-bg: #161b22;
+    --note-bg: #161b22;
+    --warn-bg: #2b2413;
+    --warn-line: #9e6a03;
+    --done: #3fb950;
+  }
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  padding: 0 1rem 6rem;
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+}
+.wrap { max-width: 46rem; margin: 0 auto; }
+
+a { color: var(--accent); }
+code, kbd {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.9em;
+  background: var(--code-bg);
+  padding: 0.15em 0.35em;
+  border-radius: 4px;
+  overflow-wrap: anywhere;
+}
+pre {
+  background: var(--code-bg);
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius);
+  overflow-x: auto;
+}
+pre code { background: none; padding: 0; }
+table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+th, td { border: 1px solid var(--line); padding: 0.5rem 0.6rem; text-align: left; vertical-align: top; font-size: 0.95rem; }
+th { background: var(--note-bg); }
+.scroll-x { overflow-x: auto; }
+
+header.page { padding: 2.5rem 0 1rem; }
+header.page h1 { font-size: 2rem; margin: 0 0 0.5rem; }
+header.page p.lede { color: var(--muted); margin: 0 0 0.75rem; }
+
+/* --- the chooser ------------------------------------------------------- */
+
+.controls {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1rem 1.1rem 0.6rem;
+  margin: 1.5rem 0;
+  background: var(--note-bg);
+}
+.controls h2 { font-size: 1rem; margin: 0 0 0.75rem; }
+fieldset { border: 0; margin: 0 0 0.9rem; padding: 0; }
+legend { padding: 0; font-weight: 600; font-size: 0.85rem; margin-bottom: 0.4rem; color: var(--muted); }
+.pills { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.3rem 0.8rem;
+  cursor: pointer;
+  background: var(--bg);
+  font-size: 0.9rem;
+  user-select: none;
+}
+.pill input { margin: 0; }
+.pill:has(input:checked) { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.pill:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 0.6rem; margin-bottom: 0.9rem; }
+.fields label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.85rem; color: var(--muted); }
+.fields input {
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  min-width: 0;
+}
+.controls .hint { font-size: 0.8rem; color: var(--muted); margin: 0 0 0.9rem; }
+
+/* --- progress ---------------------------------------------------------- */
+
+.progress { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; padding-bottom: 0.6rem; }
+.bar { flex: 1 1 8rem; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; min-width: 6rem; }
+.bar span { display: block; height: 100%; width: 0; background: var(--done); transition: width 0.2s; }
+.progress .count { font-size: 0.85rem; color: var(--muted); white-space: nowrap; }
+button.link {
+  border: 0; background: none; color: var(--accent); cursor: pointer;
+  font: inherit; font-size: 0.85rem; padding: 0; text-decoration: underline;
+}
+
+/* --- steps ------------------------------------------------------------- */
+
+.steps { counter-reset: step; }
+.step { border-top: 1px solid var(--line); padding: 1.4rem 0 0.4rem; }
+.step > h2 {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 1.15rem;
+  margin: 0 0 0.6rem;
+}
+.step > h2 .num::before { counter-increment: step; content: counter(step) "."; color: var(--muted); font-variant-numeric: tabular-nums; }
+.step > h2 input[type="checkbox"] { width: 1.05rem; height: 1.05rem; margin: 0; flex: none; align-self: center; cursor: pointer; }
+.step.done > h2 .title { color: var(--muted); text-decoration: line-through; }
+.step.done > h2 .tag { opacity: 0.5; }
+.tag {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.05rem 0.5rem;
+  color: var(--muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.step > *:last-child { margin-bottom: 0; }
+
+.note, .warn {
+  border-left: 3px solid var(--line);
+  background: var(--note-bg);
+  padding: 0.7rem 0.9rem;
+  border-radius: 0 var(--radius) var(--radius) 0;
+  margin: 0.9rem 0;
+  font-size: 0.95rem;
+}
+.warn { border-left-color: var(--warn-line); background: var(--warn-bg); }
+.note > *:first-child, .warn > *:first-child { margin-top: 0; }
+.note > *:last-child, .warn > *:last-child { margin-bottom: 0; }
+
+/* --- derived values ---------------------------------------------------- */
+
+.value { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; margin: 0.5rem 0; }
+.value .k { font-size: 0.8rem; color: var(--muted); min-width: 5.5rem; }
+button.copy {
+  font: inherit; font-size: 0.75rem;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--muted);
+  border-radius: 5px;
+  padding: 0.1rem 0.45rem;
+  cursor: pointer;
+}
+button.copy:hover { color: var(--fg); }
+
+/* --- applicability badges (no-JS and "show every path") ---------------- */
+
+.no-js .controls, .no-js .progress { display: none; }
+.no-js-note { display: none; }
+.no-js .no-js-note { display: block; }
+
+.no-js [data-when]:is(section, li, .note, .warn)::before,
+body.show-all [data-when]:is(section, li, .note, .warn)::before {
+  content: "Applies to — " attr(data-when);
+  display: block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  color: var(--muted);
+  border: 1px dashed var(--line);
+  border-radius: 5px;
+  padding: 0.1rem 0.45rem;
+  margin-bottom: 0.5rem;
+  width: fit-content;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+footer.page { border-top: 1px solid var(--line); margin-top: 2.5rem; padding-top: 1rem; color: var(--muted); font-size: 0.9rem; }
+
+@media print {
+  .controls, .progress, button.copy { display: none; }
+  .step { break-inside: avoid; page-break-inside: avoid; }
+  body { padding-bottom: 0; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="page">
+  <h1>Set up a Timber site</h1>
+  <p class="lede">
+    This stands up a <strong>hosted</strong> site with no local tooling: a public website plus
+    an in-browser editor co-hosted beside it. You create a repo from a template, choose how you
+    sign in, and let CI do the rest.
+  </p>
+  <p class="lede">
+    Want to run the editor on your own machine, build a site by hand, or hack on Timber itself?
+    See <a href="../DEVELOPMENT.md">DEVELOPMENT.md</a> instead.
+  </p>
+  <p class="no-js-note note">
+    <strong>JavaScript is off</strong>, so every path is shown below and each block is labelled
+    with the choices it applies to. Turn JavaScript on to pick your combination and see only the
+    steps you need.
+  </p>
+</header>
+
+<!-- ====================================================================== -->
+<!-- The chooser                                                            -->
+<!-- ====================================================================== -->
+
+<section class="controls" aria-label="Choose your setup">
+  <h2>Your setup</h2>
+
+  <fieldset data-axis-group="host">
+    <legend>Where your source lives</legend>
+    <div class="pills">
+      <label class="pill" data-axis="host"><input type="radio" name="host" value="github" checked> GitHub</label>
+      <label class="pill" data-axis="host"><input type="radio" name="host" value="codeberg"> Codeberg <span class="tag">Gitea/Forgejo</span></label>
+      <label class="pill" data-axis="host"><input type="radio" name="host" value="gitlab"> GitLab</label>
+    </div>
+  </fieldset>
+
+  <fieldset data-axis-group="auth">
+    <legend>How you sign in to the editor</legend>
+    <div class="pills">
+      <label class="pill" data-axis="auth"><input type="radio" name="auth" value="pat" checked> Paste a PAT</label>
+      <label class="pill" data-axis="auth" data-when="host:github"><input type="radio" name="auth" value="app-redirect"> GitHub App — redirect</label>
+      <label class="pill" data-axis="auth" data-when="host:github"><input type="radio" name="auth" value="app-device"> GitHub App — device flow</label>
+      <label class="pill" data-axis="auth" data-when="host:codeberg,gitlab"><input type="radio" name="auth" value="oauth"> Sign in with <span data-var="hostName">Codeberg</span></label>
+    </div>
+  </fieldset>
+
+  <fieldset data-axis-group="deploy">
+    <legend>Where the site is served from</legend>
+    <div class="pills">
+      <label class="pill" data-axis="deploy"><input type="radio" name="deploy" value="pages" checked> <span data-var="pagesName">GitHub Pages</span></label>
+      <label class="pill" data-axis="deploy" data-when="host:github"><input type="radio" name="deploy" value="cloudflare"> Cloudflare Pages</label>
+    </div>
+  </fieldset>
+
+  <fieldset data-axis-group="domain">
+    <legend>Domain</legend>
+    <div class="pills">
+      <label class="pill" data-axis="domain"><input type="radio" name="domain" value="default" checked> The host's default URL</label>
+      <label class="pill" data-axis="domain" data-when="host:github"><input type="radio" name="domain" value="custom"> A domain you own</label>
+    </div>
+  </fieldset>
+
+  <div class="fields">
+    <label>Your account
+      <input type="text" id="f-owner" placeholder="you" autocomplete="off" spellcheck="false">
+    </label>
+    <label>Repo name
+      <input type="text" id="f-repo" placeholder="my-site" autocomplete="off" spellcheck="false">
+    </label>
+    <label data-when="domain:custom">Your domain
+      <input type="text" id="f-domain" placeholder="www.example.com" autocomplete="off" spellcheck="false">
+    </label>
+    <label data-when="deploy:cloudflare">Pages project <span title="optional">(optional)</span>
+      <input type="text" id="f-cfProject" placeholder="defaults to the repo name" autocomplete="off" spellcheck="false">
+    </label>
+    <label>Editor path
+      <input type="text" id="f-editorPath" placeholder="edit" autocomplete="off" spellcheck="false">
+    </label>
+  </div>
+  <p class="hint">
+    Fill these in and every URL, callback and setting below becomes a concrete value you can copy.
+    Nothing is sent anywhere — it stays in this browser.
+    The <strong>editor path</strong> is <code>edit</code> unless a content page already occupies
+    <code>/edit/</code>; change it here and set a repo Variable <code>TIMBER_EDITOR_PATH</code> to match.
+  </p>
+
+  <div class="progress">
+    <div class="bar"><span id="bar-fill"></span></div>
+    <span class="count" id="progress-count">0 of 0 done</span>
+    <button type="button" class="link" id="btn-reset">Clear ticks</button>
+    <button type="button" class="link" id="btn-showall">Show every path</button>
+  </div>
+</section>
+
+<!-- ====================================================================== -->
+<!-- Which sign-in method?                                                  -->
+<!-- ====================================================================== -->
+
+<section class="note" id="choosing">
+  <p><strong>Not sure which sign-in to pick?</strong> The editor commits to your repo on your
+  behalf, so it has to authenticate. You can switch later.</p>
+  <div class="scroll-x">
+  <table>
+    <thead><tr><th>Method</th><th>Setup effort</th><th>Login experience</th><th>Security</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>Paste a PAT</strong></td>
+        <td><strong>Lowest</strong> — no cloud services at all</td>
+        <td>Paste a token once per browser (until it expires)</td>
+        <td>You hold a token in the browser's <code>localStorage</code>; you scope it to just this repo and choose its expiry</td>
+      </tr>
+      <tr data-when="host:github">
+        <td><strong>GitHub App + broker</strong> (redirect)</td>
+        <td><strong>Highest</strong> — a Cloudflare Worker <em>and</em> a GitHub App</td>
+        <td>One click: <strong>Sign in with GitHub</strong> → redirect back</td>
+        <td>Per-repo, short-lived tokens; a client <strong>secret</strong> is held server-side in the broker</td>
+      </tr>
+      <tr data-when="host:github">
+        <td><strong>GitHub App + device flow</strong></td>
+        <td><strong>Medium</strong> — a Cloudflare relay + a GitHub App, but <strong>no secret</strong></td>
+        <td>Enter a short code at <code>github.com/login/device</code>, approve</td>
+        <td>Per-repo, short-lived tokens; <strong>no client secret anywhere</strong></td>
+      </tr>
+      <tr data-when="host:codeberg,gitlab">
+        <td><strong>Sign in with <span data-var="hostName">Codeberg</span></strong> (OAuth)</td>
+        <td>Medium — a Cloudflare relay, but <strong>no secret</strong></td>
+        <td>One click: redirect, approve, land back signed in</td>
+        <td>Short-lived tokens; a <strong>public</strong> OAuth client, so no secret anywhere</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+  <p data-when="host:github">
+    <strong>Just you, least fuss?</strong> Paste a PAT — nothing to deploy; the trade-off is you
+    paste (and periodically renew) a token. <strong>Want a real "Sign in with GitHub" button
+    without holding a secret?</strong> Device flow. <strong>Want the smoothest one-click login
+    and don't mind holding a secret?</strong> Redirect. The two App methods are more secure
+    (per-repo, short-lived tokens) but need a <strong>Cloudflare</strong> account for the broker.
+  </p>
+</section>
+
+<!-- ====================================================================== -->
+<!-- Steps                                                                  -->
+<!-- ====================================================================== -->
+
+<div class="steps">
+
+<!-- ---------------------------------------------------------------- 1 --- -->
+<section class="step" id="create-repo">
+  <h2><span class="num"></span><span class="title">Create your repo from the template</span></h2>
+
+  <div data-when="host:github">
+    <p>Go to
+      <a href="https://github.com/TimAidley/Timber-site-template">TimAidley/Timber-site-template</a>
+      → <strong>"Use this template" → Create a new repository</strong>. Name it
+      <code data-var="repo">&lt;repo&gt;</code>, and make it <strong>public</strong> (GitHub Pages
+      on the free plan needs a public repo).</p>
+  </div>
+
+  <div data-when="host:codeberg,gitlab">
+    <p>The template lives on GitHub, so bring a copy of it onto
+      <span data-var="hostName">Codeberg</span>: import
+      <code>https://github.com/TimAidley/Timber-site-template</code> using your host's
+      repository import (Codeberg: <strong>+ → New Migration</strong>; GitLab:
+      <strong>New project → Import project → Repository by URL</strong>), or push a copy of the
+      template's contents into a new empty repo. Name it
+      <code data-var="repo">&lt;repo&gt;</code>.</p>
+    <p>The template carries the workflows for every host side by side —
+      <code>.github/workflows/</code>, <code>.forgejo/workflows/</code> and
+      <code>.gitlab-ci.yml</code>. Each host reads its own and ignores the others.</p>
+  </div>
+</section>
+
+<!-- ---------------------------------------------------------------- 2 --- -->
+<section class="step" id="enable-build" data-when="host:github deploy:pages">
+  <h2><span class="num"></span><span class="title">Enable Pages</span></h2>
+  <p>In your new repo: <strong>Settings → Pages → Source: "GitHub Actions."</strong></p>
+</section>
+
+<section class="step" id="enable-forgejo-actions" data-when="host:codeberg">
+  <h2><span class="num"></span><span class="title">Enable Actions</span></h2>
+  <p>Codeberg Pages is <strong>branch-based</strong> — it serves from a <code>pages</code> branch
+    rather than an artifact. The template ships
+    <code>.forgejo/workflows/deploy.yml</code> for exactly this: it builds your site and
+    force-pushes the output to <code>pages</code>, served at
+    <code data-var="siteUrl">https://&lt;owner&gt;.codeberg.page/&lt;repo&gt;</code>.</p>
+  <p>Turn it on under <strong>Settings → Actions</strong> on your repo. The workflow's header
+    comment lists the one-time steps it needs.</p>
+</section>
+
+<section class="step" id="enable-gitlab-ci" data-when="host:gitlab">
+  <h2><span class="num"></span><span class="title">Check CI/CD is on</span></h2>
+  <p>The template ships <code>.gitlab-ci.yml</code>, whose <code>pages</code> job builds your site
+    and publishes the <code>public/</code> artifact to GitLab Pages at
+    <code data-var="siteUrl">https://&lt;namespace&gt;.gitlab.io/&lt;project&gt;</code>. GitLab CI
+    runs it automatically once the file is present — there's nothing to enable unless CI/CD has
+    been disabled for the project.</p>
+</section>
+
+<section class="step" id="cloudflare-target" data-when="deploy:cloudflare">
+  <h2><span class="num"></span><span class="title">Point the deploy at Cloudflare Pages</span></h2>
+  <p>Your source, editor and commits stay on <strong>GitHub</strong> exactly as elsewhere — only
+    the <em>hosting target</em> changes. GitHub Actions still runs the build and publishes to
+    Cloudflare via <code>wrangler</code>, so the editor's publish status keeps working. There's
+    no need to enable GitHub Pages.</p>
+  <p>In your repo → <strong>Settings → Secrets and variables → Actions</strong>:</p>
+  <div class="scroll-x">
+  <table>
+    <thead><tr><th>Kind</th><th>Name</th><th>Value</th></tr></thead>
+    <tbody>
+      <tr><td>Variable</td><td><code>TIMBER_DEPLOY_TARGET</code></td><td><code>cloudflare</code></td></tr>
+      <tr><td>Secret</td><td><code>CLOUDFLARE_API_TOKEN</code></td><td>a <strong>custom API token</strong> (see below)</td></tr>
+      <tr><td>Secret</td><td><code>CLOUDFLARE_ACCOUNT_ID</code></td><td>Workers &amp; Pages overview, right-hand side</td></tr>
+      <tr><td>Variable <span class="tag">optional</span></td><td><code>TIMBER_CF_PAGES_PROJECT</code></td><td><code data-var="cfProject">the repo name</code> — defaults to the repo name; the workflow creates the project on the first run</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>Create the token under <strong>My Profile → API Tokens → Create Token → Create Custom
+    Token</strong> (<em>not</em> a template) with <strong>Account · Cloudflare Pages · Edit</strong>
+    and <strong>Account · Account Settings · Read</strong>, scoped under <strong>Account Resources
+    → Include</strong> → your account.</p>
+  <div class="warn" data-when="auth:app-redirect,app-device">
+    <p>You also chose the GitHub App sign-in, and <strong>both workflows read this same
+      secret</strong> — so the one token needs the union of the permissions: add
+      <strong>Account · Workers Scripts · Edit</strong> as well. A Pages-only token deploys the
+      site fine and then fails "Setup OAuth broker" with
+      <code>Authentication error [code: 10000]</code> while uploading the Worker's secrets.</p>
+  </div>
+</section>
+
+<!-- ---------------------------------------------------------------- 3 --- -->
+<section class="step" id="base-url">
+  <h2><span class="num"></span><span class="title">Set your base URL</span></h2>
+  <p>Edit <code>content/settings/index.md</code> and set <code>baseUrl</code> (no trailing slash),
+    then commit. This is what in-page links, canonical URLs and the sitemap are built from.</p>
+  <div class="value">
+    <span class="k">baseUrl</span>
+    <code class="copyable" data-var="baseUrlLine">baseUrl: https://&lt;you&gt;.github.io/&lt;repo&gt;</code>
+  </div>
+  <p data-when="deploy:pages domain:default host:github,codeberg,gitlab">
+    Your site is served under a repo subpath, so the subpath has to be part of
+    <code>baseUrl</code> — leaving it out is the usual cause of CSS and links 404-ing on the live
+    site.</p>
+  <p data-when="deploy:cloudflare">
+    Cloudflare Pages serves at the <strong>root</strong>, so there's no <code>/&lt;repo&gt;/</code>
+    subpath here — and the editor is co-hosted at <code data-var="editorPathAbs">/edit/</code>
+    rather than <code>/&lt;repo&gt;/edit/</code>.</p>
+  <p data-when="host:github">Committing this also kicks off the first deploy.</p>
+  <div class="value">
+    <span class="k">Your site</span>
+    <code class="copyable" data-var="siteUrl">https://&lt;you&gt;.github.io/&lt;repo&gt;</code>
+  </div>
+  <div class="value">
+    <span class="k">Your editor</span>
+    <code class="copyable" data-var="editorUrl">https://&lt;you&gt;.github.io/&lt;repo&gt;/edit/</code>
+  </div>
+</section>
+
+<!-- --------------------------------------------------------- custom domain -->
+<section class="step" id="domain-dns" data-when="domain:custom deploy:pages">
+  <h2><span class="num"></span><span class="title">Point DNS at GitHub</span></h2>
+  <p>A custom domain serves the site at the <strong>root</strong>, so three things move together —
+    do them in this order.</p>
+  <p>At your DNS provider, add a <code>CNAME</code> record for the subdomain you want (e.g.
+    <code>www</code> or <code>blog</code>) pointing at
+    <code class="copyable" data-var="pagesHost">&lt;you&gt;.github.io</code> — the bare host, no
+    repo, no <code>https://</code>. For an <em>apex</em> domain
+    (<code>example.com</code>, no subdomain) use <code>A</code>/<code>AAAA</code> records pointing
+    at GitHub's Pages IPs instead; GitHub's "Managing a custom domain" doc lists the current
+    addresses. Give it a few minutes to resolve.</p>
+</section>
+
+<section class="step" id="domain-repo" data-when="domain:custom deploy:pages">
+  <h2><span class="num"></span><span class="title">Tell the repo about the domain</span></h2>
+  <p>In <strong>one commit</strong>:</p>
+  <ul>
+    <li>Add a <code>CNAME</code> file at the repo root containing just the domain — one line, no
+      scheme, no trailing slash. <code>deploy.yml</code> copies it into the published output,
+      which is how GitHub Pages learns the domain; it is also the flag that tells the workflow to
+      build the editor for <code data-var="editorPathAbs">/edit/</code> instead of
+      <code>/&lt;repo&gt;/edit/</code>.
+      <div class="value">
+        <span class="k">CNAME</span>
+        <code class="copyable" data-var="domain">www.example.com</code>
+      </div>
+    </li>
+    <li>Set <code>baseUrl</code> in <code>content/settings/index.md</code> to that domain's root.
+      <div class="value">
+        <span class="k">baseUrl</span>
+        <code class="copyable" data-var="baseUrlLine">baseUrl: https://www.example.com</code>
+      </div>
+    </li>
+  </ul>
+  <div class="warn">
+    <p>These two must agree. <code>baseUrl</code> still pointing at the old subpath is the usual
+      cause of every link on the new domain gaining a stray <code>/&lt;repo&gt;/</code>.</p>
+  </div>
+</section>
+
+<section class="step" id="domain-https" data-when="domain:custom deploy:pages">
+  <h2><span class="num"></span><span class="title">Confirm the domain and enforce HTTPS</span></h2>
+  <p>After the deploy lands, go to <strong>Settings → Pages</strong>, confirm the custom domain
+    shows as configured, and tick <strong>Enforce HTTPS</strong> once the certificate has been
+    issued. It can take a few minutes, and the box stays greyed out until then.</p>
+  <p>The old <code data-var="defaultSiteUrl">https://&lt;you&gt;.github.io/&lt;repo&gt;/</code> URL
+    redirects to the new domain, so existing links keep working.</p>
+  <div class="warn" data-when="auth:app-redirect,app-device">
+    <p><strong>The editor URL changed too, so the sign-in setup has to follow.</strong> Update the
+      GitHub App's <strong>Callback URL</strong> to
+      <code class="copyable" data-var="editorUrl">https://&lt;your-domain&gt;/edit/</code>, add a
+      repo <strong>Variable</strong> <code>TIMBER_EDITOR_ORIGIN</code> =
+      <code class="copyable" data-var="editorOrigin">https://&lt;your-domain&gt;</code> (origin
+      only — no path, no trailing slash), and re-run <strong>Setup OAuth broker</strong> so the
+      Worker picks it up. Otherwise sign-in fails with a <code>redirect_uri</code> mismatch or
+      <code>origin_not_allowed</code>.</p>
+    <p>Set the <em>variable</em> rather than editing <code>ALLOWED_ORIGINS</code> in the Cloudflare
+      dashboard: Setup rewrites that value on every run, so a dashboard-only edit is silently
+      reverted the next time it runs.</p>
+  </div>
+</section>
+
+<section class="step" id="domain-cloudflare" data-when="domain:custom deploy:cloudflare">
+  <h2><span class="num"></span><span class="title">Attach the domain in Cloudflare</span></h2>
+  <p>Add the domain to the Pages project under <strong>Workers &amp; Pages → your project →
+    Custom domains</strong> and follow Cloudflare's DNS instructions, then set
+    <code>baseUrl</code> to it.</p>
+  <div class="value">
+    <span class="k">baseUrl</span>
+    <code class="copyable" data-var="baseUrlLine">baseUrl: https://www.example.com</code>
+  </div>
+  <div class="warn" data-when="auth:app-redirect,app-device">
+    <p>The editor URL moves with it: update the GitHub App's <strong>Callback URL</strong> to
+      <code class="copyable" data-var="editorUrl">https://&lt;your-domain&gt;/edit/</code>, set the
+      repo <strong>Variable</strong> <code>TIMBER_EDITOR_ORIGIN</code> =
+      <code class="copyable" data-var="editorOrigin">https://&lt;your-domain&gt;</code>, and re-run
+      <strong>Setup OAuth broker</strong>.</p>
+  </div>
+</section>
+
+<!-- ------------------------------------------------------------- optional -->
+<section class="step" id="multilingual">
+  <h2><span class="num"></span><span class="title">Multiple languages</span> <span class="tag">optional</span></h2>
+  <p>Timber is single-language unless you opt in. To run the site in more than one language, add a
+    <code>languages</code> list (and a <code>defaultLanguage</code>) to
+    <code>content/settings/index.md</code>. That turns on per-language URLs
+    (<code>/&lt;lang&gt;/…</code>), an <strong>Add translation</strong> action in the editor, and a
+    theme language switcher.</p>
+  <p>It's a deliberate step — it moves existing page URLs under a language prefix — so read
+    <a href="multilingual.md">docs/multilingual.md</a> before enabling it.</p>
+</section>
+
+<section class="step" id="pagination">
+  <h2><span class="num"></span><span class="title">A paginated listing</span> <span class="tag">optional</span></h2>
+  <p>Once a collection has more entries than fit on one page, add a <code>paginate</code> block to
+    the page that lists it (<code>paginate: { collection: posts, size: 10 }</code>) and the build
+    splits it across <code>/blog/</code>, <code>/blog/page/2/</code>, … with a pager the default
+    theme already renders. See <a href="pagination.md">docs/pagination.md</a>.</p>
+</section>
+
+<section class="step" id="content-checks" data-when="host:github">
+  <h2><span class="num"></span><span class="title">Require the content checks</span> <span class="tag">recommended</span></h2>
+  <p>The template ships <code>.github/workflows/validate.yml</code>, which runs two checks on every
+    pull request (and on pushes to branches other than <code>main</code> and your
+    <code>*_wip</code> editor branch):</p>
+  <ul>
+    <li><code>timber validate .</code> — schemas, required fields, references, duplicate ids.</li>
+    <li><code>timber fmt --check .</code> — every content file matches the exact form the editor
+      writes. A file that doesn't (a hand-written or imported one) is still <em>valid</em> and
+      builds fine, but the editor re-serializes it on load and shows it as modified before you've
+      typed anything — and reverting doesn't clear it. See
+      <a href="https://github.com/TimAidley/Timber-site-template/blob/main/AUTHORING.md">AUTHORING.md</a>.</li>
+  </ul>
+  <p>Those run automatically, but a workflow can only <em>report</em> a result — <strong>it can't
+    refuse a push on its own.</strong> To make a failing check actually block a merge go to
+    <strong>Settings → Rules → Rulesets → New ruleset → New branch ruleset</strong>, target the
+    default branch, tick <strong>Require status checks to pass</strong>, and add
+    <strong>Validate content</strong> to the list. (On the older UI: <strong>Settings → Branches →
+    Add branch protection rule</strong> → <em>Require status checks to pass before merging</em>.)</p>
+  <div class="note">
+    <p>The check only appears in that picker <strong>after it has run at least once</strong>, so
+      open a throwaway pull request first if the list is empty.</p>
+    <p>This is GitHub-only today — the Codeberg and GitLab setups deploy fine but don't yet ship an
+      equivalent content check.</p>
+  </div>
+</section>
+
+<!-- ------------------------------------------------------------ PAT path -->
+<section class="step" id="pat-deploy" data-when="auth:pat host:github">
+  <h2><span class="num"></span><span class="title">Let the first deploy run</span></h2>
+  <p>Make sure the <strong>Build &amp; deploy site</strong> Action has run — committing
+    <code>baseUrl</code> above triggers it, or use <strong>Actions → Build &amp; deploy site → Run
+    workflow</strong>. It ships the site <em>and</em> the editor; with no broker configured the
+    editor uses paste-a-PAT.</p>
+</section>
+
+<section class="step" id="pat-create" data-when="auth:pat">
+  <h2><span class="num"></span><span class="title">Create a token</span></h2>
+  <div data-when="host:github">
+    <p>GitHub → Settings → Developer settings → <strong>Fine-grained tokens</strong>. Scope it to
+      <code data-var="repo">&lt;repo&gt;</code> with <strong>Contents: Read &amp; write</strong>,
+      and add <strong>Actions: Read &amp; write</strong> so the editor can show deploy status and
+      re-run failed deploys. Pick an expiry you're comfortable with.</p>
+  </div>
+  <div data-when="host:codeberg">
+    <p>On Codeberg: <strong>Settings → Applications</strong> → create a token with contents
+      read/write.</p>
+  </div>
+  <div data-when="host:gitlab">
+    <p>On GitLab: <strong>User settings → Access tokens</strong> → create one with the
+      <code>write_repository</code> scope.</p>
+  </div>
+</section>
+
+<section class="step" id="pat-signin" data-when="auth:pat">
+  <h2><span class="num"></span><span class="title">Open the editor and paste it</span></h2>
+  <div class="value">
+    <span class="k">Editor</span>
+    <code class="copyable" data-var="editorUrl">https://&lt;you&gt;.github.io/&lt;repo&gt;/edit/</code>
+  </div>
+  <p>Paste the token and start editing. That's it — you're done.</p>
+  <p class="note">The token lives in that browser's <code>localStorage</code>; you'll re-paste when
+    it expires or on a new browser.</p>
+</section>
+
+<!-- ------------------------------------------------------- broker (all) -->
+<section class="step" id="cloudflare-account" data-when="auth:app-redirect,app-device,oauth">
+  <h2><span class="num"></span><span class="title">Set up Cloudflare (hosts the broker)</span></h2>
+  <p data-when="auth:app-redirect,app-device">The broker is a tiny Cloudflare <strong>Worker</strong>.
+    The free plan is plenty.</p>
+  <p data-when="auth:oauth">The broker is a tiny Cloudflare <strong>Worker</strong>. The free plan
+    is plenty. It holds <strong>no secret</strong> — <span data-var="hostName">Codeberg</span> is a
+    public OAuth client; the broker exists only because the token endpoint sends no CORS headers.</p>
+  <ol>
+    <li>Create a free account at <a href="https://dash.cloudflare.com">dash.cloudflare.com</a> if
+      you don't have one.</li>
+    <li><strong>Workers &amp; Pages</strong> → ensure a <strong>workers.dev subdomain</strong> is
+      enabled for your account (Workers &amp; Pages → <em>Subdomain</em>). The setup fails without
+      one.</li>
+    <li>Copy your <strong>Account ID</strong> (Workers &amp; Pages overview, right-hand side).</li>
+    <li>Create a <strong>custom API token</strong>: My Profile → <strong>API Tokens</strong> →
+      <strong>Create Token</strong>, scroll past the templates to <strong>Create Custom
+      Token</strong> → <strong>Get started</strong>. Give it a name, then add these
+      <strong>Permissions</strong> rows:
+      <ul>
+        <li><strong>Account · Workers Scripts · Edit</strong> — deploys the Worker and sets its secret.</li>
+        <li><strong>Account · Account Settings · Read</strong> — reads your <strong>workers.dev</strong> subdomain.</li>
+        <li data-when="deploy:cloudflare"><strong>Account · Cloudflare Pages · Edit</strong> — you're
+          also deploying the site to Cloudflare Pages, and both workflows read this same
+          <code>CLOUDFLARE_API_TOKEN</code> secret, so one token has to cover both jobs.</li>
+      </ul>
+      Under <strong>Account Resources</strong>, choose <strong>Include</strong> → your account.
+      Leave <strong>Zone Resources</strong> untouched (a workers.dev deploy needs no zone).
+      <strong>Continue to summary</strong> → <strong>Create Token</strong> → copy it.</li>
+  </ol>
+  <p>Hold on to the <strong>Account ID</strong> and <strong>API token</strong> — you'll paste them
+    in a moment.</p>
+</section>
+
+<!-- ------------------------------------------------------ GitHub App path -->
+<section class="step" id="github-app" data-when="auth:app-redirect,app-device">
+  <h2><span class="num"></span><span class="title">Register and install a GitHub App</span></h2>
+  <p>GitHub → Settings → Developer settings → <strong>GitHub Apps</strong> → <strong>New GitHub
+    App</strong>:</p>
+  <ul>
+    <li><strong>Callback URL</strong> — exactly this, trailing slash included:
+      <div class="value"><code class="copyable" data-var="editorUrl">https://&lt;you&gt;.github.io/&lt;repo&gt;/edit/</code></div>
+    </li>
+    <li><strong>Expire user authorization tokens:</strong> <strong>checked</strong> (short-lived
+      tokens; recommended).</li>
+    <li><strong>Webhook → Active:</strong> <strong>unchecked</strong> (if the form demands a URL,
+      put <code>https://example.com</code>).</li>
+    <li><strong>Where can this be installed?</strong> <strong>Only on this account.</strong></li>
+    <li><strong>Repository permissions</strong> (nothing else): <strong>Contents: Read &amp;
+      write</strong>, <strong>Actions: Read &amp; write</strong>, <strong>Metadata: Read</strong>
+      (automatic).</li>
+    <li data-when="auth:app-device">On the General page, also tick <strong>Enable Device
+      Flow</strong>.</li>
+  </ul>
+  <p>Create it and copy the <strong>Client ID</strong><span data-when="auth:app-redirect">, then
+    generate a <strong>Client secret</strong></span>.</p>
+  <p data-when="auth:app-device">The device flow uses <strong>no client secret</strong>, so there's
+    no need to generate one.</p>
+  <p>Then <strong>Install App</strong> → your account → <strong>Only select repositories</strong> →
+    <code data-var="repo">&lt;repo&gt;</code>. The install is what actually grants access to the
+    repo — registering the App alone does not.</p>
+  <div class="note" data-when="auth:app-redirect">
+    <p><strong>Prefer a classic OAuth App?</strong> It works with the same template and the same
+      <code>GH_OAUTH_*</code> names. Register it under <strong>Developer settings → OAuth
+      Apps</strong> with the same callback URL, skip the install step (OAuth Apps aren't
+      "installed"), and grant the <code>repo</code> scope at first sign-in. The trade-off: that
+      scope is <strong>account-wide</strong>, which is exactly what a GitHub App avoids. Deeper
+      reference: <a href="auth-github-app.md">docs/auth-github-app.md</a>.</p>
+  </div>
+</section>
+
+<section class="step" id="github-app-secrets" data-when="auth:app-redirect,app-device">
+  <h2><span class="num"></span><span class="title">Add the secrets and variables</span></h2>
+  <p>In your repo → <strong>Settings → Secrets and variables → Actions</strong>. Use these exact
+    names — the <code>GH_</code> prefix matters, because GitHub forbids names starting with
+    <code>GITHUB_</code>.</p>
+  <div class="scroll-x">
+  <table>
+    <thead><tr><th>Kind</th><th>Name</th><th>Value</th></tr></thead>
+    <tbody>
+      <tr><td>Variable</td><td><code>GH_OAUTH_CLIENT_ID</code></td><td>the App's <strong>Client ID</strong></td></tr>
+      <tr><td>Secret</td><td><code>CLOUDFLARE_API_TOKEN</code></td><td>the custom API token you just created</td></tr>
+      <tr><td>Secret</td><td><code>CLOUDFLARE_ACCOUNT_ID</code></td><td>your Cloudflare Account ID</td></tr>
+      <tr data-when="auth:app-redirect"><td>Secret</td><td><code>GH_OAUTH_CLIENT_SECRET</code></td><td>the App's client secret</td></tr>
+      <tr data-when="auth:app-device"><td>Variable</td><td><code>TIMBER_OAUTH_FLOW</code></td><td><code>device</code></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p data-when="auth:app-redirect">Leave <code>TIMBER_OAUTH_FLOW</code> unset — unset means the
+    redirect flow.</p>
+  <p data-when="auth:app-device">You can <strong>omit</strong> <code>GH_OAUTH_CLIENT_SECRET</code>
+    entirely: the device flow uses no secret.</p>
+</section>
+
+<!-- ------------------------------------------------- Gitea / GitLab OAuth -->
+<section class="step" id="codeberg-oauth-app" data-when="auth:oauth host:codeberg">
+  <h2><span class="num"></span><span class="title">Register an OAuth2 application</span></h2>
+  <p>On Codeberg: <strong>Settings → Applications → Create OAuth2 Application</strong>. Register it
+    as a <strong>public client</strong> — leave "Confidential Client" <strong>unchecked</strong>,
+    so there's no secret anywhere.</p>
+  <div class="value">
+    <span class="k">Redirect URI</span>
+    <code class="copyable" data-var="editorUrl">https://&lt;owner&gt;.codeberg.page/&lt;repo&gt;/edit/</code>
+  </div>
+</section>
+
+<section class="step" id="codeberg-oauth-secrets" data-when="auth:oauth host:codeberg">
+  <h2><span class="num"></span><span class="title">Add the secrets and variables</span></h2>
+  <p>In your repo → <strong>Settings → Actions → Secrets and variables</strong>:</p>
+  <div class="scroll-x">
+  <table>
+    <thead><tr><th>Kind</th><th>Name</th><th>Value</th></tr></thead>
+    <tbody>
+      <tr><td>Variable</td><td><code>OAUTH_CLIENT_ID</code></td><td>the OAuth2 application's client ID</td></tr>
+      <tr><td>Variable</td><td><code>TIMBER_OAUTH_SCOPE</code></td><td>e.g. <code>write:repository</code></td></tr>
+      <tr><td>Secret</td><td><code>CLOUDFLARE_API_TOKEN</code></td><td>the custom API token you just created</td></tr>
+      <tr><td>Secret</td><td><code>CLOUDFLARE_ACCOUNT_ID</code></td><td>your Cloudflare Account ID</td></tr>
+      <tr><td>Secret</td><td><code>DEPLOY_TOKEN</code></td><td>a PAT with <code>contents:write</code></td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section class="step" id="gitlab-oauth-app" data-when="auth:oauth host:gitlab">
+  <h2><span class="num"></span><span class="title">Register an OAuth application</span></h2>
+  <p>On GitLab: <strong>User settings → Applications</strong>. Register it as a
+    <strong>public</strong> client — leave "Confidential" <strong>unchecked</strong>.</p>
+  <div class="value">
+    <span class="k">Redirect URI</span>
+    <code class="copyable" data-var="editorUrl">https://&lt;namespace&gt;.gitlab.io/&lt;project&gt;/edit/</code>
+  </div>
+</section>
+
+<section class="step" id="gitlab-oauth-secrets" data-when="auth:oauth host:gitlab">
+  <h2><span class="num"></span><span class="title">Add the CI/CD variables</span></h2>
+  <p>In your project → <strong>Settings → CI/CD → Variables</strong> (masked):</p>
+  <div class="scroll-x">
+  <table>
+    <thead><tr><th>Name</th><th>Value</th></tr></thead>
+    <tbody>
+      <tr><td><code>TIMBER_OAUTH_CLIENT_ID</code></td><td>the application's client ID</td></tr>
+      <tr><td><code>TIMBER_OAUTH_SCOPE</code></td><td>e.g. <code>api</code></td></tr>
+      <tr><td><code>CLOUDFLARE_API_TOKEN</code></td><td>the custom API token you just created</td></tr>
+      <tr><td><code>CLOUDFLARE_ACCOUNT_ID</code></td><td>your Cloudflare Account ID</td></tr>
+      <tr><td><code>GITLAB_PUSH_TOKEN</code></td><td>a token with <code>write_repository</code></td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<!-- ------------------------------------------------- deploy broker + sign in -->
+<section class="step" id="run-broker" data-when="auth:app-redirect,app-device,oauth">
+  <h2><span class="num"></span><span class="title">Deploy the broker</span></h2>
+  <p data-when="auth:app-redirect,app-device"><strong>Actions → "Setup OAuth broker" → Run
+    workflow.</strong> It deploys the Cloudflare broker, records its URL, and triggers a site
+    deploy. Wait for <strong>Build &amp; deploy site</strong> to go green.</p>
+  <p data-when="auth:oauth host:codeberg"><strong>Actions → "Setup OAuth broker (Codeberg)" → Run
+    workflow.</strong> It deploys the broker in Gitea mode (<strong>no secret</strong>), records
+    its URL, and redeploys the editor with sign-in active. The broker's
+    <code>GITEA_BASE_URL</code> and the editor's <code>oauth.clientId</code>,
+    <code>brokerUrl</code> and <code>scope</code> are all wired for you.</p>
+  <p data-when="auth:oauth host:gitlab">Run the <strong><code>setup-oauth-broker</code></strong> job
+    from the <strong>Pipelines</strong> page (the ▶ button). It deploys the broker in GitLab mode
+    (<strong>no secret</strong> — GitLab is a public client; the broker is only a CORS relay),
+    records its URL, and redeploys the editor with sign-in active.</p>
+</section>
+
+<section class="step" id="signin" data-when="auth:app-redirect,app-device,oauth">
+  <h2><span class="num"></span><span class="title">Sign in</span></h2>
+  <div class="value">
+    <span class="k">Editor</span>
+    <code class="copyable" data-var="editorUrl">https://&lt;you&gt;.github.io/&lt;repo&gt;/edit/</code>
+  </div>
+  <p data-when="auth:app-redirect">Click <strong>Sign in with GitHub</strong>: you're bounced to
+    GitHub, you approve, and you land back signed in.</p>
+  <p data-when="auth:app-device">Click <strong>Sign in with GitHub</strong>: the editor shows a
+    short code and opens <code>github.com/login/device</code>. Enter the code, approve, and it
+    signs you in.</p>
+  <p data-when="auth:oauth">Click <strong>Sign in with <span data-var="hostName">Codeberg</span></strong>,
+    approve, and you land back signed in.</p>
+  <p class="note" data-when="auth:app-redirect,app-device">One App plus one broker can serve
+    <strong>several</strong> of your sites — reuse them. Add each new site's <code>…/edit/</code>
+    callback URL to the App, install it on that repo, and the shared broker already allows your
+    <code data-var="editorOrigin">https://&lt;you&gt;.github.io</code> origin.</p>
+</section>
+
+</div><!-- /.steps -->
+
+<!-- ====================================================================== -->
+<!-- Troubleshooting                                                        -->
+<!-- ====================================================================== -->
+
+<section id="troubleshooting">
+  <h2>Troubleshooting</h2>
+  <p class="hint" style="color:var(--muted);font-size:0.9rem">
+    Filtered to your choices. If your symptom isn't here, hit <strong>Show every path</strong>
+    above — a mis-selected option is a common reason an answer looks missing.
+  </p>
+  <ul>
+    <li data-when="auth:app-redirect,app-device"><strong>App "does not need repository access" at
+      install</strong> → the repository permissions didn't save. Edit the App →
+      <strong>Permissions &amp; events</strong> → set <strong>Contents: Read &amp; write</strong>
+      and <strong>Actions: Read &amp; write</strong> → Save, then accept the updated permissions on
+      the installation.</li>
+    <li data-when="auth:app-redirect,app-device"><strong>Sign-in produces a token with no repo
+      access</strong> → the App isn't installed on the repo, or it's installed on "All
+      repositories" without your repo selected.</li>
+    <li data-when="auth:app-redirect,app-device"><strong>"Secret names must not start with
+      GITHUB_"</strong> → use the <code>GH_OAUTH_*</code> names.</li>
+    <li data-when="auth:app-redirect,app-device,oauth"><strong>Setup fails reading your workers.dev
+      subdomain</strong> → enable it (Cloudflare → Workers &amp; Pages → Subdomain), then re-run
+      the setup workflow.</li>
+    <li data-when="auth:app-redirect"><strong>Sign-in <code>redirect_uri</code> mismatch</strong> →
+      the App's callback must equal
+      <code data-var="editorUrl">https://&lt;you&gt;.github.io/&lt;repo&gt;/edit/</code> exactly —
+      trailing slash, lowercase host.</li>
+    <li data-when="auth:app-redirect,app-device,oauth"><strong><code>origin_not_allowed</code> on
+      sign-in</strong> → the broker's allowed origin didn't match the origin the editor is served
+      from. Set the repo Variable <code>TIMBER_EDITOR_ORIGIN</code> to
+      <code data-var="editorOrigin">https://&lt;you&gt;.github.io</code> (scheme + host only) and
+      re-run the setup workflow. Editing <code>ALLOWED_ORIGINS</code> in the Cloudflare dashboard
+      works until the next Setup run overwrites it.</li>
+    <li data-when="auth:app-redirect,app-device,oauth" data-x-note="cf-token"><strong><code>Authentication
+      error [code: 10000]</code> during setup</strong> → the Cloudflare API token is missing
+      <strong>Account · Workers Scripts · Edit</strong>.</li>
+    <li data-when="host:github"><strong>Deploy fails at "Check out Timber"</strong> → the
+      <code>TimAidley/Timber</code> repo must be public.</li>
+    <li><strong>CSS and links 404 on the live site</strong> → confirm <code>baseUrl</code> is
+      <code data-var="siteUrl">https://&lt;you&gt;.github.io/&lt;repo&gt;</code>, subpath included.</li>
+    <li data-when="host:github deploy:pages"><strong>Pages 404 after a green deploy</strong> →
+      confirm <strong>Settings → Pages → Source = GitHub Actions</strong> and give it a minute.</li>
+    <li data-when="deploy:cloudflare"><strong>The deploy succeeds but the editor's publish status
+      never updates</strong> → you're on the "GitHub Actions builds → <code>wrangler pages
+      deploy</code>" model, which is the supported one. Cloudflare's own Git integration can build
+      a Timber site too, but then there's no GitHub Actions run for the editor's status to follow.</li>
+    <li data-when="host:codeberg"><strong>The site never appears</strong> → Codeberg Pages serves
+      from the <code>pages</code> branch. Check the branch exists and that
+      <strong>Settings → Actions</strong> is enabled.</li>
+    <li data-when="host:codeberg"><strong>The Publish button never leaves "Building…"</strong> →
+      expected. Codeberg has no deploy capability behind it, unlike GitHub and GitLab.</li>
+  </ul>
+</section>
+
+<section id="self-hosted">
+  <h2>Self-hosted instances</h2>
+  <p data-when="host:codeberg">Self-hosted Gitea/Forgejo works the same way — set
+    <code>apiBaseUrl</code> to your instance origin. The workflows derive
+    <code>GITEA_BASE_URL</code> from the instance, and <code>TIMBER_EDITOR_ORIGIN</code> overrides
+    the editor origin if your Pages domain isn't <code>&lt;owner&gt;.codeberg.page</code>.</p>
+  <p data-when="host:gitlab">Self-hosted GitLab works the same way — set <code>apiBaseUrl</code> to
+    your instance. Nested groups are handled by <code>projectPath</code>
+    (<code>CI_PROJECT_PATH</code>), which <code>.gitlab-ci.yml</code> sets for you.</p>
+  <p data-when="host:github">Timber's git host is a swappable adapter, and Codeberg (Forgejo) and
+    GitLab are supported alternatives — including self-hosted instances of either. Switch the
+    <strong>Where your source lives</strong> choice above to see their setup.</p>
+  <p>Background on the seam: <a href="../ARCHITECTURE.md">ARCHITECTURE.md</a> →
+    "The git host — the <code>HostProvider</code> seam".</p>
+</section>
+
+<footer class="page">
+  <p>These are the canonical Timber setup instructions — the source is
+    <code>docs/install.html</code> in the
+    <a href="https://github.com/TimAidley/Timber">Timber repo</a>. Your choices and ticks are kept
+    in this browser only.</p>
+</footer>
+
+</div><!-- /.wrap -->
+
+<script>
+(function () {
+  'use strict';
+
+  var AXES = ['host', 'auth', 'deploy', 'domain'];
+  var FIELDS = ['owner', 'repo', 'domain', 'cfProject', 'editorPath'];
+  var STORE = 'timber-install-v1';
+
+  var doc = document;
+  var body = doc.body;
+  var showAll = false;
+  var checked = Object.create(null);
+
+  doc.documentElement.className = 'js';
+
+  /* --- data-when ------------------------------------------------------- */
+
+  function matches(el, state) {
+    var when = el.getAttribute('data-when');
+    if (!when) return true;
+    return when.trim().split(/\s+/).every(function (term) {
+      var bits = term.split(':');
+      var axis = bits[0];
+      var values = (bits[1] || '').split(',');
+      return values.indexOf(state[axis]) !== -1;
+    });
+  }
+
+  function readState() {
+    var state = {};
+    AXES.forEach(function (axis) {
+      var hit = doc.querySelector('input[name="' + axis + '"]:checked');
+      state[axis] = hit ? hit.value : null;
+    });
+    return state;
+  }
+
+  function readFields() {
+    var f = {};
+    FIELDS.forEach(function (name) {
+      var el = doc.getElementById('f-' + name);
+      f[name] = el ? el.value.trim() : '';
+    });
+    return f;
+  }
+
+  /* --- derived values -------------------------------------------------- */
+
+  function computeVars(s, f) {
+    var ownerPh = s.host === 'gitlab' ? '<namespace>' : s.host === 'codeberg' ? '<owner>' : '<you>';
+    var repoPh = s.host === 'gitlab' ? '<project>' : '<repo>';
+    var owner = f.owner || ownerPh;
+    // Pages serves from the lowercased login; a capitalised owner in a URL is a
+    // classic 404, so normalise it here rather than telling people to remember.
+    var ownerLc = f.owner ? f.owner.toLowerCase() : ownerPh;
+    var repo = f.repo || repoPh;
+    var editorPath = f.editorPath || 'edit';
+    var domain = f.domain || '<your-domain>';
+    var cfProject = f.cfProject || f.repo || '<project>';
+
+    var pagesHost =
+      s.host === 'codeberg' ? ownerLc + '.codeberg.page' :
+      s.host === 'gitlab' ? ownerLc + '.gitlab.io' :
+      ownerLc + '.github.io';
+
+    var defaultSiteUrl = s.host === 'github' && s.deploy === 'cloudflare'
+      ? 'https://' + cfProject + '.pages.dev'
+      : 'https://' + pagesHost + '/' + repo;
+
+    var siteUrl = s.domain === 'custom' ? 'https://' + domain : defaultSiteUrl;
+    var editorOrigin = siteUrl.split('/').slice(0, 3).join('/');
+    var editorUrl = siteUrl + '/' + editorPath + '/';
+
+    return {
+      hostName: s.host === 'codeberg' ? 'Codeberg' : s.host === 'gitlab' ? 'GitLab' : 'GitHub',
+      pagesName: s.host === 'codeberg' ? 'Codeberg Pages' : s.host === 'gitlab' ? 'GitLab Pages' : 'GitHub Pages',
+      owner: owner,
+      repo: repo,
+      domain: domain,
+      cfProject: cfProject,
+      pagesHost: pagesHost,
+      projectPath: owner + '/' + repo,
+      editorPathAbs: '/' + editorPath + '/',
+      siteUrl: siteUrl,
+      defaultSiteUrl: defaultSiteUrl,
+      baseUrlLine: 'baseUrl: ' + siteUrl,
+      editorUrl: editorUrl,
+      editorOrigin: editorOrigin
+    };
+  }
+
+  /* --- rendering ------------------------------------------------------- */
+
+  function applyVars(vars) {
+    Array.prototype.forEach.call(doc.querySelectorAll('[data-var]'), function (el) {
+      var name = el.getAttribute('data-var');
+      if (Object.prototype.hasOwnProperty.call(vars, name)) el.textContent = vars[name];
+    });
+  }
+
+  function filterOptions(state) {
+    // Options carry data-when too, so the axes constrain each other. Snapping a
+    // now-invalid selection changes the state, so iterate to a fixed point.
+    for (var pass = 0; pass < AXES.length + 1; pass++) {
+      var changed = false;
+      AXES.forEach(function (axis) {
+        var labels = Array.prototype.slice.call(doc.querySelectorAll('label[data-axis="' + axis + '"]'));
+        var visible = [];
+        labels.forEach(function (label) {
+          var ok = matches(label, state);
+          label.hidden = !ok;
+          if (ok) visible.push(label);
+        });
+        var current = visible.filter(function (l) { return l.querySelector('input').checked; });
+        if (!current.length && visible.length) {
+          visible[0].querySelector('input').checked = true;
+          changed = true;
+        }
+        // An axis with one live option isn't a choice — don't make it look like one.
+        var group = doc.querySelector('[data-axis-group="' + axis + '"]');
+        if (group) group.hidden = visible.length < 2;
+      });
+      if (!changed) return readState();
+      state = readState();
+    }
+    return state;
+  }
+
+  function setShowAll(on) {
+    showAll = on;
+    body.classList.toggle('show-all', on);
+    doc.getElementById('btn-showall').textContent = on ? 'Show only my path' : 'Show every path';
+    render();
+  }
+
+  function filterContent(state) {
+    Array.prototype.forEach.call(doc.querySelectorAll('[data-when]:not([data-axis])'), function (el) {
+      el.hidden = showAll ? false : !matches(el, state);
+    });
+  }
+
+  function updateProgress() {
+    var steps = Array.prototype.slice.call(doc.querySelectorAll('.step')).filter(function (s) {
+      return !s.hidden;
+    });
+    var done = steps.filter(function (s) { return checked[s.id]; }).length;
+    doc.getElementById('progress-count').textContent = done + ' of ' + steps.length + ' done';
+    doc.getElementById('bar-fill').style.width = steps.length ? (done / steps.length) * 100 + '%' : '0';
+  }
+
+  function render() {
+    var state = filterOptions(readState());
+    filterContent(state);
+    applyVars(computeVars(state, readFields()));
+    updateProgress();
+    save(state);
+    writeQuery(state);
+  }
+
+  /* --- persistence ----------------------------------------------------- */
+
+  function save(state) {
+    try {
+      localStorage.setItem(STORE, JSON.stringify({
+        state: state,
+        fields: readFields(),
+        checked: Object.keys(checked).filter(function (k) { return checked[k]; })
+      }));
+    } catch (e) { /* private mode, quota — the page still works */ }
+  }
+
+  // Selections live in the query string, never the fragment: the fragment belongs to
+  // the step anchors that other docs deep-link to (…/install.html#content-checks), and
+  // rewriting it here would break both the link and the browser's scroll to it.
+  function writeQuery(state) {
+    var query = '?' + AXES.map(function (a) { return a + '=' + state[a]; }).join('&');
+    if (query !== location.search) {
+      history.replaceState(null, '', location.pathname + query + location.hash);
+    }
+  }
+
+  function applySelection(state) {
+    AXES.forEach(function (axis) {
+      if (!state || !state[axis]) return;
+      var input = doc.querySelector('input[name="' + axis + '"][value="' + state[axis] + '"]');
+      if (input) input.checked = true;
+    });
+  }
+
+  function restore() {
+    var stored = null;
+    try { stored = JSON.parse(localStorage.getItem(STORE) || 'null'); } catch (e) { /* ignore */ }
+    if (stored) {
+      applySelection(stored.state);
+      FIELDS.forEach(function (name) {
+        var el = doc.getElementById('f-' + name);
+        if (el && stored.fields && stored.fields[name]) el.value = stored.fields[name];
+      });
+      (stored.checked || []).forEach(function (id) { checked[id] = true; });
+    }
+    // A shared link beats whatever this browser remembered.
+    if (location.search.length > 1) {
+      var fromQuery = {};
+      location.search.slice(1).split('&').forEach(function (pair) {
+        var kv = pair.split('=');
+        if (AXES.indexOf(kv[0]) !== -1) fromQuery[kv[0]] = decodeURIComponent(kv[1] || '');
+      });
+      applySelection(fromQuery);
+    }
+  }
+
+  // A deep link to a step whose path isn't selected would otherwise land on a hidden
+  // element. Show every path so the anchor resolves, and say why.
+  function honourAnchor() {
+    var target = location.hash.length > 1 && doc.getElementById(location.hash.slice(1));
+    if (target && target.hidden) {
+      setShowAll(true);
+      if (target.scrollIntoView) target.scrollIntoView();
+    }
+  }
+
+  /* --- tick boxes ------------------------------------------------------ */
+
+  function buildCheckboxes() {
+    Array.prototype.forEach.call(doc.querySelectorAll('.step'), function (step) {
+      var h = step.querySelector('h2');
+      var box = doc.createElement('input');
+      box.type = 'checkbox';
+      box.checked = !!checked[step.id];
+      box.setAttribute('aria-label', 'Mark this step done');
+      step.classList.toggle('done', box.checked);
+      box.addEventListener('change', function () {
+        checked[step.id] = box.checked;
+        step.classList.toggle('done', box.checked);
+        updateProgress();
+        save(readState());
+      });
+      h.insertBefore(box, h.firstChild);
+    });
+  }
+
+  function buildCopyButtons() {
+    Array.prototype.forEach.call(doc.querySelectorAll('.copyable'), function (el) {
+      var btn = doc.createElement('button');
+      btn.type = 'button';
+      btn.className = 'copy';
+      btn.textContent = 'Copy';
+      btn.addEventListener('click', function () {
+        var text = el.textContent;
+        var done = function () {
+          btn.textContent = 'Copied';
+          setTimeout(function () { btn.textContent = 'Copy'; }, 1200);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(done, function () { btn.textContent = 'Press ⌘C'; });
+        } else {
+          done();
+        }
+      });
+      el.parentNode.insertBefore(btn, el.nextSibling);
+    });
+  }
+
+  /* --- wiring ---------------------------------------------------------- */
+
+  restore();
+  buildCheckboxes();
+  buildCopyButtons();
+
+  AXES.forEach(function (axis) {
+    Array.prototype.forEach.call(doc.querySelectorAll('input[name="' + axis + '"]'), function (input) {
+      input.addEventListener('change', render);
+    });
+  });
+  FIELDS.forEach(function (name) {
+    var el = doc.getElementById('f-' + name);
+    if (el) el.addEventListener('input', render);
+  });
+
+  doc.getElementById('btn-reset').addEventListener('click', function () {
+    checked = Object.create(null);
+    Array.prototype.forEach.call(doc.querySelectorAll('.step'), function (step) {
+      step.classList.remove('done');
+      var box = step.querySelector('h2 input[type="checkbox"]');
+      if (box) box.checked = false;
+    });
+    render();
+  });
+
+  var showAllBtn = doc.getElementById('btn-showall');
+  showAllBtn.addEventListener('click', function () { setShowAll(!showAll); });
+
+  render();
+  honourAnchor();
+
+  // Exposed for docs/install.html's test, which drives the real page in jsdom
+  // rather than reimplementing the filter logic.
+  window.__timberInstall = {
+    axes: AXES,
+    setSelection: function (state) { applySelection(state); render(); },
+    getState: readState,
+    vars: function () { return computeVars(readState(), readFields()); },
+    visibleOptions: function (axis) {
+      return Array.prototype.slice.call(doc.querySelectorAll('label[data-axis="' + axis + '"]'))
+        .filter(function (l) { return !l.hidden; })
+        .map(function (l) { return l.querySelector('input').value; });
+    },
+    setFields: function (fields) {
+      Object.keys(fields).forEach(function (name) {
+        var el = doc.getElementById('f-' + name);
+        if (el) el.value = fields[name];
+      });
+      render();
+    },
+    visibleSteps: function () {
+      return Array.prototype.slice.call(doc.querySelectorAll('.step'))
+        .filter(function (s) { return !s.hidden; })
+        .map(function (s) { return s.id; });
+    }
+  };
+})();
+</script>
+</body>
+</html>

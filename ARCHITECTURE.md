@@ -265,7 +265,8 @@ Cross-cutting things and every file they touch:
   that switch: `deploy.yml` copies it into `_site` (which is how Pages learns the domain) and
   uses its presence to build the editor for `/edit/` rather than `/<repo>/edit/`. The two must
   agree — a `CNAME` without a matching `baseUrl` gives every in-page link a stray `/<repo>/`.
-  Change either → INSTALL.md §2.4 and `site-template/.github/workflows/deploy.yml`.
+  Change either → the custom-domain steps in `docs/install.html` and
+  `site-template/.github/workflows/deploy.yml`.
 - **Preview asset resolution** → the preview frame can't fetch the repo, so
   `packages/app/src/preview/renderSitePage.ts` (`assetRepoPath`) maps each image reference
   back to the repo path `AssetStore` keys on, then swaps in a blob URL. Three shapes:
@@ -349,7 +350,13 @@ Cross-cutting things and every file they touch:
   → resolve it through `resolveThemePaths`, never a hardcoded `templates/`/`assets/` literal.
 - **The site scaffold** (theme, schemas, sample content, workflows) → edit **`site-template/`**
   only; the mirror regenerates the template repo. Never edit `Timber-site-template` directly.
-- **Setup instructions** → **`INSTALL.md`** only (canonical); the template's README is a stub.
+- **Setup instructions** → **`docs/install.html`** only (canonical); `INSTALL.md` and the
+  template's README are stubs that link to it. It's a single dependency-free page: the
+  `data-when="host:… auth:… deploy:…"` attributes hide the paths that don't apply, and
+  `data-var` slots hold URLs derived from the owner/repo/domain the reader types in. Add a
+  setup step → add a `<section class="step">` with the `data-when` terms it applies to;
+  `test/install-page.test.ts` drives the page in jsdom and fails on an unknown axis value, a
+  duplicate step id, or a combination that loses a required step.
 - **Auth flow / mode** → `host/{auth,oauth,deviceFlow,token}.ts` + the sign-in components
   + `docs/auth-github-app.md`.
 - **The Timber wordmark → keep the two font copies in lockstep.** The brand wordmark renders in two

@@ -33,6 +33,15 @@ export default defineWorkspace([
       include: ['packages/**/test/**/*.live.test.ts'],
     },
   },
+  // Repo-level specs that aren't about a package — currently docs/install.html,
+  // whose filter logic is driven for real in jsdom.
+  {
+    test: {
+      name: 'docs',
+      environment: 'node',
+      include: ['test/**/*.test.ts'],
+    },
+  },
   // The browser editor app runs as its own project (jsdom + React plugin); see
   // packages/app/vitest.config.ts. It's excluded from the two projects above
   // because it's browser-only React, not part of the isomorphism proof.
