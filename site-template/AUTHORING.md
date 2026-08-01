@@ -172,4 +172,4 @@ branch other than `main` and `*_wip`.
 A workflow only *reports* a result, though — it can't refuse a push by itself. To make a
 failing check actually block a merge, mark **Validate content** as a required status check
 on your default branch; the steps are in Timber's
-[`INSTALL.md` §2.6](https://github.com/TimAidley/Timber/blob/main/INSTALL.md).
+[`INSTALL.md` §2.7](https://github.com/TimAidley/Timber/blob/main/INSTALL.md).

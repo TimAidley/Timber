@@ -259,6 +259,13 @@ Cross-cutting things and every file they touch:
   `pagination.liquid` pager + `.listing`/`.pagination` in `theme.css`) and
   `docs/pagination.md`. Change the URL shape or the paginator's keys → update the theme,
   both callers, the docs, and SPEC §13 together.
+- **Where the site is served from** → one value, `baseUrl` in the settings singleton, which
+  `@timber/content`'s `siteContext` turns into `site.basePath` (`/repo`, or `''` for a root
+  site or custom domain). On GitHub Pages a root-level **`CNAME`** file is the second half of
+  that switch: `deploy.yml` copies it into `_site` (which is how Pages learns the domain) and
+  uses its presence to build the editor for `/edit/` rather than `/<repo>/edit/`. The two must
+  agree — a `CNAME` without a matching `baseUrl` gives every in-page link a stray `/<repo>/`.
+  Change either → INSTALL.md §2.4 and `site-template/.github/workflows/deploy.yml`.
 - **Body links** (SPEC §6 → Links inside a Markdown body) → `@timber/generator`'s
   `links.ts` (`rebaseHtml`: `basePath` onto root-relative refs, `base` to resolve relative
   ones). `renderPage` applies it to every body with `site.basePath`; `attachExcerpts` applies

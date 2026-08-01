@@ -54,20 +54,53 @@ Edit **`content/settings/index.md`** → `baseUrl: https://<you>.github.io/<repo
 trailing slash) and commit. This makes links, canonical URLs, and the sitemap correct
 under the repo's subpath. (Committing it also kicks off the first deploy.)
 
-### 2.4 (Optional) Multiple languages
+### 2.4 (Optional) Use your own domain
+Skip this if `<you>.github.io/<repo>` is fine. A custom domain serves the site at the
+**root**, so three things move together — do them in this order:
+
+1. **DNS.** At your DNS provider, add a `CNAME` record for the subdomain you want (e.g.
+   `www` or `blog`) pointing at **`<you>.github.io`** (the bare host — no repo, no
+   `https://`). For an *apex* domain (`example.com`, no subdomain) use `A`/`AAAA` records
+   pointing at GitHub's Pages IPs instead; GitHub's "Managing a custom domain" doc lists
+   the current addresses. Give it a few minutes to resolve.
+2. **Tell the repo**, in one commit:
+   - Add a **`CNAME`** file at the repo root containing just the domain — e.g.
+     `www.example.com`, one line, no scheme and no trailing slash. `deploy.yml` copies it
+     into the published output, which is how GitHub Pages learns the domain; it is also
+     the flag that tells the workflow to build the editor for `/edit/` instead of
+     `/<repo>/edit/`.
+   - Set `baseUrl` in **`content/settings/index.md`** to that domain's root (e.g.
+     `https://www.example.com`, no `/<repo>`). This is what in-page links, canonical
+     URLs, and the sitemap are built from.
+
+   These two must agree. `baseUrl` still pointing at the old subpath is the usual cause of
+   every link on the new domain gaining a stray `/<repo>/`.
+3. **After the deploy lands**, in **Settings → Pages**, confirm the custom domain shows as
+   configured and tick **Enforce HTTPS** once the certificate has been issued (it can take
+   a few minutes, and the box stays greyed out until then).
+
+The old `<you>.github.io/<repo>/` URL redirects to the new domain, so existing links keep
+working.
+
+> **If you use the GitHub App sign-in (3b), the editor URL changes too.** Update the App's
+> **Callback URL** to `https://<your-domain>/edit/`, and set the broker's `ALLOWED_ORIGINS`
+> to `https://<your-domain>` and re-run **Setup OAuth broker** — otherwise sign-in fails
+> with a `redirect_uri` mismatch or `origin_not_allowed`.
+
+### 2.5 (Optional) Multiple languages
 Timber is single-language unless you opt in. To run the site in more than one language,
 add a `languages` list (and a `defaultLanguage`) to **`content/settings/index.md`** — this
 turns on per-language URLs (`/<lang>/…`), an **Add translation** action in the editor, and a
 theme language switcher. It's a deliberate step (it moves existing page URLs under a
 language prefix), so read **[docs/multilingual.md](docs/multilingual.md)** before enabling.
 
-### 2.5 (Optional) A paginated listing
+### 2.6 (Optional) A paginated listing
 Once a collection has more entries than fit on one page, add a `paginate` block to the page
 that lists it (`paginate: { collection: posts, size: 10 }`) and the build splits it across
 `/blog/`, `/blog/page/2/`, … with a pager the default theme already renders. See
 **[docs/pagination.md](docs/pagination.md)**.
 
-### 2.6 (Recommended) Require the content checks
+### 2.7 (Recommended) Require the content checks
 The template ships **`.github/workflows/validate.yml`**, which runs two checks on every pull
 request (and on pushes to branches other than `main` and your `*_wip` editor branch):
 

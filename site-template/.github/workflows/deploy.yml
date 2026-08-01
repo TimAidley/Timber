@@ -11,6 +11,10 @@ name: Build & deploy site
 # TWO DEPLOY TARGETS (set the repo Variable TIMBER_DEPLOY_TARGET):
 #   * "github" (default) — GitHub Pages, served at https://<owner>.github.io/<repo>/, editor
 #     at /<repo>/edit/. One-time: Settings → Pages → Source: "GitHub Actions".
+#     For a CUSTOM DOMAIN, commit a `CNAME` file at the repo root holding just the domain
+#     (e.g. "www.example.com") and set content/settings baseUrl to that domain's ROOT — the
+#     site then serves at / instead of /<repo>/, and the editor moves to /edit/. See
+#     INSTALL.md "Use your own domain".
 #   * "cloudflare" — Cloudflare Pages (source stays on GitHub; GitHub Actions builds and
 #     publishes via wrangler). Served at your Pages project's root (<project>.pages.dev or a
 #     custom domain), editor at /edit/. One-time:
@@ -80,12 +84,29 @@ jobs:
       - name: Build the site
         run: node .timber/packages/cli/dist/index.js build . _site
 
+      # A custom domain serves the site at the ROOT, not under /<repo>/. GitHub Pages takes
+      # the domain from a CNAME file in the published output, so committing `CNAME` at the
+      # repo root is both how the domain gets configured and how this workflow knows the
+      # site is no longer on a subpath. Keep it in step with `baseUrl` in
+      # content/settings/index.md — that is what the generator derives in-page links from.
+      - name: Add the custom domain, if there is one
+        if: ${{ vars.TIMBER_DEPLOY_TARGET != 'cloudflare' }}
+        run: |
+          if [ -f CNAME ]; then
+            cp CNAME _site/CNAME
+            echo "Publishing to custom domain: $(cat CNAME)"
+          else
+            echo "No CNAME file — publishing to the default github.io URL."
+          fi
+
       # Co-host the editor at the editor path — default "edit", overridable with the
-      # TIMBER_EDITOR_PATH repo variable. Its base depends on the deploy target: GitHub Pages
-      # serves under /<repo>/ (editor at /<repo>/edit/), Cloudflare Pages serves at the root
-      # (editor at /edit/). Sign-in adapts to config: with a broker URL (committed by "Setup
-      # OAuth broker") it shows "Sign in with GitHub"; otherwise paste-a-PAT. NOTE: if you
-      # change the path AND use the redirect flow, register the matching callback on your App.
+      # TIMBER_EDITOR_PATH repo variable. Its base must match where the editor is actually
+      # served from, which is the site root plus that path — and the site root is `/<repo>/`
+      # only for a project-Pages site on the default domain. Cloudflare Pages and a GitHub
+      # Pages custom domain both serve at `/`. Sign-in adapts to config: with a broker URL
+      # (committed by "Setup OAuth broker") it shows "Sign in with GitHub"; otherwise
+      # paste-a-PAT. NOTE: if you change the path — or add a custom domain — AND use the
+      # redirect flow, register the matching callback on your App.
       - name: Build the editor
         run: |
           REPO='${{ github.event.repository.name }}'
@@ -94,8 +115,8 @@ jobs:
           EDITOR_PATH='${{ vars.TIMBER_EDITOR_PATH }}'
           EDITOR_PATH="${EDITOR_PATH:-edit}"                              # default
           EDITOR_PATH="${EDITOR_PATH#/}"; EDITOR_PATH="${EDITOR_PATH%/}"  # strip any slashes
-          if [ "$DEPLOY_TARGET" = "cloudflare" ]; then
-            export TIMBER_BASE="/$EDITOR_PATH/"          # Cloudflare Pages serves at root
+          if [ "$DEPLOY_TARGET" = "cloudflare" ] || [ -f CNAME ]; then
+            export TIMBER_BASE="/$EDITOR_PATH/"          # served at the root
           else
             export TIMBER_BASE="/$REPO/$EDITOR_PATH/"    # GitHub project Pages subpath
           fi
