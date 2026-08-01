@@ -158,20 +158,76 @@ export async function renderSitePage(input: RenderSitePageInput): Promise<string
     return css !== undefined ? `<style data-timber-theme>${css}</style>` : tag;
   });
 
-  // Resolve committed/staged image paths to object URLs the frame can load.
-  const paths = new Set<string>();
+  // Resolve image references to object URLs the frame can load. The frame has no origin
+  // it can fetch the repo from, so every reference has to be turned into a blob URL — and
+  // to look one up, the *site* reference has to be mapped back to the **repo path** the
+  // AssetStore keys on. Site URL → repo path, for the three shapes a page can contain.
+  const urlToDir = new Map<string, string>();
+  for (const o of model.objects) {
+    const s = model.schemas.get(o.type);
+    if (s) urlToDir.set(effectiveUrl(o, s), o.path.replace(/\/[^/]*$/, ''));
+  }
+  const objectDir = object.path.replace(/\/[^/]*$/, '');
+
+  const repoPaths = new Map<string, string>();
   for (const match of html.matchAll(ASSET_REF_RE)) {
-    const path = match[1];
-    if (path && /^(content|assets)\//.test(path)) paths.add(path);
+    const ref = match[1];
+    if (!ref) continue;
+    const repoPath = assetRepoPath(ref, objectDir, basePath, urlToDir);
+    if (repoPath) repoPaths.set(ref, repoPath);
   }
   const resolved = new Map<string, string>();
   await Promise.all(
-    [...paths].map(async (path) => {
-      const url = await assetStore.ensure(path);
-      if (url) resolved.set(path, url);
+    [...repoPaths].map(async ([ref, repoPath]) => {
+      const url = await assetStore.ensure(repoPath);
+      if (url) resolved.set(ref, url);
     }),
   );
-  for (const [path, url] of resolved) html = html.split(`"${path}"`).join(`"${url}"`);
+  for (const [ref, url] of resolved) html = html.split(`"${ref}"`).join(`"${url}"`);
 
   return html;
+}
+
+/**
+ * Map an asset reference as it appears in a rendered page to the repo path the
+ * {@link AssetStore} knows it by, or `undefined` if it isn't ours to resolve.
+ *
+ * Three shapes reach a page, and the preview has to handle all of them:
+ *
+ * 1. **Relative** — `photo.jpg`, a colocated file written bare in the body of the object
+ *    being edited. Resolves against that object's own bundle folder.
+ * 2. **Site-wide** — `/assets/logo.png`, which is already a repo path once the site's base
+ *    path and the leading slash come off.
+ * 3. **Another object's colocated file** — `/posts/hello/photo.jpg`, which a listing
+ *    excerpt carries. Only the model can say which bundle `/posts/hello/` came from, so
+ *    the page URL is looked up and the filename appended to that object's folder.
+ *
+ * Absolute and protocol-relative references belong to somebody else and pass through.
+ */
+function assetRepoPath(
+  ref: string,
+  objectDir: string,
+  basePath: string,
+  urlToDir: Map<string, string>,
+): string | undefined {
+  if (ref === '' || ref.startsWith('#') || /^[a-z][a-z0-9+.-]*:/i.test(ref))
+    return undefined;
+  if (ref.startsWith('//')) return undefined;
+
+  if (!ref.startsWith('/')) {
+    // A throwaway origin resolves any `./` or `../` the author wrote; only the path is kept.
+    return new URL(ref, `https://timber.invalid/${objectDir}/`).pathname.replace(
+      /^\//,
+      '',
+    );
+  }
+
+  let path = ref;
+  if (basePath && path.startsWith(basePath)) path = path.slice(basePath.length);
+  if (path.startsWith('/assets/')) return path.replace(/^\//, '');
+
+  const cut = path.lastIndexOf('/');
+  if (cut < 0) return undefined;
+  const dir = urlToDir.get(`${path.slice(0, cut)}/`);
+  return dir ? `${dir}/${path.slice(cut + 1)}` : undefined;
 }

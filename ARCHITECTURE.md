@@ -266,6 +266,14 @@ Cross-cutting things and every file they touch:
   uses its presence to build the editor for `/edit/` rather than `/<repo>/edit/`. The two must
   agree — a `CNAME` without a matching `baseUrl` gives every in-page link a stray `/<repo>/`.
   Change either → INSTALL.md §2.4 and `site-template/.github/workflows/deploy.yml`.
+- **Preview asset resolution** → the preview frame can't fetch the repo, so
+  `packages/app/src/preview/renderSitePage.ts` (`assetRepoPath`) maps each image reference
+  back to the repo path `AssetStore` keys on, then swaps in a blob URL. Three shapes:
+  relative (resolve against the edited object's bundle), `/assets/**` (a repo path once the
+  base path and leading slash come off), and another object's colocated file arriving via a
+  listing excerpt (`/posts/x/photo.jpg` → looked up through the model's URL index). Add a
+  new way for an asset reference to reach a page → teach `assetRepoPath` about it, or it
+  renders broken in preview while being fine on the built site.
 - **Body links** (SPEC §6 → Links inside a Markdown body) → `@timber/generator`'s
   `links.ts` (`rebaseHtml`: `basePath` onto root-relative refs, `base` to resolve relative
   ones). `renderPage` applies it to every body with `site.basePath`; `attachExcerpts` applies

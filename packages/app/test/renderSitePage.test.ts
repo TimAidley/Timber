@@ -359,3 +359,98 @@ describe('renderSitePage', () => {
     expect(html).not.toContain('class="pagination"');
   });
 });
+
+/**
+ * The preview frame has no origin it can fetch the repo from, so every image reference has
+ * to become a blob URL — which means mapping the reference back to the **repo path** the
+ * AssetStore keys on. A page can carry three different shapes of reference, and getting
+ * any of them wrong shows the author a broken image in a preview of a page that is fine.
+ */
+describe('renderSitePage image references', () => {
+  /** A snapshot with a colocated image in a post body and a site-wide asset in settings. */
+  function imageFixture(): {
+    model: ReturnType<typeof assembleContent>;
+    theme: SiteTheme;
+  } {
+    const snapshot: RepoSnapshot = new Map([
+      [
+        'config/schemas/settings.yml',
+        'kind: singleton\npage: false\nhasBody: false\nfields:\n  title:\n    type: text\n  baseUrl:\n    type: text\n  logo:\n    type: image\n',
+      ],
+      [
+        'config/schemas/posts.yml',
+        'kind: collection\nfields:\n  title:\n    type: text\n  date:\n    type: date\n',
+      ],
+      [
+        'content/settings/index.md',
+        '---\ntitle: S\nbaseUrl: https://example.test\nlogo: /assets/logo.png\n---\n',
+      ],
+      [
+        'content/posts/hello/index.md',
+        '---\nid: P1\ntitle: Hello\ndate: 2026-01-01\npublic: true\n---\n\n![Alt](photo.jpg)\n',
+      ],
+    ]);
+    const schemas = loadSchemas(snapshot);
+    const model = assembleContent(snapshot, schemas);
+    const theme: SiteTheme = {
+      templates: new Map([
+        [
+          'default.liquid',
+          '<img src="{{ site.logo | relative_url }}" />{{ content }}' +
+            '{% for p in collections.posts %}{{ p.excerpt }}{% endfor %}',
+        ],
+      ]),
+      stylesheets: new Map(),
+      navigationYml: '',
+      manifest: null,
+      objectUrls: [],
+    };
+    return { model, theme };
+  }
+
+  /** Render `target` and report every repo path the preview asked the store to load. */
+  async function requestedPaths(target: string): Promise<string[]> {
+    const { model, theme } = imageFixture();
+    const object = model.objects.find((o) => o.path === target)!;
+    const asked: string[] = [];
+    const store = new AssetStore(async (p: string) => {
+      asked.push(p);
+      return undefined;
+    });
+    await renderSitePage({
+      model,
+      object,
+      schema: model.schemas.get(object.type)!,
+      data: object.data,
+      body: object.body,
+      theme,
+      assetStore: store,
+    });
+    return asked.sort();
+  }
+
+  it('resolves a colocated image written as a bare filename', async () => {
+    // `![Alt](photo.jpg)` only means anything relative to the bundle it was written in.
+    const asked = await requestedPaths('content/posts/hello/index.md');
+    expect(asked).toContain('content/posts/hello/photo.jpg');
+  });
+
+  it('resolves a site-wide asset referenced from the site root', async () => {
+    // `/assets/logo.png` is a repo path once the leading slash comes off — but it never
+    // matched while the check required the reference to *start* with `assets/`.
+    const asked = await requestedPaths('content/posts/hello/index.md');
+    expect(asked).toContain('assets/logo.png');
+  });
+
+  it("resolves another object's colocated image carried by a listing excerpt", async () => {
+    // An excerpt arrives as `/posts/hello/photo.jpg` — a site URL, not a repo path. Only
+    // the model can say which bundle that URL came from.
+    const asked = await requestedPaths('content/settings/index.md');
+    expect(asked).toContain('content/posts/hello/photo.jpg');
+  });
+
+  it('leaves references it does not own alone', async () => {
+    const asked = await requestedPaths('content/posts/hello/index.md');
+    expect(asked.some((p) => p.includes('://') || p.startsWith('//'))).toBe(false);
+  });
+});
