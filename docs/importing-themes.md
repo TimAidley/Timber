@@ -85,7 +85,14 @@ The rest of this doc covers the **programmatic** API underneath the command.
     `{% include 'x', a: b %}`, and dynamic `{% include {{ file }} %}` → `{% include file %}`;
   - the Jekyll `include.foo` param namespace → bare `foo` locals;
   - dropping redundant `escape` / `escape_once` / `xml_escape` (Timber auto-escapes — see
-    "Escaping" below).
+    "Escaping" below);
+  - `| markdownify` → `| markdownify_block`. Both render Markdown, but Jekyll's filter is
+    block-level while Timber's `markdownify` renders a lone paragraph **inline** (the field it
+    exists for is usually one line). A Jekyll theme calls it on a page-shaped value — a comment
+    body, an excerpt — and expects the `<p>`, so imported calls point at Timber's block-level
+    form. Rewriting here rather than overriding the filter is deliberate: `registerJekyllCompat`
+    is registered for **native** themes too (see `themeRuntime`), so an override would change
+    `markdownify` for every site and break the "all additive" property below.
 
   It returns `{ templates, layoutData }` — `layoutData[<layout>]` holds that layout's
   front-matter data (Jekyll's `layout.*`, e.g. a base layout's CSS/JS asset lists). Pass

@@ -358,9 +358,12 @@ Cross-cutting things and every file they touch:
   in `src/styles.css`, font in `src/fonts/`) and **published sites** via the **`:timber-logo`
   shortcode** (SPEC §7 → Brand wordmark). The shortcode is **self-contained**, NOT theme-owned: the
   shared generator's directive transform (`packages/generator/src/figureDirective.ts`, span-class
-  allowance in `markdown.ts`) emits the `<span class="wordmark">…` markup, and a post-sanitize rehype
-  plugin (`wordmarkStyle.ts`) injects the `.wordmark` rules + an `@font-face` with the font
-  **base64-embedded** (`wordmarkFont.ts`). This is deliberate — brand styling that must match on every
+  allowance in `markdown.ts`) emits the `<span class="wordmark">…` markup, and `injectWordmarkStyle`
+  (`wordmarkStyle.ts`) adds the `.wordmark` rules + an `@font-face` with the font
+  **base64-embedded** (`wordmarkFont.ts`). That injection runs **per page** — `renderPage` applies it
+  to the assembled document — not per Markdown document, because a wordmark can arrive from a body,
+  a listing **excerpt**, or a settings field rendered with **`markdownify`** (`contentFilters.ts`),
+  and every route needs the same `<style>` exactly once. This is deliberate — brand styling that must match on every
   site can't live in each site's `theme.css` (it drifts/goes stale), so it ships from the version-pinned
   generator and works on existing sites with zero theme changes. The embedded base64 is generated from
   the app's canonical woff2 by **`scripts/gen-wordmark-font.mjs`** → `generator/src/wordmarkFont.ts`.
