@@ -1,12 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Editor, rootCtx, defaultValueCtx, remarkStringifyOptionsCtx } from '@milkdown/kit/core';
+import {
+  Editor,
+  rootCtx,
+  defaultValueCtx,
+  remarkStringifyOptionsCtx,
+} from '@milkdown/kit/core';
 import { commonmark } from '@milkdown/kit/preset/commonmark';
 import { gfm } from '@milkdown/kit/preset/gfm';
 import { listener, listenerCtx } from '@milkdown/kit/plugin/listener';
 import { cursor } from '@milkdown/kit/plugin/cursor';
 import { history, undoCommand, redoCommand } from '@milkdown/kit/plugin/history';
 import { Milkdown, MilkdownProvider, useEditor, useInstance } from '@milkdown/react';
-import { ProsemirrorAdapterProvider, useNodeViewFactory } from '@prosemirror-adapter/react';
+import {
+  ProsemirrorAdapterProvider,
+  useNodeViewFactory,
+} from '@prosemirror-adapter/react';
 import { callCommand } from '@milkdown/kit/utils';
 import type { CmdKey } from '@milkdown/kit/core';
 import {
@@ -35,7 +43,7 @@ import {
   insertFigureCommand,
 } from './figure/index.js';
 import { processImage } from '../media/processImage.js';
-import { bundleImagePath } from '../media/assetName.js';
+import { bundleImagePath, bundleRelativeSrc } from '../media/assetName.js';
 import type { AssetStore } from '../state/assets.js';
 import { DiffView } from '../diff/DiffView.js';
 
@@ -172,9 +180,14 @@ function WysiwygToolbar({
         const path = bundleImagePath(bundleDir, file.name, processed.mime);
         assetStore.stage(path, processed.blob);
         onStaged?.(path);
-        run(insertFigureCommand.key, { src: path, alt });
+        // Staged under the repo path, but written into the body **relative to the
+        // bundle**: the build copies a bundle's files next to the page it renders, so a
+        // page-relative src is what resolves on the published site.
+        run(insertFigureCommand.key, { src: bundleRelativeSrc(bundleDir, path), alt });
       } catch (err) {
-        window.alert(`Could not process image: ${err instanceof Error ? err.message : String(err)}`);
+        window.alert(
+          `Could not process image: ${err instanceof Error ? err.message : String(err)}`,
+        );
       } finally {
         setBusy(false);
       }
@@ -195,12 +208,32 @@ function WysiwygToolbar({
         disabled={loading}
         groups={[
           [
-            { label: 'Undo', shortcut: 'Ctrl+Z', icon: 'undo', onClick: () => run(undoCommand.key) },
-            { label: 'Redo', shortcut: 'Ctrl+Y', icon: 'redo', onClick: () => run(redoCommand.key) },
+            {
+              label: 'Undo',
+              shortcut: 'Ctrl+Z',
+              icon: 'undo',
+              onClick: () => run(undoCommand.key),
+            },
+            {
+              label: 'Redo',
+              shortcut: 'Ctrl+Y',
+              icon: 'redo',
+              onClick: () => run(redoCommand.key),
+            },
           ],
           [
-            { label: 'Bold', shortcut: 'Ctrl+B', icon: 'bold', onClick: () => run(toggleStrongCommand.key) },
-            { label: 'Italic', shortcut: 'Ctrl+I', icon: 'italic', onClick: () => run(toggleEmphasisCommand.key) },
+            {
+              label: 'Bold',
+              shortcut: 'Ctrl+B',
+              icon: 'bold',
+              onClick: () => run(toggleStrongCommand.key),
+            },
+            {
+              label: 'Italic',
+              shortcut: 'Ctrl+I',
+              icon: 'italic',
+              onClick: () => run(toggleEmphasisCommand.key),
+            },
             {
               label: 'Strikethrough',
               icon: 'strikethrough',
@@ -215,16 +248,48 @@ function WysiwygToolbar({
             { label: 'Link', icon: 'link', onClick: addLink },
           ],
           [
-            { label: 'Heading 1', icon: 'h1', onClick: () => run(wrapInHeadingCommand.key, 1) },
-            { label: 'Heading 2', icon: 'h2', onClick: () => run(wrapInHeadingCommand.key, 2) },
-            { label: 'Heading 3', icon: 'h3', onClick: () => run(wrapInHeadingCommand.key, 3) },
-            { label: 'Paragraph', icon: 'paragraph', onClick: () => run(turnIntoTextCommand.key) },
+            {
+              label: 'Heading 1',
+              icon: 'h1',
+              onClick: () => run(wrapInHeadingCommand.key, 1),
+            },
+            {
+              label: 'Heading 2',
+              icon: 'h2',
+              onClick: () => run(wrapInHeadingCommand.key, 2),
+            },
+            {
+              label: 'Heading 3',
+              icon: 'h3',
+              onClick: () => run(wrapInHeadingCommand.key, 3),
+            },
+            {
+              label: 'Paragraph',
+              icon: 'paragraph',
+              onClick: () => run(turnIntoTextCommand.key),
+            },
           ],
           [
-            { label: 'Bullet list', icon: 'bulletList', onClick: () => run(wrapInBulletListCommand.key) },
-            { label: 'Numbered list', icon: 'orderedList', onClick: () => run(wrapInOrderedListCommand.key) },
-            { label: 'Quote', icon: 'quote', onClick: () => run(wrapInBlockquoteCommand.key) },
-            { label: 'Code block', icon: 'codeBlock', onClick: () => run(createCodeBlockCommand.key) },
+            {
+              label: 'Bullet list',
+              icon: 'bulletList',
+              onClick: () => run(wrapInBulletListCommand.key),
+            },
+            {
+              label: 'Numbered list',
+              icon: 'orderedList',
+              onClick: () => run(wrapInOrderedListCommand.key),
+            },
+            {
+              label: 'Quote',
+              icon: 'quote',
+              onClick: () => run(wrapInBlockquoteCommand.key),
+            },
+            {
+              label: 'Code block',
+              icon: 'codeBlock',
+              onClick: () => run(createCodeBlockCommand.key),
+            },
           ],
           [
             { label: 'Divider', icon: 'hr', onClick: () => run(insertHrCommand.key) },
@@ -321,98 +386,102 @@ export function BodyEditor({
       <div className="editor-card__head editor-card__head--tabs">
         {label ? <span className="editor-card__eyebrow">{label}</span> : null}
         <div className="body-editor__tabs" role="tablist" aria-label="Body editor mode">
-        <button
-          type="button"
-          role="tab"
-          id="body-editor-tab-wysiwyg"
-          aria-selected={mode === 'wysiwyg'}
-          aria-controls="body-editor-panel"
-          className={`body-editor__tab${mode === 'wysiwyg' ? ' is-active' : ''}`}
-          onClick={() => setMode('wysiwyg')}
-        >
-          Editor
-        </button>
-        <button
-          type="button"
-          role="tab"
-          id="body-editor-tab-source"
-          aria-selected={mode === 'source'}
-          aria-controls="body-editor-panel"
-          className={`body-editor__tab${mode === 'source' ? ' is-active' : ''}`}
-          onClick={() => setMode('source')}
-        >
-          Markdown
-        </button>
-        {showDiffTab ? (
           <button
             type="button"
             role="tab"
-            id="body-editor-tab-diff"
-            aria-selected={mode === 'diff'}
+            id="body-editor-tab-wysiwyg"
+            aria-selected={mode === 'wysiwyg'}
             aria-controls="body-editor-panel"
-            className={`body-editor__tab${mode === 'diff' ? ' is-active' : ''}`}
-            onClick={() => setMode('diff')}
-            title="Unpublished changes to this page (front matter + body)"
+            className={`body-editor__tab${mode === 'wysiwyg' ? ' is-active' : ''}`}
+            onClick={() => setMode('wysiwyg')}
           >
-            Diff
+            Editor
           </button>
-        ) : null}
+          <button
+            type="button"
+            role="tab"
+            id="body-editor-tab-source"
+            aria-selected={mode === 'source'}
+            aria-controls="body-editor-panel"
+            className={`body-editor__tab${mode === 'source' ? ' is-active' : ''}`}
+            onClick={() => setMode('source')}
+          >
+            Markdown
+          </button>
+          {showDiffTab ? (
+            <button
+              type="button"
+              role="tab"
+              id="body-editor-tab-diff"
+              aria-selected={mode === 'diff'}
+              aria-controls="body-editor-panel"
+              className={`body-editor__tab${mode === 'diff' ? ' is-active' : ''}`}
+              onClick={() => setMode('diff')}
+              title="Unpublished changes to this page (front matter + body)"
+            >
+              Diff
+            </button>
+          ) : null}
         </div>
       </div>
 
       <div className="editor-card__body">
-      <div
-        id="body-editor-panel"
-        role="tabpanel"
-        aria-labelledby={
-          mode === 'wysiwyg'
-            ? 'body-editor-tab-wysiwyg'
-            : mode === 'diff'
-              ? 'body-editor-tab-diff'
-              : 'body-editor-tab-source'
-        }
-      >
-        {mode === 'wysiwyg' ? (
-          <AssetStoreProvider value={assetStore}>
-            <MilkdownProvider>
-              <ProsemirrorAdapterProvider>
-                <WysiwygToolbar assetStore={assetStore} bundleDir={bundleDir} onStaged={onStaged} />
-                <Wysiwyg value={value} onChange={onChange} docKey={docKey} />
-              </ProsemirrorAdapterProvider>
-            </MilkdownProvider>
-          </AssetStoreProvider>
-        ) : mode === 'diff' ? (
-          <>
-            {onRevert ? (
-              <div className="body-editor__diffbar">
-                <button
-                  type="button"
-                  className="body-editor__revert"
-                  onClick={onRevert}
-                  title="Discard this page's unpublished changes — revert it to the published version."
-                >
-                  Revert page
-                </button>
-              </div>
-            ) : null}
-            <DiffView
-              base={base?.seed === docKey ? base.text : null}
-              working={diffWorkingText ?? ''}
-              loading={baseLoading || base?.seed !== docKey}
-              error={baseError}
-              emptyLabel="No unpublished changes to this page."
+        <div
+          id="body-editor-panel"
+          role="tabpanel"
+          aria-labelledby={
+            mode === 'wysiwyg'
+              ? 'body-editor-tab-wysiwyg'
+              : mode === 'diff'
+                ? 'body-editor-tab-diff'
+                : 'body-editor-tab-source'
+          }
+        >
+          {mode === 'wysiwyg' ? (
+            <AssetStoreProvider value={{ store: assetStore, bundleDir }}>
+              <MilkdownProvider>
+                <ProsemirrorAdapterProvider>
+                  <WysiwygToolbar
+                    assetStore={assetStore}
+                    bundleDir={bundleDir}
+                    onStaged={onStaged}
+                  />
+                  <Wysiwyg value={value} onChange={onChange} docKey={docKey} />
+                </ProsemirrorAdapterProvider>
+              </MilkdownProvider>
+            </AssetStoreProvider>
+          ) : mode === 'diff' ? (
+            <>
+              {onRevert ? (
+                <div className="body-editor__diffbar">
+                  <button
+                    type="button"
+                    className="body-editor__revert"
+                    onClick={onRevert}
+                    title="Discard this page's unpublished changes — revert it to the published version."
+                  >
+                    Revert page
+                  </button>
+                </div>
+              ) : null}
+              <DiffView
+                base={base?.seed === docKey ? base.text : null}
+                working={diffWorkingText ?? ''}
+                loading={baseLoading || base?.seed !== docKey}
+                error={baseError}
+                emptyLabel="No unpublished changes to this page."
+              />
+            </>
+          ) : (
+            <textarea
+              className="body-editor__source"
+              value={value}
+              onChange={onSourceChange}
+              spellCheck={false}
+              aria-label="Markdown source"
             />
-          </>
-        ) : (
-          <textarea
-            className="body-editor__source"
-            value={value}
-            onChange={onSourceChange}
-            spellCheck={false}
-            aria-label="Markdown source"
-          />
-        )}
-      </div>
+          )}
+        </div>
       </div>
     </section>
   );

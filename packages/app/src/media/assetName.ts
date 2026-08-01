@@ -33,8 +33,39 @@ export function baseNameFrom(name: string): string {
 }
 
 /** The repo-relative path an uploaded image is staged/committed to within a bundle. */
-export function bundleImagePath(bundleDir: string, fileName: string, mime: string): string {
+export function bundleImagePath(
+  bundleDir: string,
+  fileName: string,
+  mime: string,
+): string {
   return `${bundleDir}/images/${baseNameFrom(fileName)}.${extForMime(mime, fileName)}`;
+}
+
+/**
+ * The `src` to write into a body for a bundle asset: the path **relative to the bundle**.
+ *
+ * The build copies a bundle's files flat next to the page it renders
+ * (`content/posts/hello/images/p.webp` → `/posts/hello/images/p.webp`), so a body's `src`
+ * has to be relative to the page — `images/p.webp`. Writing the repo path instead produces
+ * a `src` that only resolves inside the editor and 404s on the published page.
+ */
+export function bundleRelativeSrc(bundleDir: string, repoPath: string): string {
+  const prefix = `${bundleDir}/`;
+  return repoPath.startsWith(prefix) ? repoPath.slice(prefix.length) : repoPath;
+}
+
+/**
+ * The repo path a body's `src` refers to, for looking the bytes up in the asset store.
+ * The inverse of {@link bundleRelativeSrc}, plus tolerance for two other forms found in
+ * real content: a **site-wide** `/assets/…` reference, and a **repo path** written
+ * directly into the body (what the editor itself used to insert).
+ */
+export function bodySrcToRepoPath(bundleDir: string, src: string): string | undefined {
+  if (!src || /^[a-z][a-z0-9+.-]*:/i.test(src) || src.startsWith('//')) return undefined;
+  const bare = src.replace(/^\//, '');
+  if (/^(content|assets|themes)\//.test(bare)) return bare;
+  // A throwaway origin resolves any `./` or `../`; only the path part is kept.
+  return new URL(src, `https://timber.invalid/${bundleDir}/`).pathname.replace(/^\//, '');
 }
 
 /**

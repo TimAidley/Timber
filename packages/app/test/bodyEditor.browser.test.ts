@@ -87,7 +87,15 @@ describe('BodyEditor toolbar + tabs (real browser)', () => {
 
     expect(document.querySelector('.body-toolbar')).toBeTruthy();
     // A representative spread of the actions is present.
-    for (const label of ['Bold', 'Italic', 'Heading 1', 'Bullet list', 'Quote', 'Divider', 'Table']) {
+    for (const label of [
+      'Bold',
+      'Italic',
+      'Heading 1',
+      'Bullet list',
+      'Quote',
+      'Divider',
+      'Table',
+    ]) {
       expect(btn(label), `button ${label}`).toBeTruthy();
     }
   });
@@ -161,7 +169,11 @@ describe('BodyEditor toolbar + tabs (real browser)', () => {
     // Without diff props, the tab is absent (keeps the generic editor generic).
     mount({ value: 'hello', onChange: () => {} });
     await waitFor(() => (btn('Bold') ? true : null));
-    expect([...document.querySelectorAll('.body-editor__tab')].some((t) => t.textContent === 'Diff')).toBe(false);
+    expect(
+      [...document.querySelectorAll('.body-editor__tab')].some(
+        (t) => t.textContent === 'Diff',
+      ),
+    ).toBe(false);
     root?.unmount();
     host?.remove();
 
@@ -176,16 +188,22 @@ describe('BodyEditor toolbar + tabs (real browser)', () => {
     });
 
     const diffTab = await waitFor(() =>
-      [...document.querySelectorAll<HTMLButtonElement>('.body-editor__tab')].find((t) => t.textContent === 'Diff'),
+      [...document.querySelectorAll<HTMLButtonElement>('.body-editor__tab')].find(
+        (t) => t.textContent === 'Diff',
+      ),
     );
     diffTab.click();
 
     // The published base is fetched, then the unified diff renders both sides.
     const del = await waitFor(() =>
-      [...document.querySelectorAll('.diff-row--del')].find((r) => r.textContent?.includes('title: Old')),
+      [...document.querySelectorAll('.diff-row--del')].find((r) =>
+        r.textContent?.includes('title: Old'),
+      ),
     );
     expect(del).toBeTruthy();
-    const add = [...document.querySelectorAll('.diff-row--add')].find((r) => r.textContent?.includes('title: New'));
+    const add = [...document.querySelectorAll('.diff-row--add')].find((r) =>
+      r.textContent?.includes('title: New'),
+    );
     expect(add).toBeTruthy();
 
     // Revert is wired to the supplied handler.
@@ -204,7 +222,9 @@ describe('BodyEditor toolbar + tabs (real browser)', () => {
       getPublishedText: () => Promise.resolve(same),
     });
     const diffTab = await waitFor(() =>
-      [...document.querySelectorAll<HTMLButtonElement>('.body-editor__tab')].find((t) => t.textContent === 'Diff'),
+      [...document.querySelectorAll<HTMLButtonElement>('.body-editor__tab')].find(
+        (t) => t.textContent === 'Diff',
+      ),
     );
     diffTab.click();
     await waitFor(() => {
@@ -218,9 +238,9 @@ describe('BodyEditor toolbar + tabs (real browser)', () => {
     mount({ value: '# Title\n\nBody text', onChange: () => {} });
     await waitFor(() => (btn('Bold') ? true : null));
 
-    const sourceTab = [...document.querySelectorAll<HTMLButtonElement>('.body-editor__tab')].find(
-      (t) => t.textContent === 'Markdown',
-    );
+    const sourceTab = [
+      ...document.querySelectorAll<HTMLButtonElement>('.body-editor__tab'),
+    ].find((t) => t.textContent === 'Markdown');
     expect(sourceTab).toBeTruthy();
     sourceTab!.click();
 
@@ -258,7 +278,12 @@ describe('BodyEditor toolbar + tabs (real browser)', () => {
 
   it('renders a :::figure as a live NodeView with an image, caption and controls', async () => {
     const store = new AssetStore();
-    store.stage('media/cat.webp', new Blob(['x'], { type: 'image/webp' }));
+    // Staged the way the app stages: under the repo path. The body's src stays
+    // page-relative, which is what resolves against the rendered page.
+    store.stage(
+      'content/pages/home/media/cat.webp',
+      new Blob(['x'], { type: 'image/webp' }),
+    );
     const md = [
       ':::figure{layout="center" size="sm"}',
       '![A cat](media/cat.webp)',
@@ -284,7 +309,10 @@ describe('BodyEditor toolbar + tabs (real browser)', () => {
 
   it('labels an empty caption with a placeholder so it is discoverable', async () => {
     const store = new AssetStore();
-    store.stage('media/x.webp', new Blob(['x'], { type: 'image/webp' }));
+    store.stage(
+      'content/pages/home/media/x.webp',
+      new Blob(['x'], { type: 'image/webp' }),
+    );
     mount({
       value: ':::figure{layout="center"}\n![Alt](media/x.webp)\n:::\n',
       onChange: () => {},
@@ -299,7 +327,10 @@ describe('BodyEditor toolbar + tabs (real browser)', () => {
 
   it('does not flag a populated caption as empty', async () => {
     const store = new AssetStore();
-    store.stage('media/x.webp', new Blob(['x'], { type: 'image/webp' }));
+    store.stage(
+      'content/pages/home/media/x.webp',
+      new Blob(['x'], { type: 'image/webp' }),
+    );
     mount({
       value: ':::figure\n![Alt](media/x.webp)\n\nReal caption.\n:::\n',
       onChange: () => {},
@@ -312,15 +343,37 @@ describe('BodyEditor toolbar + tabs (real browser)', () => {
     expect(cap.hasAttribute('data-empty')).toBe(false);
   });
 
+  it('resolves a colocated image written as a bare filename', async () => {
+    // How a page bundle imported from another generator refers to its own images — and
+    // what the editor showed as "Image not available" while the built page rendered it
+    // correctly, because the raw src was handed to a store that keys on repo paths.
+    const store = new AssetStore();
+    store.stage('content/pages/home/photo.jpg', new Blob(['x'], { type: 'image/jpeg' }));
+    mount({
+      value: ':::figure{layout="center"}\n![A photo](photo.jpg)\n:::\n',
+      onChange: () => {},
+      assetStore: store,
+    });
+    const img = await waitFor(() =>
+      document.querySelector<HTMLImageElement>('.figure-node img'),
+    );
+    expect(img.getAttribute('src')).toMatch(/^blob:/);
+  });
+
   it('selects the whole figure when the image is clicked', async () => {
     const store = new AssetStore();
-    store.stage('media/x.webp', new Blob(['x'], { type: 'image/webp' }));
+    store.stage(
+      'content/pages/home/media/x.webp',
+      new Blob(['x'], { type: 'image/webp' }),
+    );
     mount({
       value: ':::figure{layout="center"}\n![Alt](media/x.webp)\n:::\n',
       onChange: () => {},
       assetStore: store,
     });
-    const img = await waitFor(() => document.querySelector<HTMLImageElement>('.figure-node img'));
+    const img = await waitFor(() =>
+      document.querySelector<HTMLImageElement>('.figure-node img'),
+    );
     img.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
     // NodeSelection → the adapter marks the figure selected → is-selected class.
     await waitFor(() =>
@@ -343,19 +396,26 @@ describe('BodyEditor toolbar + tabs (real browser)', () => {
     const img = await waitFor(() =>
       document.querySelector<HTMLImageElement>('.figure-node img'),
     );
-    expect(asked).toBe('media/dog.webp');
+    // The body says `media/dog.webp`; the store is asked for the repo path it keys on.
+    expect(asked).toBe('content/pages/home/media/dog.webp');
     expect(img.getAttribute('src')).toMatch(/^blob:/);
   });
 
   it('edits figure layout from the NodeView and re-serializes canonically', async () => {
     let latest = '';
-    const md = [':::figure', '![A cat](media/cat.webp)', '', 'Caption.', ':::', ''].join('\n');
+    const md = [':::figure', '![A cat](media/cat.webp)', '', 'Caption.', ':::', ''].join(
+      '\n',
+    );
     mount({ value: md, onChange: (m) => (latest = m) });
 
     const wrapBtn = await waitFor(() =>
-      document.querySelector<HTMLButtonElement>('.figure-node__bar button[title="Wrap right"]'),
+      document.querySelector<HTMLButtonElement>(
+        '.figure-node__bar button[title="Wrap right"]',
+      ),
     );
-    wrapBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    wrapBtn.dispatchEvent(
+      new MouseEvent('mousedown', { bubbles: true, cancelable: true }),
+    );
     wrapBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
 
     await waitFor(() => (latest.includes('layout="wrap-right"') ? true : null));
