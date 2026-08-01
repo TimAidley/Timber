@@ -47,4 +47,34 @@ describe('summarizeChanges', () => {
   it('returns zeros when everything is clean', () => {
     expect(summarizeChanges([A, B], new Set(), new Set())).toEqual({ editing: 0, saved: 0, deleting: 0 });
   });
+
+  // A template/schema/config edit from the advanced area is committed to the same WIP
+  // branch and ships in the same publish, but belongs to no object. Counting objects alone
+  // left it invisible — and since the Publish button is gated on these counts, unpublishable.
+  it('counts a changed site file that belongs to no object', () => {
+    const counts = summarizeChanges(
+      [A, B],
+      new Set(),
+      new Set(['themes/acme/templates/footer.liquid']),
+    );
+    expect(counts).toEqual({ editing: 0, saved: 1, deleting: 0 });
+  });
+
+  it('counts site files alongside changed objects', () => {
+    const counts = summarizeChanges(
+      [A, B, C],
+      new Set([A]),
+      new Set([A, B, 'config/schemas/pages.yml', 'themes/acme/assets/theme.css']),
+    );
+    expect(counts).toEqual({ editing: 1, saved: 3, deleting: 0 });
+  });
+
+  it('does not double-count a colocated asset, which belongs to its object', () => {
+    const counts = summarizeChanges(
+      [A, B],
+      new Set(),
+      new Set(['content/events/a/images/hero.webp']),
+    );
+    expect(counts).toEqual({ editing: 0, saved: 1, deleting: 0 });
+  });
 });

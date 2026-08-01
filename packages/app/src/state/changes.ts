@@ -32,7 +32,22 @@ export function objectChangeState(
   return 'clean';
 }
 
-/** Tally per-object change states into the header counts ("Editing 1 · Saved 4"). */
+/**
+ * Tally the header counts ("Editing 1 · Saved 4") from the live change sets.
+ *
+ * Counts **objects and site files alike**. Not everything pending publish is a content
+ * object: a template, schema, config file or theme asset edited in the advanced area is
+ * committed to the same WIP branch and ships in the same publish, but belongs to no
+ * object. Tallying objects alone left an advanced-area-only change invisible — the header
+ * read "No unpublished changes" and, because the Publish button is gated on these counts,
+ * the change could not be published at all without touching an unrelated object first.
+ *
+ * A site file is any changed path that is neither an object's `index.md` nor inside an
+ * object's bundle — a colocated asset already counts towards its own object (see
+ * {@link objectChangeState}) and must not be counted twice. They fold into `saved`, which
+ * is where the WIP branch has them, and which keeps the header total equal to the number
+ * of rows the changes panel lists.
+ */
 export function summarizeChanges(
   objectPaths: readonly string[],
   editing: ReadonlySet<string>,
@@ -47,6 +62,13 @@ export function summarizeChanges(
     if (state === 'editing') e += 1;
     else if (state === 'saved') s += 1;
     else if (state === 'deleting') d += 1;
+  }
+  const owned = new Set(objectPaths);
+  const bundles = objectPaths.map((p) => p.replace(/\/index\.md$/, '') + '/');
+  for (const path of saved) {
+    if (owned.has(path)) continue;
+    if (bundles.some((prefix) => path.startsWith(prefix))) continue;
+    s += 1;
   }
   return { editing: e, saved: s, deleting: d };
 }
