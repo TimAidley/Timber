@@ -1,6 +1,7 @@
 import { Liquid } from 'liquidjs';
 import { parseFrontMatter } from './frontmatter.js';
 import { renderMarkdown } from './markdown.js';
+import { injectWordmarkStyle } from './wordmarkStyle.js';
 import { rebaseHtml } from './links.js';
 import { engine, createEngine, SafeHtml } from './liquid.js';
 import type { RenderPageInput, TemplateMap } from './types.js';
@@ -126,5 +127,8 @@ export async function renderPage(input: RenderPageInput): Promise<string> {
     },
   );
 
-  return html;
+  // Brand-wordmark styling (SPEC §7), added once over the finished document — the logo can
+  // arrive from the body, an excerpt, or a `markdownify`-ed setting, and every route needs
+  // the same self-contained `<style>`. A no-op on pages with no wordmark.
+  return injectWordmarkStyle(html);
 }

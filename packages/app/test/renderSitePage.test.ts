@@ -64,12 +64,13 @@ describe('renderSitePage', () => {
     // Live title in <head>/<h1> and the rendered Markdown body.
     expect(html).toContain('Welcome');
     // The home page body uses the `:timber-logo` shortcode (SPEC §7 → Brand wordmark):
-    // it renders the styled wordmark and injects its self-contained styling (rules +
-    // embedded font), so the logo works in preview with no theme setup.
+    // it renders the styled wordmark, and the page-level injection puts its self-contained
+    // styling (rules + embedded font) in <head>, so the logo works in preview with no theme setup.
     expect(html).toContain(
       '<span class="wordmark"><span class="wordmark__tim">Tim</span>ber</span>',
     );
     expect(html).toContain('@font-face');
+    expect(html.indexOf('@font-face')).toBeLessThan(html.indexOf('</head>'));
   });
 
   it('reflects live front-matter edits, not the stored copy', async () => {
