@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { JSDOM } from 'jsdom';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { WORDMARK_CSS } from '../packages/generator/src/wordmarkStyle.js';
 
 // docs/install.html carries the setup instructions for every host / sign-in /
 // deploy combination and shows one path at a time. Nothing else validates it —
@@ -213,6 +214,33 @@ describe('docs/install.html', () => {
     const deep = load('https://example.test/install.html#content-checks');
     expect(deep.window.location.hash).toBe('#content-checks');
     expect(deep.window.location.search).toContain('host=github');
+  });
+
+  it('renders the wordmark with the markup all three surfaces share', () => {
+    const mark = doc.querySelector('h1 .wordmark');
+    expect(mark, 'the page title should use the wordmark').toBeTruthy();
+    // Same shape as @timber/app's <Wordmark/> and the :timber-logo shortcode: "Tim"
+    // emphasised inside one contiguous word, so it still reads as "Timber".
+    expect(mark!.querySelector('.wordmark__tim')?.textContent).toBe('Tim');
+    expect(mark!.textContent).toBe('Timber');
+  });
+
+  it('keeps its wordmark styling in step with the generator', () => {
+    // The page never passes through the generator, so it carries its own copy of the
+    // brand block. Regenerate with scripts/gen-install-wordmark.mjs — don't hand-edit.
+    const html = readFileSync(PAGE, 'utf8');
+    expect(
+      html.includes(`<style>${WORDMARK_CSS}</style>`),
+      'docs/install.html is out of date — run `node scripts/gen-install-wordmark.mjs`',
+    ).toBe(true);
+  });
+
+  it('embeds the logo font, so the page stays self-contained', () => {
+    // A URL here would break the wordmark the moment the file is opened from disk or
+    // moved to the Timber-built docs site.
+    const html = readFileSync(PAGE, 'utf8');
+    expect(html).toContain('data:font/woff2;base64,');
+    expect(html).not.toMatch(/src:\s*url\((?!data:)/);
   });
 
   it('reads without JavaScript — no block is hidden by default markup', () => {

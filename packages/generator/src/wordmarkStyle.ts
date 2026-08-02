@@ -28,8 +28,12 @@ import { WORDMARK_FONT_DATA_URI } from './wordmarkFont.js';
  * The colours resolve to the site's own `--fg` / `--muted` when present (matching the
  * body text, as in the editor header) and fall back to `currentColor` — with a muted
  * tint via `color-mix` — on themes that don't define them, so the two-tone survives.
+ *
+ * Exported because `docs/install.html` is a standalone page outside the generator's reach
+ * and has to carry its own copy of this block; `scripts/gen-install-wordmark.mjs` writes
+ * it there and `test/install-page.test.ts` fails if the two drift apart.
  */
-const WORDMARK_CSS =
+export const WORDMARK_CSS =
   `@font-face{` +
   `font-family:'Fraunces Timber';font-style:normal;font-weight:100 900;font-display:swap;` +
   `src:url(${WORDMARK_FONT_DATA_URI}) format('woff2')}` +

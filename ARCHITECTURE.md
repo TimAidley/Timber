@@ -2,7 +2,8 @@
 
 A map of the moving parts and their dependencies. This is the **"what talks to what"**;
 for the *why* behind decisions see **`SPEC.md`** (authoritative), and for *how to stand up
-a site* see **`INSTALL.md`**.
+a site* see the **[setup guide](https://timaidley.github.io/Timber/install.html)**
+(`docs/install.html`).
 
 ---
 
@@ -359,11 +360,11 @@ Cross-cutting things and every file they touch:
   duplicate step id, or a combination that loses a required step.
 - **Auth flow / mode** → `host/{auth,oauth,deviceFlow,token}.ts` + the sign-in components
   + `docs/auth-github-app.md`.
-- **The Timber wordmark → keep the two font copies in lockstep.** The brand wordmark renders in two
-  documents from two copies of the **subsetted Fraunces face** (`fraunces-timber.woff2`, OFL-1.1):
+- **The Timber wordmark → keep the three font copies in lockstep.** The brand wordmark renders in
+  three documents from copies of the **subsetted Fraunces face** (`fraunces-timber.woff2`, OFL-1.1):
   the **editor chrome** (`@timber/app` — `components/Wordmark.tsx` + `.wordmark` rules and `@font-face`
-  in `src/styles.css`, font in `src/fonts/`) and **published sites** via the **`:timber-logo`
-  shortcode** (SPEC §7 → Brand wordmark). The shortcode is **self-contained**, NOT theme-owned: the
+  in `src/styles.css`, font in `src/fonts/`), **published sites** via the **`:timber-logo`
+  shortcode** (SPEC §7 → Brand wordmark), and the **setup guide** (`docs/install.html`). The shortcode is **self-contained**, NOT theme-owned: the
   shared generator's directive transform (`packages/generator/src/figureDirective.ts`, span-class
   allowance in `markdown.ts`) emits the `<span class="wordmark">…` markup, and `injectWordmarkStyle`
   (`wordmarkStyle.ts`) adds the `.wordmark` rules + an `@font-face` with the font
@@ -374,5 +375,9 @@ Cross-cutting things and every file they touch:
   site can't live in each site's `theme.css` (it drifts/goes stale), so it ships from the version-pinned
   generator and works on existing sites with zero theme changes. The embedded base64 is generated from
   the app's canonical woff2 by **`scripts/gen-wordmark-font.mjs`** → `generator/src/wordmarkFont.ts`.
-  Change the font file, the classes, or the "Tim"/"ber" split → update the app copy **and** rerun the
-  script so header ≡ shortcode. (The default theme carries no wordmark CSS or font — the generator owns it.)
+  `docs/install.html` never passes through the generator, so it carries the same block inline between
+  its `wordmark:start`/`wordmark:end` markers, written by **`scripts/gen-install-wordmark.mjs`** from
+  the generator's exported `WORDMARK_CSS` (`test/install-page.test.ts` fails when the two drift apart).
+  Change the font file, the classes, or the "Tim"/"ber" split → update the app copy **and** rerun both
+  scripts so header ≡ shortcode ≡ setup guide. (The default theme carries no wordmark CSS or font — the
+  generator owns it.)
