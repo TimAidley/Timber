@@ -22,6 +22,19 @@ describe('advanced area scoped to the active theme', () => {
     expect(kindOf('templates/default.liquid', theme)).toBeUndefined();
   });
 
+  it('classifies SCSS as an editable style, partials included', () => {
+    // The build compiles `.scss` (@timber/sass), so it is a stylesheet source like `.css` —
+    // not a binary asset. Partials under `_sass/` are what a main stylesheet @imports, so
+    // they have to be editable too or half the theme's styling stays out of reach.
+    expect(kindOf('themes/acme/assets/theme.scss', theme)).toBe('style');
+    expect(kindOf('themes/acme/assets/_sass/_variables.scss', theme)).toBe('style');
+    // `.sass` (indented syntax) is NOT compiled by the build, so editing it would imply
+    // support that doesn't exist.
+    expect(kindOf('themes/acme/assets/theme.sass', theme)).toBeUndefined();
+    // Binary assets in the same folder still belong to the asset manager.
+    expect(kindOf('themes/acme/assets/fonts/x.woff2', theme)).toBeUndefined();
+  });
+
   it('newFilePath + validateFileName target the active theme folder', () => {
     expect(newFilePath({ kind: 'template', name: 'events' }, theme)).toBe(
       'themes/acme/templates/events.liquid',

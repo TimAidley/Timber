@@ -18,15 +18,22 @@ export type AdvancedKind = 'template' | 'style' | 'schema' | 'config';
 
 const CONFIG_RE = /^config\/.*\.ya?ml$/;
 
+/** Stylesheet sources the build turns into CSS: plain `.css` copied verbatim, and `.scss`
+ *  compiled by `@timber/sass` — both main stylesheets and the `_sass/` partials they pull in,
+ *  which is why this matches on extension rather than excluding underscore-prefixed files.
+ *  `.sass` (the indented syntax) is deliberately absent: the build only compiles `.scss`, so
+ *  editing one here would imply a support the build doesn't have. */
+const STYLE_RE = /\.(css|scss)$/;
+
 /** Classify a repo path into the kind that drives validation + syntax highlighting, scoped to
  *  the active theme (SPEC §13): a `template`/`style` is one under *this* theme's
  *  `templatesDir`/`assetsDir` (so the advanced area only ever surfaces the current theme's
  *  files, never a sibling theme's). `config/**` is site-level, theme-independent. `assetsDir`
- *  `.css` files are editable text, unlike the fonts/images that also live there (those need
+ *  stylesheets are editable text, unlike the fonts/images that also live there (those need
  *  the binary manager). Defaults to the legacy root for callers without a resolved theme. */
 export function kindOf(path: string, theme: ThemePaths = LEGACY_THEME): AdvancedKind | undefined {
   if (path.startsWith(`${theme.templatesDir}/`) && path.endsWith('.liquid')) return 'template';
-  if (path.startsWith(`${theme.assetsDir}/`) && path.endsWith('.css')) return 'style';
+  if (path.startsWith(`${theme.assetsDir}/`) && STYLE_RE.test(path)) return 'style';
   if (CONFIG_RE.test(path)) return path.startsWith('config/schemas/') ? 'schema' : 'config';
   return undefined;
 }
