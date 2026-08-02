@@ -46,6 +46,32 @@ describe('timber-logo wordmark shortcode', () => {
     expect(html.indexOf('@font-face')).toBeLessThan(html.indexOf('</head>'));
   });
 
+  it('carries its own brand ink rather than inheriting the surrounding text colour', async () => {
+    // A logo has to read the same everywhere. Following `--fg`/`currentColor` meant that in
+    // muted text (a footer) the full-ink "Tim" faded and the two-tone contrast collapsed.
+    const html = await renderPage({ markdown: ':timber-logo\n', template: PAGE });
+    expect(html).toContain('#1b2230'); // ink, matching the editor chrome's --text
+    expect(html).toContain('#5b6472'); // muted, matching --text-muted
+    expect(html).not.toContain('currentColor');
+    expect(html).not.toContain('var(--fg');
+    expect(html).not.toContain('var(--muted');
+  });
+
+  it('inverts on a dark page via the declared colour scheme, not the visitor OS setting', async () => {
+    // `prefers-color-scheme` would flip the logo to near-white on a light-only site whenever
+    // the visitor's OS is dark — invisible. `light-dark()` follows the page's own scheme.
+    const html = await renderPage({ markdown: ':timber-logo\n', template: PAGE });
+    expect(html).toContain('light-dark(#1b2230,#e7eaf0)');
+    expect(html).toContain('light-dark(#5b6472,#9aa4b4)');
+    expect(html).not.toContain('prefers-color-scheme');
+  });
+
+  it('lets a theme recolour it for a section that bucks the page scheme', async () => {
+    const html = await renderPage({ markdown: ':timber-logo\n', template: PAGE });
+    expect(html).toContain('var(--wordmark-ink,');
+    expect(html).toContain('var(--wordmark-muted,');
+  });
+
   it('injects the style only once even with multiple logos, and not at all without one', async () => {
     const two = await renderPage({
       markdown: 'Made by :timber-logo and :timber-logo.\n',

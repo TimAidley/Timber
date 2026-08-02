@@ -369,3 +369,8 @@ Cross-cutting things and every file they touch:
   the app's canonical woff2 by **`scripts/gen-wordmark-font.mjs`** → `generator/src/wordmarkFont.ts`.
   Change the font file, the classes, or the "Tim"/"ber" split → update the app copy **and** rerun the
   script so header ≡ shortcode. (The default theme carries no wordmark CSS or font — the generator owns it.)
+  The **colours** are in lockstep the same way: the shortcode hard-codes the editor chrome's `--text` /
+  `--text-muted` values (`app/src/styles.css`, light + dark) rather than following the site's `--fg` /
+  `--muted`, because a logo has to hold its two-tone contrast even in muted text like a footer. Change
+  those tokens in the app → update `WORDMARK_CSS` to match. Dark inversion is `light-dark()`, keyed to
+  the page's declared `color-scheme`; `--wordmark-ink` / `--wordmark-muted` override it per section.

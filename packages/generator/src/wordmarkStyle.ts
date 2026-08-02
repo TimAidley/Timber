@@ -25,9 +25,26 @@ import { WORDMARK_FONT_DATA_URI } from './wordmarkFont.js';
  * Author-typed raw HTML never becomes an element anyway — remark-rehype runs without
  * `allowDangerousHtml` — so no untrusted `<style>` exists to worry about.
  *
- * The colours resolve to the site's own `--fg` / `--muted` when present (matching the
- * body text, as in the editor header) and fall back to `currentColor` — with a muted
- * tint via `color-mix` — on themes that don't define them, so the two-tone survives.
+ * COLOURS — brand ink, not the surrounding text colour. The wordmark is a logo, so it has
+ * to read the same on every site and in every slot on a page. Inheriting `currentColor`
+ * (what this used to do when a theme defined no `--fg`/`--muted`) meant that dropping it
+ * into a footer styled with muted text produced a faded logo with no full-ink "Tim" — the
+ * two-tone contrast that *is* the wordmark collapsed into whatever the surrounding text
+ * happened to be. So the values are fixed here, taken from the editor chrome's own tokens
+ * (`@timber/app` `styles.css` `--text` / `--text-muted`) so header ≡ shortcode.
+ *
+ * DARK MODE — via `light-dark()`, which keys off the **page's declared `color-scheme`**,
+ * not the viewer's OS preference. That distinction matters: `prefers-color-scheme` would
+ * flip the logo to near-white on a light-only site whenever the *visitor* runs their OS in
+ * dark mode, which is both common and invisible. The cost is that a dark theme must declare
+ * `color-scheme: dark` (or `light dark`) for the flip to happen — good practice regardless,
+ * since it also drives form controls and scrollbars.
+ *
+ * ESCAPE HATCH — `--wordmark-ink` / `--wordmark-muted`, read as `var()` fallbacks so a
+ * theme can set them on any ancestor and win. No automatic signal can catch a section that
+ * bucks the page scheme (a dark footer band on a light page is the usual one), so that case
+ * is served by saying so explicitly. In a browser too old for `light-dark()` the whole
+ * declaration is invalid and colour simply inherits — degrading to the old behaviour.
  */
 const WORDMARK_CSS =
   `@font-face{` +
@@ -36,8 +53,8 @@ const WORDMARK_CSS =
   `.wordmark{` +
   `font-family:'Fraunces Timber',Georgia,'Times New Roman',serif;font-optical-sizing:auto;` +
   `font-weight:440;letter-spacing:-0.005em;` +
-  `color:var(--muted,color-mix(in srgb,currentColor 62%,transparent));white-space:nowrap}` +
-  `.wordmark__tim{font-weight:800;color:var(--fg,currentColor);` +
+  `color:var(--wordmark-muted,light-dark(#5b6472,#9aa4b4));white-space:nowrap}` +
+  `.wordmark__tim{font-weight:800;color:var(--wordmark-ink,light-dark(#1b2230,#e7eaf0));` +
   `font-variation-settings:'SOFT' 12,'WONK' 1}`;
 
 /** The `wordmark` class as it appears in rendered output, however the span was produced. */

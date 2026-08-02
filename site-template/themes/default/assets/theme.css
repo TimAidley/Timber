@@ -191,4 +191,7 @@ body {
 /* The `:timber-logo` wordmark shortcode (SPEC §7 → Brand wordmark) is self-styling: the
    generator injects its `@font-face` + `.wordmark` rules (with the Fraunces face embedded)
    into any page that uses it, so it renders identically on every site with no theme setup.
-   The rules read `--fg` / `--muted` (defined above) when present; nothing to add here. */
+   Being a logo, it carries its own brand ink rather than following `--fg` / `--muted` —
+   so it keeps its two-tone contrast even in muted text like the footer. Nothing to add
+   here. To recolour it for a section that bucks the page's colour scheme (a dark footer
+   band on a light page), set `--wordmark-ink` / `--wordmark-muted` on that section. */
