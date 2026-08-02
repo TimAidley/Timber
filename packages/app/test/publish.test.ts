@@ -37,6 +37,9 @@ class FakeClient implements PublishClient {
   async loadSnapshot() {
     return this.cfg.snapshot;
   }
+  setBranch(branch: string, sha: string) {
+    this.cfg.branches[branch] = sha;
+  }
   async publishSquash(input: PublishSquashInput) {
     this.calls.publishSquash.push(input);
     return { sha: 'NEWMAIN' };
@@ -125,7 +128,7 @@ describe('runPublish', () => {
     if (!plan.ok) throw new Error('expected a runnable plan');
 
     const result = await runPublish(c, CTX, plan, 'Publish');
-    expect(result.sha).toBe('NEWMAIN');
+    expect(result).toEqual({ ok: true, sha: 'NEWMAIN' });
     expect(c.calls.publishSquash).toHaveLength(1);
     expect(c.calls.publishSquash[0]).toEqual({
       defaultBranch: 'main',
@@ -166,5 +169,31 @@ describe('runPublish', () => {
       { path: 'content/pages/hello/index.md', status: 'modified' },
       { path: 'content/pages/removed/index.md', status: 'removed' },
     ]);
+  });
+
+  // A plan pins the WIP tip it was made from. If a debounced autosave (or another tab)
+  // lands between planning and confirming, publishing that pinned tip ships the tree
+  // WITHOUT the newest commit — the site comes out a version behind and the change
+  // bounces back as still-unpublished. Refuse instead, so the caller re-plans.
+  it('refuses a stale plan when the WIP branch moved since planning', async () => {
+    const c = new FakeClient({
+      branches: { main: 'BASE', octocat_wip: 'WIP' },
+      compares: { 'main...octocat_wip': [{ path: 'content/pages/hello/index.md', status: 'modified' }] },
+      snapshot: validSnapshot,
+    });
+    const plan = await planPublish(c, CTX);
+    if (!plan.ok) throw new Error('expected a runnable plan');
+
+    c.setBranch('octocat_wip', 'WIP2'); // the autosave commit lands
+    const result = await runPublish(c, CTX, plan, 'Publish');
+
+    expect(result).toEqual({ ok: false, reason: 'stale' });
+    expect(c.calls.publishSquash).toHaveLength(0); // nothing was published
+
+    // Re-planning against the moved branch publishes the *current* tip.
+    const fresh = await planPublish(c, CTX);
+    if (!fresh.ok) throw new Error('expected a runnable plan');
+    expect(await runPublish(c, CTX, fresh, 'Publish')).toEqual({ ok: true, sha: 'NEWMAIN' });
+    expect(c.calls.publishSquash[0]!.wipTip).toBe('WIP2');
   });
 });

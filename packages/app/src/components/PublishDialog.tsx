@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   planPublish,
   runPublish,
@@ -33,6 +33,14 @@ export function PublishDialog({ client, ctx, onClose, onPublished }: PublishDial
   const [publishing, setPublishing] = useState(false);
   const [publishedSha, setPublishedSha] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Bumped to re-plan when the branch moved under us (see doPublish); the notice that
+  // goes with it, so the refreshed list doesn't change silently under the reader.
+  const [planSeq, setPlanSeq] = useState(0);
+  const [restaleNotice, setRestaleNotice] = useState(false);
+  // Whether the author has typed their own commit message — a re-plan refreshes the
+  // generated default but must not overwrite what they wrote. A ref, not state: it's
+  // read by the planning effect, and re-planning on every keystroke would be absurd.
+  const messageEdited = useRef(false);
   // Which changed paths are expanded to show their diff.
   const [openDiffs, setOpenDiffs] = useState<ReadonlySet<string>>(new Set());
   const toggleDiff = (path: string): void =>
@@ -52,7 +60,7 @@ export function PublishDialog({ client, ctx, onClose, onPublished }: PublishDial
       .then((p) => {
         if (cancelled) return;
         setPlan(p);
-        if (p.ok) setMessage(describePublish(p.changed));
+        if (p.ok && !messageEdited.current) setMessage(describePublish(p.changed));
       })
       .catch((e: unknown) => {
         // Say what failed and what fixes it; the raw host message goes to the log.
@@ -62,14 +70,26 @@ export function PublishDialog({ client, ctx, onClose, onPublished }: PublishDial
     return () => {
       cancelled = true;
     };
-  }, [client, ctx, publishedSha]);
+  }, [client, ctx, publishedSha, planSeq]);
 
+  /**
+   * Publish the reviewed plan. `runPublish` refuses a plan whose branch has moved on
+   * (a debounced autosave landing, another tab) rather than publishing a tree behind
+   * the one shown here — so re-plan and let the author look at the newer state.
+   */
   async function doPublish(): Promise<void> {
     if (!plan?.ok) return;
     setPublishing(true);
     setError(null);
     try {
-      const { sha } = await runPublish(client, ctx, plan, message);
+      const outcome = await runPublish(client, ctx, plan, message);
+      if (!outcome.ok) {
+        setRestaleNotice(true);
+        setPlan(null);
+        setPlanSeq((n) => n + 1);
+        return;
+      }
+      const { sha } = outcome;
       setPublishedSha(sha);
       onPublished(sha);
     } catch (e) {
@@ -107,6 +127,12 @@ export function PublishDialog({ client, ctx, onClose, onPublished }: PublishDial
           <Block block={plan.block} onClose={onClose} />
         ) : (
           <>
+            {restaleNotice ? (
+              <p className="publish__notice" role="status">
+                More changes reached your branch while this was open — the list below is
+                up to date. Publish to include them.
+              </p>
+            ) : null}
             <p className="publish__summary">
               {plan.changed.length} change{plan.changed.length === 1 ? '' : 's'}
               {plan.strategy === 'rebase' ? ' · will rebase onto the latest main' : ''}
@@ -148,7 +174,13 @@ export function PublishDialog({ client, ctx, onClose, onPublished }: PublishDial
             </ul>
             <label className="publish__message">
               Commit message
-              <input value={message} onChange={(e) => setMessage(e.target.value)} />
+              <input
+                value={message}
+                onChange={(e) => {
+                  setMessage(e.target.value);
+                  messageEdited.current = true;
+                }}
+              />
             </label>
             <div className="modal__actions">
               <button type="button" onClick={onClose}>

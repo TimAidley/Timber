@@ -6,16 +6,16 @@ type CommitFn = (files: FileWrite[], message: string, deletions: string[], moves
 
 function setup(commit: CommitFn) {
   const states: SyncState[] = [];
-  const dirtyObjectSets: string[][] = [];
+  const dirtyPathSets: string[][] = [];
   const saver = new Autosaver({
     commit,
     assetBytes: async (path) => (path.endsWith('.webp') ? new Uint8Array([1, 2, 3]) : undefined),
     onState: (s) => states.push(s),
-    onDirtyObjects: (paths) => dirtyObjectSets.push([...paths].sort()),
+    onDirtyPaths: (paths) => dirtyPathSets.push([...paths].sort()),
     idleMs: 2000,
     retryMs: 5000,
   });
-  return { saver, states, dirtyObjectSets };
+  return { saver, states, dirtyPathSets };
 }
 
 describe('Autosaver', () => {
@@ -255,29 +255,29 @@ describe('Autosaver', () => {
 
   it('reports the editing (uncommitted) object set, clearing it once the commit lands', async () => {
     const commit = vi.fn<CommitFn>(async () => undefined);
-    const { saver, dirtyObjectSets } = setup(commit);
+    const { saver, dirtyPathSets } = setup(commit);
 
     saver.markObjectDirty('content/events/a/index.md', { title: 'A' }, 'body');
     saver.markObjectDirty('content/people/b/index.md', { title: 'B' }, 'body');
     // Latest notification lists both dirty objects.
-    expect(dirtyObjectSets.at(-1)).toEqual(['content/events/a/index.md', 'content/people/b/index.md']);
+    expect(dirtyPathSets.at(-1)).toEqual(['content/events/a/index.md', 'content/people/b/index.md']);
 
     await vi.advanceTimersByTimeAsync(2000);
     // After a successful flush they're on the branch → editing set is empty.
-    expect(dirtyObjectSets.at(-1)).toEqual([]);
+    expect(dirtyPathSets.at(-1)).toEqual([]);
   });
 
   it('keeps an object in the editing set while a failing commit retries', async () => {
     const commit = vi.fn<CommitFn>().mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce(undefined);
-    const { saver, dirtyObjectSets } = setup(commit);
+    const { saver, dirtyPathSets } = setup(commit);
 
     saver.markObjectDirty('content/events/a/index.md', { title: 'A' }, 'body');
     await vi.advanceTimersByTimeAsync(2000); // attempt 1 fails
     // Still editing (not yet saved) after the failure.
-    expect(dirtyObjectSets.at(-1)).toEqual(['content/events/a/index.md']);
+    expect(dirtyPathSets.at(-1)).toEqual(['content/events/a/index.md']);
 
     await vi.advanceTimersByTimeAsync(5000); // backoff retry succeeds
-    expect(dirtyObjectSets.at(-1)).toEqual([]);
+    expect(dirtyPathSets.at(-1)).toEqual([]);
   });
 
   it('saveNow() flushes immediately without waiting for the idle timer', async () => {
@@ -288,5 +288,86 @@ describe('Autosaver', () => {
     await saver.saveNow();
 
     expect(commit).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * Publish awaits saveNow() and only then plans against the WIP tip, so "resolved" has to
+ * mean "on the branch". The old `if (flushing) return` resolved instantly while the
+ * caller's edits sat in the dirty map — which is how a publish shipped the previous
+ * version and left the change pending straight afterwards.
+ */
+describe('Autosaver.saveNow — resolves only once everything queued has landed', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  const A = 'content/events/a/index.md';
+
+  it('awaits an in-flight flush instead of resolving straight past it', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const commit = vi.fn<CommitFn>(async () => {
+      await gate;
+    });
+    const { saver } = setup(commit);
+
+    saver.markObjectDirty(A, { title: 'A' }, 'body');
+    void saver.saveNow(); // first flush, now stuck in commit
+
+    let settled = false;
+    const second = saver.saveNow().then((ok) => {
+      settled = true;
+      return ok;
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(settled).toBe(false); // must not resolve while the commit is in flight
+
+    release();
+    await expect(second).resolves.toBe(true);
+    expect(settled).toBe(true);
+  });
+
+  it('commits edits made while an earlier flush was in flight', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const commit = vi.fn<CommitFn>(async () => {
+      await gate;
+    });
+    const { saver } = setup(commit);
+
+    saver.markObjectDirty(A, { title: 'A' }, 'v1');
+    void saver.saveNow(); // takes v1 and blocks in commit
+
+    // A template edit typed a moment later — the flush already took its snapshot, so it
+    // is NOT part of that commit and must go in a second one before saveNow resolves.
+    saver.markFileDirty('themes/acme/assets/theme.css', 'body { color: red }');
+    const pending = saver.saveNow();
+    release();
+    await expect(pending).resolves.toBe(true);
+
+    expect(commit).toHaveBeenCalledTimes(2);
+    expect(commit.mock.calls[1]![0].map((f) => f.path)).toEqual(['themes/acme/assets/theme.css']);
+  });
+
+  it('resolves false when the flush failed, leaving the edits queued for the retry', async () => {
+    const commit = vi.fn<CommitFn>().mockRejectedValue(new Error('network'));
+    const { saver } = setup(commit);
+
+    saver.markFileDirty('templates/default.liquid', 'v1');
+    await expect(saver.saveNow()).resolves.toBe(false);
+    expect(commit).toHaveBeenCalledTimes(1); // the backoff owns the retry, not saveNow
+    expect(saver.getDirtyFile('templates/default.liquid')).toBe('v1');
+  });
+
+  it('resolves true when there was nothing to save', async () => {
+    const commit = vi.fn<CommitFn>(async () => undefined);
+    const { saver } = setup(commit);
+
+    await expect(saver.saveNow()).resolves.toBe(true);
+    expect(commit).not.toHaveBeenCalled();
   });
 });

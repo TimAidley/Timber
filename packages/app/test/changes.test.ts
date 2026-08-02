@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { objectChangeState, summarizeChanges } from '../src/state/changes.js';
+import { objectChangeState, siteFileChanges, summarizeChanges } from '../src/state/changes.js';
 
 const A = 'content/events/a/index.md';
 const B = 'content/events/b/index.md';
@@ -76,5 +76,36 @@ describe('summarizeChanges', () => {
       new Set(['content/events/a/images/hero.webp']),
     );
     expect(counts).toEqual({ editing: 0, saved: 1, deleting: 0 });
+  });
+
+  // An advanced-area edit is unsaved for the ~5s until the coalesced commit lands, and
+  // during that window the header read "No unpublished changes" — nothing at all, where
+  // a page edit badges immediately.
+  it('counts a site file with local-only edits under "editing"', () => {
+    const counts = summarizeChanges([A, B], new Set(['themes/acme/assets/theme.css']), new Set());
+    expect(counts).toEqual({ editing: 1, saved: 0, deleting: 0 });
+  });
+
+  it('counts a site file that is both editing and saved once, as editing', () => {
+    const css = 'themes/acme/assets/theme.css';
+    const counts = summarizeChanges([A, B], new Set([css]), new Set([css]));
+    expect(counts).toEqual({ editing: 1, saved: 0, deleting: 0 });
+  });
+});
+
+describe('siteFileChanges', () => {
+  it('states each changed non-object path, editing winning over saved', () => {
+    const css = 'themes/acme/assets/theme.css';
+    const yml = 'config/schemas/pages.yml';
+    expect(siteFileChanges([A, B], new Set([css]), new Set([css, yml]))).toEqual([
+      { path: css, state: 'editing' },
+      { path: yml, state: 'saved' },
+    ]);
+  });
+
+  it('excludes objects and their bundles (those belong to the object)', () => {
+    expect(
+      siteFileChanges([A, B], new Set([A]), new Set(['content/events/a/images/hero.webp'])),
+    ).toEqual([]);
   });
 });

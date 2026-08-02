@@ -54,7 +54,7 @@ import { ChangesPanel, type ChangeEntry } from './components/ChangesPanel.js';
 import { DiagnosticsPanel } from './components/DiagnosticsPanel.js';
 import { diagnostics } from './state/diagnostics.js';
 import { kindOf } from './advanced/loadAdvancedFiles.js';
-import { objectChangeState, summarizeChanges } from './state/changes.js';
+import { objectChangeState, siteFileChanges, summarizeChanges } from './state/changes.js';
 import { useDeployPoll } from './state/useDeployPoll.js';
 import { NewObjectDialog } from './components/NewObjectDialog.js';
 import { DeleteDialog } from './components/DeleteDialog.js';
@@ -260,6 +260,10 @@ export function Editor({
   // for the deploy poll, the created-time of the newest run seen *before* we publish —
   // so a stale completed run can't be mistaken for our new one.
   const [publishPhase, setPublishPhase] = useState<PublishPhase>('idle');
+  // Between the Publish click and the dialog opening we flush pending edits to the
+  // branch (see startPublish) — a round trip worth showing, so the click isn't followed
+  // by a second of nothing.
+  const [preparingPublish, setPreparingPublish] = useState(false);
   const [deploySince, setDeploySince] = useState<string | undefined>(undefined);
   const deployState = useDeployPoll(
     session.client.deploy,
@@ -1000,17 +1004,39 @@ export function Editor({
 
   // Publish: flush any pending edits to WIP first (so they're included), record the
   // current deploy baseline, then open the review dialog.
+  //
+  // The flush is **awaited**. Firing it off and opening the dialog immediately meant the
+  // dialog planned against the WIP tip as it was *before* the pending commit landed, and
+  // published that tree — the site came out one version behind, and the edit reappeared
+  // as an unpublished change straight afterwards. Anything typed in the last few seconds
+  // (an advanced-area edit especially, where the debounce is the only thing standing
+  // between the keystroke and the branch) is exactly what's most likely to be lost.
   async function startPublish(): Promise<void> {
     if (publishPhase === 'building' || publishPhase === 'publishing') return;
     setPublishPhase('idle'); // clear a prior done/failed
-    autosave.saveNow();
+    setPreparingPublish(true);
     try {
-      const latest = await session.client.deploy?.getLatestDeploy(session.defaultBranch);
-      setDeploySince(latest?.createdAt);
-    } catch {
-      setDeploySince(undefined);
+      const saved = await autosave.saveNow();
+      if (!saved) {
+        // The edits are still local; publishing now would ship the previous version.
+        // The header has switched to "Save failed — <reason>" with the retry/details
+        // actions, so the cause is already on screen — just don't open the dialog.
+        diagnostics.warn(
+          'publish',
+          'publish held back: pending changes have not reached your branch yet',
+        );
+        return;
+      }
+      try {
+        const latest = await session.client.deploy?.getLatestDeploy(session.defaultBranch);
+        setDeploySince(latest?.createdAt);
+      } catch {
+        setDeploySince(undefined);
+      }
+      setShowPublish(true);
+    } finally {
+      setPreparingPublish(false);
     }
-    setShowPublish(true);
   }
 
   // Retry after a *deploy-leg* failure. The 'failed' phase is only ever reached from
@@ -1099,14 +1125,20 @@ export function Editor({
         },
       });
     }
-    for (const path of savedPaths) {
+    // Templates/config/assets: listed with their own lifecycle state, so an advanced-area
+    // edit shows as Editing straight away rather than appearing only once it reaches WIP.
+    for (const { path, state } of siteFileChanges(
+      objects.map((o) => o.path),
+      autosave.editingPaths,
+      savedPaths,
+    )) {
       if (bundlePrefixes.some((p) => path.startsWith(p))) continue; // rolled into its object
       const k = kindOf(path, theme);
       entries.push({
         path,
         title: path.split('/').pop() ?? path,
         kind: k ?? 'asset',
-        state: 'saved',
+        state,
         onOpen:
           k && advancedAllowed
             ? () => {
@@ -1564,6 +1596,7 @@ export function Editor({
           />
           <PublishButton
             phase={publishPhase}
+            preparing={preparingPublish}
             hasChanges={hasChanges}
             onPublish={() =>
               void (publishPhase === 'failed' ? retryDeploy() : startPublish())
@@ -1676,6 +1709,8 @@ export function Editor({
                     <AdvancedList
                       files={advanced.files}
                       selectedPath={advancedMode === 'files' ? advanced.selectedPath : undefined}
+                      editingPaths={autosave.editingPaths}
+                      savedPaths={savedPaths}
                       onSelect={(path) => {
                         setAdvancedMode('files');
                         advanced.setSelectedPath(path);

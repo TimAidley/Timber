@@ -21,12 +21,17 @@ export interface AutosaverDeps {
   /** Notified whenever the sync state changes (drives the indicator). */
   onState: (state: SyncState) => void;
   /**
-   * Notified whenever the set of objects with **local-only** (uncommitted) edits
+   * Notified whenever the set of paths with **local-only** (uncommitted) edits
    * changes — drives the per-item "Editing" badges + header count. Paths in flight
    * (being committed) stay included until the commit lands, so the badge doesn't
    * flicker to clean mid-save.
+   *
+   * Covers content objects **and** raw site files (templates, styles, schemas, config)
+   * alike: an advanced-area edit is exactly as unsaved as a page edit, and leaving it
+   * out of this set is what made the header read "No unpublished changes" for the ~5s
+   * between typing in the code editor and the coalesced commit landing.
    */
-  onDirtyObjects?: (paths: string[]) => void;
+  onDirtyPaths?: (paths: string[]) => void;
   /** Notified on a failed flush (before the backoff retry) — surfaces the cause. */
   onError?: (error: unknown) => void;
   /**
@@ -92,8 +97,8 @@ function describeCommit(
  */
 export class Autosaver {
   private dirtyObjects = new Map<string, DirtyObject>();
-  /** Object paths taken by an in-flight flush; kept in the "editing" set until it lands. */
-  private flushingObjects = new Set<string>();
+  /** Paths taken by an in-flight flush; kept in the "editing" set until it lands. */
+  private flushingPaths = new Set<string>();
   private dirtyFiles = new Map<string, string>();
   private dirtyAssets = new Set<string>();
   private dirtyDeletions = new Set<string>();
@@ -102,6 +107,8 @@ export class Autosaver {
   private dirtyRenames = new Map<string, string>();
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private flushing = false;
+  /** The in-flight flush, so a concurrent {@link saveNow} can await it rather than no-op. */
+  private inFlight: Promise<void> | null = null;
   /** Consecutive failed flushes; drives exponential retry backoff, reset on success. */
   private failures = 0;
   private readonly idleMs: number;
@@ -114,14 +121,27 @@ export class Autosaver {
     this.maxRetryMs = deps.maxRetryMs ?? 60000;
   }
 
-  /** Emit the current "editing" object set (uncommitted edits + in-flight). */
-  private notifyDirtyObjects(): void {
-    this.deps.onDirtyObjects?.([...new Set([...this.dirtyObjects.keys(), ...this.flushingObjects])]);
+  /** Emit the current "editing" path set (uncommitted edits + in-flight). */
+  private notifyDirtyPaths(): void {
+    this.deps.onDirtyPaths?.([
+      ...new Set([...this.dirtyObjects.keys(), ...this.dirtyFiles.keys(), ...this.flushingPaths]),
+    ]);
+  }
+
+  /** Whether anything at all is queued for the next commit. */
+  private hasPending(): boolean {
+    return (
+      this.dirtyObjects.size > 0 ||
+      this.dirtyFiles.size > 0 ||
+      this.dirtyAssets.size > 0 ||
+      this.dirtyDeletions.size > 0 ||
+      this.dirtyMoves.size > 0
+    );
   }
 
   markObjectDirty(path: string, data: FrontMatter, body: string): void {
     this.dirtyObjects.set(path, { data, body });
-    this.notifyDirtyObjects();
+    this.notifyDirtyPaths();
     this.deps.onState('dirty');
     this.schedule();
   }
@@ -134,6 +154,7 @@ export class Autosaver {
    */
   markFileDirty(path: string, content: string): void {
     this.dirtyFiles.set(path, content);
+    this.notifyDirtyPaths();
     this.deps.onState('dirty');
     this.schedule();
   }
@@ -156,7 +177,7 @@ export class Autosaver {
       this.dirtyFiles.delete(path);
       this.dirtyAssets.delete(path);
     }
-    this.notifyDirtyObjects();
+    this.notifyDirtyPaths();
     this.deps.onState('dirty');
     this.schedule();
   }
@@ -173,7 +194,7 @@ export class Autosaver {
     this.dirtyDeletions.add(oldPath);
     for (const move of moves) this.dirtyMoves.set(move.to, move);
     this.dirtyRenames.set(newPath, oldPath);
-    this.notifyDirtyObjects();
+    this.notifyDirtyPaths();
     this.deps.onState('dirty');
     this.schedule();
   }
@@ -188,7 +209,7 @@ export class Autosaver {
   markObjectCreated(path: string, data: FrontMatter, body: string, moves: MoveEntry[]): void {
     this.dirtyObjects.set(path, { data, body });
     for (const move of moves) this.dirtyMoves.set(move.to, move);
-    this.notifyDirtyObjects();
+    this.notifyDirtyPaths();
     this.deps.onState('dirty');
     this.schedule();
   }
@@ -207,7 +228,7 @@ export class Autosaver {
     }
     this.dirtyObjects.set(path, { data, body });
     for (const move of moves) this.dirtyMoves.set(move.to, move);
-    this.notifyDirtyObjects();
+    this.notifyDirtyPaths();
     this.deps.onState('dirty');
     this.schedule();
   }
@@ -227,14 +248,8 @@ export class Autosaver {
     for (const p of [...this.dirtyDeletions]) if (inBundle(p)) this.dirtyDeletions.delete(p);
     for (const p of [...this.dirtyMoves.keys()]) if (inBundle(p)) this.dirtyMoves.delete(p);
     for (const p of [...this.dirtyRenames.keys()]) if (inBundle(p)) this.dirtyRenames.delete(p);
-    this.notifyDirtyObjects();
-    const anyDirty =
-      this.dirtyObjects.size ||
-      this.dirtyFiles.size ||
-      this.dirtyAssets.size ||
-      this.dirtyDeletions.size ||
-      this.dirtyMoves.size;
-    if (!anyDirty) this.deps.onState('idle');
+    this.notifyDirtyPaths();
+    if (!this.hasPending()) this.deps.onState('idle');
   }
 
   /**
@@ -246,13 +261,8 @@ export class Autosaver {
   forgetFile(path: string): void {
     this.dirtyFiles.delete(path);
     this.dirtyDeletions.delete(path);
-    const anyDirty =
-      this.dirtyObjects.size ||
-      this.dirtyFiles.size ||
-      this.dirtyAssets.size ||
-      this.dirtyDeletions.size ||
-      this.dirtyMoves.size;
-    if (!anyDirty) this.deps.onState('idle');
+    this.notifyDirtyPaths();
+    if (!this.hasPending()) this.deps.onState('idle');
   }
 
   getDirtyObject(path: string): DirtyObject | undefined {
@@ -263,13 +273,29 @@ export class Autosaver {
     return this.dirtyFiles.get(path);
   }
 
-  /** Flush immediately (explicit save / tab hide). */
-  saveNow(): Promise<void> {
+  /**
+   * Flush immediately (explicit save / tab hide / before publishing) and resolve once
+   * everything queued at call time has actually landed on the branch — resolving to
+   * `true` when nothing is left pending, `false` when the flush failed and the edits
+   * are still local (the backoff retry will pick them up).
+   *
+   * Awaiting an *in-flight* flush is the point: a bare `if (flushing) return` resolved
+   * instantly while the caller's own edits sat in the dirty map, so Publish could plan
+   * against a WIP tip that predated them and ship the previous version. A flush already
+   * running may also have been taken *before* those edits, so a second pass commits
+   * whatever it left behind.
+   */
+  async saveNow(): Promise<boolean> {
     if (this.idleTimer) {
       clearTimeout(this.idleTimer);
       this.idleTimer = null;
     }
-    return this.flush();
+    await this.flush(); // joins an in-flight flush rather than skipping past it
+    // Anything the joined flush had already taken its snapshot before goes in a second
+    // pass — unless that flush failed, in which case the backoff owns the retry and
+    // hammering it again here would only shorten the wait we deliberately lengthened.
+    if (this.failures === 0 && this.hasPending()) await this.flush();
+    return !this.hasPending();
   }
 
   private schedule(): void {
@@ -284,16 +310,21 @@ export class Autosaver {
     this.idleTimer = setTimeout(() => void this.flush(), delay);
   }
 
-  private async flush(): Promise<void> {
-    if (this.flushing) return;
-    if (
-      this.dirtyObjects.size === 0 &&
-      this.dirtyFiles.size === 0 &&
-      this.dirtyAssets.size === 0 &&
-      this.dirtyDeletions.size === 0 &&
-      this.dirtyMoves.size === 0
-    )
-      return;
+  /**
+   * Run a flush, or — if one is already running — hand back *its* promise so callers
+   * can await the commit in progress instead of racing past it.
+   */
+  private flush(): Promise<void> {
+    if (this.flushing) return this.inFlight ?? Promise.resolve();
+    const run = this.doFlush().finally(() => {
+      if (this.inFlight === run) this.inFlight = null;
+    });
+    this.inFlight = run;
+    return run;
+  }
+
+  private async doFlush(): Promise<void> {
+    if (!this.hasPending()) return;
 
     // Optimistically take the dirty set; restore it on failure. Device-only objects
     // (SPEC §5/§8) are dropped here — never committed, never re-queued; their durable
@@ -322,13 +353,14 @@ export class Autosaver {
       deletions.length === 0 &&
       moves.length === 0
     ) {
-      this.notifyDirtyObjects();
+      this.notifyDirtyPaths();
       this.deps.onState('idle');
       return;
     }
-    // These objects are in transit but not yet on the branch, so they stay "editing"
+    // These paths are in transit but not yet on the branch, so they stay "editing"
     // (not clean, not saved) until the commit lands — no mid-save badge flicker.
-    this.flushingObjects = new Set(objects.map(([p]) => p));
+    this.flushingPaths = new Set([...objects.map(([p]) => p), ...rawFiles.map(([p]) => p)]);
+    this.notifyDirtyPaths();
 
     this.flushing = true;
     this.deps.onState('saving');
@@ -369,14 +401,9 @@ export class Autosaver {
       );
       if (this.failures > 0) this.deps.onRecovered?.(this.failures);
       this.failures = 0; // success resets the backoff
-      this.flushingObjects = new Set(); // landed → these become "saved", not "editing"
-      this.notifyDirtyObjects();
-      const stillDirty =
-        this.dirtyObjects.size ||
-        this.dirtyFiles.size ||
-        this.dirtyAssets.size ||
-        this.dirtyDeletions.size ||
-        this.dirtyMoves.size;
+      this.flushingPaths = new Set(); // landed → these become "saved", not "editing"
+      this.notifyDirtyPaths();
+      const stillDirty = this.hasPending();
       this.deps.onState(stillDirty ? 'dirty' : 'saved');
       if (stillDirty) this.schedule();
     } catch (err) {
@@ -386,8 +413,8 @@ export class Autosaver {
       for (const path of deletions) this.dirtyDeletions.add(path);
       for (const move of moves) if (!this.dirtyMoves.has(move.to)) this.dirtyMoves.set(move.to, move);
       for (const [newP, oldP] of renames) if (!this.dirtyRenames.has(newP)) this.dirtyRenames.set(newP, oldP);
-      this.flushingObjects = new Set(); // back in dirtyObjects → still "editing"
-      this.notifyDirtyObjects();
+      this.flushingPaths = new Set(); // back in the dirty maps → still "editing"
+      this.notifyDirtyPaths();
       this.failures += 1;
       this.deps.onError?.(err);
       this.deps.onState('error');
@@ -406,7 +433,10 @@ export interface Autosave {
    * cause like an expired session, the offer to sign in again instead of retrying.
    */
   lastError: HostErrorInfo | null;
-  /** Object paths with local-only (uncommitted) edits — drives the "Editing" badges. */
+  /**
+   * Paths with local-only (uncommitted) edits — drives the "Editing" badges. Includes
+   * raw site files (templates/styles/schemas/config) as well as content objects.
+   */
   editingPaths: ReadonlySet<string>;
   markObjectDirty: (path: string, data: FrontMatter, body: string) => void;
   markFileDirty: (path: string, content: string) => void;
@@ -419,7 +449,12 @@ export interface Autosave {
   forgetFile: (path: string) => void;
   getDirtyObject: (path: string) => DirtyObject | undefined;
   getDirtyFile: (path: string) => string | undefined;
-  saveNow: () => void;
+  /**
+   * Flush pending edits now, resolving `true` once they're on the branch (or `false` if
+   * the commit failed and they're still local). Publish **awaits** this — see
+   * {@link Autosaver.saveNow}.
+   */
+  saveNow: () => Promise<boolean>;
 }
 
 /**
@@ -472,7 +507,7 @@ export function useAutosave(
           if (state === 'saved' || state === 'idle') setLastError(null);
           setSyncState(state);
         },
-        onDirtyObjects: (paths) => setEditingPaths(new Set(paths)),
+        onDirtyPaths: (paths) => setEditingPaths(new Set(paths)),
       }),
     [session, assetStore],
   );
@@ -501,6 +536,6 @@ export function useAutosave(
     forgetFile: (path) => saver.forgetFile(path),
     getDirtyObject: (path) => saver.getDirtyObject(path),
     getDirtyFile: (path) => saver.getDirtyFile(path),
-    saveNow: () => void saver.saveNow(),
+    saveNow: () => saver.saveNow(),
   };
 }

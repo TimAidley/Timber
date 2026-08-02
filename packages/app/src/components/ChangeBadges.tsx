@@ -214,6 +214,12 @@ interface PublishButtonProps {
   phase: PublishPhase;
   /** Whether there's anything to publish (unsaved or saved-but-unpublished). */
   hasChanges: boolean;
+  /**
+   * Whether the click is being prepared — pending edits are being flushed to the branch
+   * before the review dialog can show an accurate diff. Named for what's happening
+   * ("Saving…"), because nothing has been published yet and it can still be called off.
+   */
+  preparing?: boolean;
   onPublish: () => void;
 }
 
@@ -223,8 +229,13 @@ interface PublishButtonProps {
  * Publish failed — retry). There's no standing "published" banner — the site is
  * always published; only what's *pending* is worth showing (SPEC §11).
  */
-export function PublishButton({ phase, hasChanges, onPublish }: PublishButtonProps): React.JSX.Element {
-  const busy = phase === 'publishing' || phase === 'building';
+export function PublishButton({
+  phase,
+  hasChanges,
+  preparing = false,
+  onPublish,
+}: PublishButtonProps): React.JSX.Element {
+  const busy = preparing || phase === 'publishing' || phase === 'building';
   const disabled = busy || (phase === 'idle' && !hasChanges);
   return (
     <button
@@ -235,7 +246,7 @@ export function PublishButton({ phase, hasChanges, onPublish }: PublishButtonPro
       onClick={onPublish}
     >
       {busy ? <Spinner /> : null}
-      {PUBLISH_LABEL[phase]}
+      {preparing ? 'Saving…' : PUBLISH_LABEL[phase]}
     </button>
   );
 }

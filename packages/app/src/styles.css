@@ -3290,6 +3290,16 @@ button.langmenu__row {
   color: var(--danger);
 }
 
+/* "The branch moved while you were reading this" — the list below has been refreshed. */
+.publish__notice {
+  margin: 0 0 0.6rem;
+  padding: 0.5rem 0.6rem;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  border-left: 3px solid var(--accent);
+  font-size: 0.85rem;
+}
+
 .publish__block ul,
 .publish__done code {
   font-size: 0.82rem;

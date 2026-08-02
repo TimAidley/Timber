@@ -27,7 +27,11 @@ const FILES: AdvancedFile[] = [
   file('config/navigation.yml', 'config'),
 ];
 
-function mount(selectedPath = ''): void {
+function mount(
+  selectedPath = '',
+  editingPaths: ReadonlySet<string> = new Set(),
+  savedPaths: ReadonlySet<string> = new Set(),
+): void {
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
@@ -35,6 +39,8 @@ function mount(selectedPath = ''): void {
     React.createElement(AdvancedList, {
       files: FILES,
       selectedPath,
+      editingPaths,
+      savedPaths,
       onSelect: () => undefined,
     }),
   );
@@ -78,6 +84,23 @@ describe('AdvancedList (rendered)', () => {
     expect(titlesIn(1)).toEqual(['theme.css']);
     expect(titlesIn(2)).toEqual(['pages.yml', 'settings.yml']);
     expect(titlesIn(3)).toEqual(['navigation.yml']);
+  });
+
+  // An advanced-area edit is unsaved for as long as the autosave debounce lasts, and
+  // without a badge the row looked identical to a published file for those seconds —
+  // the one place the editor said nothing about work it was still holding.
+  it('badges an edited file Editing and a committed one Saved', async () => {
+    mount('', new Set(['assets/theme.css']), new Set(['config/navigation.yml']));
+    await waitFor(() => document.querySelector('.cbadge'));
+
+    const badgeFor = (name: string): Element | null | undefined =>
+      [...document.querySelectorAll('.object-list__title')]
+        .find((t) => t.textContent?.includes(name))
+        ?.querySelector('.cbadge');
+
+    expect(badgeFor('theme.css')?.className).toContain('cbadge--editing');
+    expect(badgeFor('navigation.yml')?.className).toContain('cbadge--saved');
+    expect(badgeFor('default.liquid')).toBeNull(); // clean → no badge
   });
 
   it('marks the selected file active', async () => {

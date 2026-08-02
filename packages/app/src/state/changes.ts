@@ -44,9 +44,14 @@ export function objectChangeState(
  *
  * A site file is any changed path that is neither an object's `index.md` nor inside an
  * object's bundle — a colocated asset already counts towards its own object (see
- * {@link objectChangeState}) and must not be counted twice. They fold into `saved`, which
- * is where the WIP branch has them, and which keeps the header total equal to the number
- * of rows the changes panel lists.
+ * {@link objectChangeState}) and must not be counted twice.
+ *
+ * Site files run the same two-stage lifecycle as objects: `editing` while the edit is
+ * only in this browser, `saved` once it's on the WIP branch — and `editing` wins, since
+ * it's the furthest-back state. Counting them as `saved` only (their branch state) meant
+ * a template or stylesheet edited in the advanced area showed *nothing* in the header
+ * until the coalesced commit landed seconds later, unlike a page edit, which badges
+ * immediately.
  */
 export function summarizeChanges(
   objectPaths: readonly string[],
@@ -63,12 +68,37 @@ export function summarizeChanges(
     else if (state === 'saved') s += 1;
     else if (state === 'deleting') d += 1;
   }
-  const owned = new Set(objectPaths);
-  const bundles = objectPaths.map((p) => p.replace(/\/index\.md$/, '') + '/');
-  for (const path of saved) {
-    if (owned.has(path)) continue;
-    if (bundles.some((prefix) => path.startsWith(prefix))) continue;
-    s += 1;
+  for (const { state } of siteFileChanges(objectPaths, editing, saved)) {
+    if (state === 'editing') e += 1;
+    else s += 1;
   }
   return { editing: e, saved: s, deleting: d };
+}
+
+/**
+ * The changed paths that belong to no content object — templates, styles, schemas,
+ * config and stray site assets — each with its lifecycle state. An object's own
+ * `index.md` and anything inside its bundle are excluded: those belong to the object
+ * (see {@link objectChangeState}) and would otherwise be counted twice.
+ *
+ * Shared by the header counts and the changes panel so the two can't disagree about
+ * what's pending.
+ */
+export function siteFileChanges(
+  objectPaths: readonly string[],
+  editing: ReadonlySet<string>,
+  saved: ReadonlySet<string>,
+): { path: string; state: 'editing' | 'saved' }[] {
+  const owned = new Set(objectPaths);
+  const bundles = objectPaths.map((p) => p.replace(/\/index\.md$/, '') + '/');
+  const isSiteFile = (path: string): boolean =>
+    !owned.has(path) && !bundles.some((prefix) => path.startsWith(prefix));
+  const out: { path: string; state: 'editing' | 'saved' }[] = [];
+  const seen = new Set<string>();
+  for (const path of [...editing, ...saved]) {
+    if (seen.has(path) || !isSiteFile(path)) continue;
+    seen.add(path);
+    out.push({ path, state: editing.has(path) ? 'editing' : 'saved' });
+  }
+  return out;
 }

@@ -5,14 +5,16 @@ import { Autosaver } from '../src/state/autosave.js';
 type CommitFn = (files: FileWrite[], message: string, deletions: string[], moves: MoveEntry[]) => Promise<void>;
 
 function setup(commit: CommitFn) {
+  const dirtyPathSets: string[][] = [];
   const saver = new Autosaver({
     commit,
     assetBytes: async () => undefined,
     onState: () => undefined,
+    onDirtyPaths: (paths) => dirtyPathSets.push([...paths].sort()),
     idleMs: 2000,
     retryMs: 5000,
   });
-  return { saver };
+  return { saver, dirtyPathSets };
 }
 
 describe('Autosaver.markFileDirty (advanced area — templates/config)', () => {
@@ -72,6 +74,43 @@ describe('Autosaver.markFileDirty (advanced area — templates/config)', () => {
     saver.markFileDirty('templates/default.liquid', 'draft');
     expect(saver.getDirtyFile('templates/default.liquid')).toBe('draft');
     expect(saver.getDirtyFile('templates/missing.liquid')).toBeUndefined();
+  });
+
+  // The advanced area's edits were left out of the "editing" set entirely, so a template
+  // or stylesheet edit showed nothing in the header until its commit landed ~5s later.
+  it('reports an edited file as editing until its commit lands', async () => {
+    const commit = vi.fn<CommitFn>(async () => undefined);
+    const { saver, dirtyPathSets } = setup(commit);
+
+    saver.markFileDirty('themes/acme/assets/theme.css', 'body { color: red }');
+    expect(dirtyPathSets.at(-1)).toEqual(['themes/acme/assets/theme.css']);
+
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(dirtyPathSets.at(-1)).toEqual([]); // on the branch → "saved", not "editing"
+  });
+
+  it('keeps a file in the editing set while a failing commit retries', async () => {
+    const commit = vi
+      .fn<CommitFn>()
+      .mockRejectedValueOnce(new Error('network'))
+      .mockResolvedValueOnce(undefined);
+    const { saver, dirtyPathSets } = setup(commit);
+
+    saver.markFileDirty('templates/default.liquid', 'v1');
+    await vi.advanceTimersByTimeAsync(2000); // attempt 1 fails
+    expect(dirtyPathSets.at(-1)).toEqual(['templates/default.liquid']);
+
+    await vi.advanceTimersByTimeAsync(5000); // backoff retry succeeds
+    expect(dirtyPathSets.at(-1)).toEqual([]);
+  });
+
+  it('forgetFile drops the file from the editing set (revert)', () => {
+    const commit = vi.fn<CommitFn>(async () => undefined);
+    const { saver, dirtyPathSets } = setup(commit);
+
+    saver.markFileDirty('templates/default.liquid', 'v1');
+    saver.forgetFile('templates/default.liquid');
+    expect(dirtyPathSets.at(-1)).toEqual([]);
   });
 
   it('keeps the file dirty and retries after a failed commit', async () => {

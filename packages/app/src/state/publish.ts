@@ -94,19 +94,35 @@ export async function planPublish(client: PublishClient, ctx: PublishContext): P
 }
 
 /**
+ * The result of executing a plan: the new default-branch SHA, or `stale` when the WIP
+ * branch moved after the plan was made and the plan must be rebuilt before publishing.
+ */
+export type PublishOutcome = { ok: true; sha: string } | { ok: false; reason: 'stale' };
+
+/**
  * Execute an approved {@link PublishPlan}: hand the plan to the host's intent-level
  * {@link PublishClient.publishSquash}, which squash-merges onto the default branch and
  * resets WIP to the new tip. Returns the new default-branch SHA (the caller updates
  * `session.baseSha` and clears local drafts). The tree mechanics (clean reuse vs rebase
  * overlay) are the adapter's job — see the host port's `publishSquash`.
+ *
+ * A plan pins the WIP tip it was built from, and that tip can move between planning and
+ * confirming — a debounced autosave landing, another tab, a slow reader. Publishing the
+ * pinned tip then ships a tree one commit **behind** the branch (and behind the diff the
+ * author just reviewed), and the WIP reset that follows bounces those newer changes back
+ * as unpublished. So the tip is re-checked here, at the point of no return, and a moved
+ * branch returns `stale` for the caller to re-plan rather than publishing the wrong tree.
  */
 export async function runPublish(
   client: PublishClient,
   ctx: PublishContext,
   plan: Extract<PublishPlan, { ok: true }>,
   message: string,
-): Promise<{ sha: string }> {
-  return client.publishSquash({
+): Promise<PublishOutcome> {
+  const tip = await client.getBranchSha(ctx.wipBranch);
+  if (tip !== plan.wipTip) return { ok: false, reason: 'stale' };
+
+  const { sha } = await client.publishSquash({
     defaultBranch: ctx.defaultBranch,
     wipBranch: ctx.wipBranch,
     parentSha: plan.currentMain,
@@ -115,4 +131,5 @@ export async function runPublish(
     strategy: plan.strategy,
     changes: plan.wipChanged,
   });
+  return { ok: true, sha };
 }
