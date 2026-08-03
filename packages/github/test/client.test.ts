@@ -128,6 +128,26 @@ describe('RepoClient (replayed from fixtures recorded against the real sandbox r
     expect(isExhausted()).toBe(true);
   });
 
+  it('reads the branch tip with the HTTP cache bypassed', async () => {
+    // The wiring that matters: GitHub marks ref reads `private, max-age=60`, so a cached
+    // tip would send every commit at a stale parent for a minute. Asserted at the client
+    // level (not just on the wrapper) because it's the constructor that has to opt in.
+    const calls: RequestInit[] = [];
+    const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
+      calls.push(init ?? {});
+      return new Response(JSON.stringify({ ref: 'refs/heads/me_wip', object: { sha: 'abc' } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }) as unknown as typeof fetch;
+
+    const sha = await new RepoClient({ owner: OWNER, repo: REPO, getToken: async () => FAKE_TOKEN, fetchImpl })
+      .getBranchSha('me_wip');
+
+    expect(sha).toBe('abc');
+    expect(calls[0]?.cache).toBe('no-store');
+  });
+
   it('commitFiles() waits out a lagging ref read rather than failing the save', async () => {
     // GitHub's ref reads are eventually consistent: right after the rejected update the
     // re-read can still return the sha we already had. That's lag, not a real deadlock —

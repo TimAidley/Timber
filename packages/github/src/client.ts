@@ -6,6 +6,7 @@ import type {
   RepoVisibility,
 } from '@timber/host';
 import { base64ToBytes, base64ToUtf8, bytesToBase64, utf8ToBase64 } from './base64.js';
+import { noStoreFetch } from './noStore.js';
 import type {
   ChangedPath,
   CommitFilesInput,
@@ -93,6 +94,9 @@ function refReadBackoffMs(attempt: number): number {
   return Math.round(base * (0.5 + Math.random()));
 }
 
+/** How many times to re-read a stale ref (~150ms, 300ms, 600ms) before giving up on it. */
+const STALE_READ_WAITS = 3;
+
 /**
  * Load a repo's content into memory, edit a file, commit back (SPEC §11 / build
  * order Phase 2). Built on the low-level Git Data API (blob -> tree -> commit ->
@@ -127,7 +131,9 @@ export class RepoClient implements HostProvider {
     this.repo = options.repo;
     this.deployWorkflow = options.deployWorkflow ?? DEFAULT_DEPLOY_WORKFLOW;
     this.sleep = options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
-    this.octokit = new Octokit();
+    // Reads must not come from the browser's HTTP cache — a cached branch tip makes
+    // every commit target a stale parent for a full minute (see `noStore.ts`).
+    this.octokit = new Octokit({ request: { fetch: noStoreFetch(options.fetchImpl) } });
     this.octokit.hook.before('request', async (requestOptions) => {
       const token = await options.getToken();
       requestOptions.headers.authorization = `Bearer ${token}`;
@@ -429,15 +435,17 @@ export class RepoClient implements HostProvider {
       } catch (err) {
         if (attempt >= MAX_ATTEMPTS || !isNonFastForwardError(err)) throw err;
 
+        // The update was rejected, so the tip HAS moved: a read that still shows the sha
+        // we already have is stale, not the truth. Wait it out, with a growing jittered
+        // gap, before believing it. (The usual cause of a *persistently* stale read was
+        // the browser's HTTP cache, now bypassed in `noStore.ts`; this remains as the
+        // backstop for the host's own read-after-write lag.)
         let latest = await this.getBranchSha(branch);
-        if (!latest || latest === tipSha) {
-          // The ref update was rejected, so the tip HAS moved; a read that still shows
-          // the old sha is lag, not truth. Wait it out and look again.
-          await this.sleep(refReadBackoffMs(attempt));
+        for (let wait = 1; (!latest || latest === tipSha) && wait <= STALE_READ_WAITS; wait += 1) {
+          await this.sleep(refReadBackoffMs(wait));
           latest = await this.getBranchSha(branch);
         }
-        // Still nothing new after waiting — something we don't understand is going on;
-        // hand it to the caller's backoff rather than spinning here.
+        // Still nothing new — hand it to the caller's backoff rather than spinning here.
         if (!latest || latest === tipSha) throw err;
         tipSha = latest;
       }

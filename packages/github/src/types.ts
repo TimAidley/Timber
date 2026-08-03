@@ -37,6 +37,11 @@ export interface RepoClientOptions {
    * Defaults to a real `setTimeout`; tests inject a no-op so the retry path is free.
    */
   sleep?: (ms: number) => Promise<void>;
+  /**
+   * `fetch` implementation Octokit should use (wrapped to bypass the HTTP cache — see
+   * `noStore.ts`). Defaults to the global `fetch`; injected in tests.
+   */
+  fetchImpl?: typeof fetch;
 }
 
 /**

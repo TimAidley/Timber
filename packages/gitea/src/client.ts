@@ -155,7 +155,14 @@ export class GiteaClient implements HostProvider {
       ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
       ...((init?.headers as Record<string, string> | undefined) ?? {}),
     };
-    const res = await this.fetchImpl(`${this.apiRoot}${path}`, { ...init, headers });
+    // `cache: 'no-store'`: this client does read-modify-write against a branch other
+    // tabs also write to, so a cached branch tip would make every commit target a
+    // stale parent until the entry expired (see @timber/github's `noStore.ts`).
+    const res = await this.fetchImpl(`${this.apiRoot}${path}`, {
+      ...init,
+      headers,
+      cache: 'no-store',
+    });
     if (!res.ok) {
       throw await giteaResponseError(init?.method ?? 'GET', path, res);
     }
