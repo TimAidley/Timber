@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { sanitizePreviewDocument } from './sanitizePreview.js';
+import { findChangedElement } from './previewScroll.js';
 
 function escapeHtml(s: string): string {
   return s.replace(/[&<>]/g, (c) => (c === '&' ? '&amp;' : c === '<' ? '&lt;' : '&gt;'));
@@ -21,12 +22,19 @@ function errorDoc(message: string): string {
  * real generator, so a full-width window is a truer full-page preview than the pane —
  * useful on a second monitor. While open, the window is rewritten whenever the render
  * changes; the user closing it (or this component unmounting) tears the mirror down.
+ *
+ * Rewriting resets the window's scroll, so — like the pane (see previewScroll.ts) — each
+ * rewrite restores the previous scroll offset and scrolls the edited element into view.
+ * `contentKey` identifies the previewed page: when it changes, the mirror is a different
+ * page and starts fresh at the top instead of restoring the previous page's scroll.
  */
 export function usePreviewWindow(
   html: string,
   error: string | null,
+  contentKey?: string,
 ): { isOpen: boolean; open: () => void; close: () => void } {
   const winRef = useRef<Window | null>(null);
+  const prevKeyRef = useRef(contentKey);
   const [isOpen, setIsOpen] = useState(false);
 
   const close = useCallback(() => {
@@ -52,10 +60,22 @@ export function usePreviewWindow(
     // whole document (scripts/handlers stripped, theme `<style>` kept) before writing so
     // it can't reach `opener`/the token — the pop-out's analogue of the pane's sandbox.
     const doc = error ? errorDoc(error) : sanitizePreviewDocument(html);
+    // Unlike the pane's frame, the old document is still live here, so its scroll offset
+    // and <body> can be captured directly (the clone must precede `document.open`, which
+    // empties the document). Only meaningful when the rewrite is the SAME page re-rendered.
+    const samePage = prevKeyRef.current === contentKey && !error;
+    const scroll = samePage ? { x: w.scrollX, y: w.scrollY } : null;
+    const before = samePage ? (w.document.body?.cloneNode(true) as Element | null) : null;
     w.document.open();
     w.document.write(doc);
     w.document.close();
-  }, [html, error, isOpen]);
+    prevKeyRef.current = contentKey;
+    if (!scroll) return;
+    w.scrollTo(scroll.x, scroll.y);
+    const body = w.document.body;
+    const changed = before && body ? findChangedElement(before, body) : null;
+    if (changed && changed !== body) changed.scrollIntoView({ block: 'nearest' });
+  }, [html, error, isOpen, contentKey]);
 
   // Notice the user closing the popped-out window so the button reflects it.
   useEffect(() => {

@@ -1296,7 +1296,7 @@ export function Editor({
     assetStore,
     previewEnabled,
   );
-  const previewWin = usePreviewWindow(previewHtml, previewError);
+  const previewWin = usePreviewWindow(previewHtml, previewError, selected?.path);
   previewWindowOpenRef.current = previewWin.isOpen;
 
   // Drag the split divider to resize the preview pane; persist the width on drop.
@@ -1586,7 +1586,9 @@ export function Editor({
         />
       ) : null
     ) : selected && !selectedDeleted ? (
-      <Preview html={previewHtml} error={previewError} />
+      // Keyed by the open object so its scroll-follow state (previewScroll.ts) starts
+      // fresh per page instead of restoring the previous page's scroll position.
+      <Preview key={selected.path} html={previewHtml} error={previewError} />
     ) : (
       <p className="app__preview-empty">Nothing to preview.</p>
     );
