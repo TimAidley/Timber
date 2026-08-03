@@ -4,6 +4,6 @@
  * SDK. Unlike the Codeberg adapter it provides a real {@link DeployBackend} backed by
  * GitLab CI/CD pipelines (GitLab Pages).
  */
-export { GitLabClient } from './client.js';
+export { GitLabClient, summarizePipelineJobs } from './client.js';
 export type { GitLabClientOptions, FetchLike } from './client.js';
 export { base64ToUtf8, utf8ToBase64, bytesToBase64, base64ToBytes } from './base64.js';

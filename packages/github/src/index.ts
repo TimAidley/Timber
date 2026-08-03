@@ -3,13 +3,15 @@
  * back (SPEC §9, §11; build order Phase 2). Isomorphic: Octokit's client is
  * fetch-based, so this runs unchanged in the browser and in Node.
  */
-export { RepoClient, planRebaseOverlay } from './client.js';
+export { RepoClient, planRebaseOverlay, summarizeRunProgress } from './client.js';
+export type { WorkflowJobSummary } from './client.js';
 export { fromEnv } from './token.js';
 export { base64ToUtf8, utf8ToBase64, bytesToBase64, base64ToBytes } from './base64.js';
 
 export type { GetToken } from './token.js';
 export type {
   DeployBackend,
+  DeployProgress,
   DeployRun,
   HostIdentity,
   HostProvider,

@@ -144,4 +144,46 @@ export interface DeployRun {
   headBranch: string | null;
   /** ISO timestamp the deploy was created — lets the poll distinguish a new run from a stale one. */
   createdAt: string;
+  /**
+   * The host's opaque id for this run, if it has one — the handle
+   * {@link DeployBackend.getDeployProgress} is called with. Optional: a host that can
+   * report a run's *status* but can't address it individually simply omits it, and the
+   * editor falls back to a progress-less "Building…".
+   */
+  id?: string;
+  /**
+   * ISO timestamp the run actually began *executing*, as opposed to being queued. Absent
+   * when the host doesn't distinguish the two — callers measuring elapsed time fall back
+   * to {@link createdAt}, which then includes any time spent waiting for a runner.
+   */
+  startedAt?: string;
+}
+
+/**
+ * How far along a *running* deploy is (SPEC §12). Deliberately thin: an adapter reports
+ * only what its host knows — is the run executing or still waiting for a runner, and what
+ * is it doing right now — while the editor owns every presentation decision (the bar's
+ * fill, the ETA wording, when an estimate has been overrun). That split is what lets a
+ * new adapter buy the whole progress UI with one small data method.
+ *
+ * Note there is no percentage here on purpose. Hosts count work in incomparable units
+ * (GitHub Actions steps within jobs; GitLab jobs within stages) and the denominator moves
+ * mid-run — a run's later jobs don't exist in the API until the earlier ones finish — so a
+ * fraction derived from counting is neither stable nor comparable across hosts. Progress
+ * is measured in *elapsed time against a typical run* instead; see
+ * {@link DeployBackend.getTypicalDeployDurationMs}.
+ */
+export interface DeployProgress {
+  /**
+   * `queued`: waiting for a runner, so no execution time has elapsed to measure against.
+   * `running`: executing.
+   */
+  phase: 'queued' | 'running';
+  /**
+   * What the deploy is doing right now, for a human-readable label ("Build the site").
+   * Whatever unit the host names — a GitHub Actions *step*, a GitLab *job* — since it's
+   * shown, not counted. Absent when nothing is identifiably in flight (between jobs, or
+   * a host that doesn't break a run down at all).
+   */
+  label?: string;
 }

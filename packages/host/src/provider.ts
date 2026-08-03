@@ -2,6 +2,7 @@ import type {
   ChangedPath,
   CommitFilesInput,
   CommitResult,
+  DeployProgress,
   DeployRun,
   PublishSquashInput,
   RefComparison,
@@ -96,6 +97,51 @@ export interface DeployBackend {
    * needs the deploy to run again.
    */
   triggerDeploy(ref: string): Promise<void>;
+  /**
+   * How long a deploy of this site *typically* takes, in ms — measured from the host's
+   * recent successful runs, not guessed. Drives the build banner's progress bar and ETA
+   * (SPEC §12).
+   *
+   * **Optional**, like {@link HostProvider.deploy} itself: a host that can't report run
+   * timings omits it and the editor shows a progress-less "Building…" rather than
+   * inventing a duration. `undefined` is also the right *return* when there's no basis
+   * for an estimate yet — a site's first deploy has no previous run to learn from.
+   */
+  getTypicalDeployDurationMs?(branch?: string): Promise<number | undefined>;
+  /**
+   * What a running deploy is doing right now — see {@link DeployProgress}. Takes the
+   * host's own {@link DeployRun.id}. **Optional** on the same terms as
+   * {@link getTypicalDeployDurationMs}; `undefined` means "can't tell", which the editor
+   * treats as an unlabelled running build rather than an error.
+   */
+  getDeployProgress?(runId: string): Promise<DeployProgress | undefined>;
+}
+
+/**
+ * Median of a set of run durations, or `undefined` if none are usable — the shared
+ * implementation behind adapters' {@link DeployBackend.getTypicalDeployDurationMs}, since
+ * every host answers the same question ("how long do recent successful deploys take?")
+ * from its own list endpoint.
+ *
+ * Median, not mean, because the sample is tiny and CI durations are long-tailed: one run
+ * that queued behind a busy runner pool would drag a mean upward and leave every ETA
+ * afterwards too pessimistic. Non-finite and non-positive spans are dropped rather than
+ * clamped — a host reporting an end before a start is reporting nothing usable.
+ */
+export function medianDurationMs(
+  spans: readonly { startedAt: string; endedAt: string }[],
+): number | undefined {
+  const durations = spans
+    .map((s) => Date.parse(s.endedAt) - Date.parse(s.startedAt))
+    .filter((ms) => Number.isFinite(ms) && ms > 0)
+    .sort((a, b) => a - b);
+  const mid = Math.floor(durations.length / 2);
+  const upper = durations[mid];
+  if (upper === undefined) return undefined; // empty sample
+  const lower = durations[mid - 1];
+  return durations.length % 2 === 1 || lower === undefined
+    ? upper
+    : Math.round((lower + upper) / 2);
 }
 
 /**

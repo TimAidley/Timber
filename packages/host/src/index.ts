@@ -8,6 +8,7 @@ export type {
   ChangedPath,
   CommitFilesInput,
   CommitResult,
+  DeployProgress,
   DeployRun,
   FileWrite,
   GetToken,
@@ -21,6 +22,7 @@ export type {
 } from './types.js';
 
 export type { DeployBackend, HostIdentity, HostProvider, HostRepo } from './provider.js';
+export { medianDurationMs } from './provider.js';
 
 export { describeHostError, redactSecrets, summarizeHostError } from './errors.js';
 export type { HostErrorInfo, HostErrorKind } from './errors.js';

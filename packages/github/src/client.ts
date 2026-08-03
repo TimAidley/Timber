@@ -1,6 +1,8 @@
 import { Octokit } from '@octokit/rest';
+import { medianDurationMs } from '@timber/host';
 import type {
   DeployBackend,
+  DeployProgress,
   HostProvider,
   PublishSquashInput,
   RepoVisibility,
@@ -24,6 +26,52 @@ import type {
 
 /** The GitHub Actions workflow file the site-template ships for build+deploy (SPEC §12). */
 const DEFAULT_DEPLOY_WORKFLOW = 'deploy.yml';
+
+/**
+ * How many recent successful runs the deploy-duration estimate averages over. Small on
+ * purpose: a site's build time tracks its content and its pinned Timber, both of which
+ * drift, so a long window would keep quoting a duration the site has grown out of.
+ */
+const TIMING_SAMPLE_SIZE = 5;
+
+/** The subset of an Actions job {@link summarizeRunProgress} reads (structural, so tests can build one). */
+export interface WorkflowJobSummary {
+  /** `queued` | `in_progress` | `completed` (plus `waiting`/`pending` for a gated job). */
+  status: string;
+  /** The job's steps, when the API reports them — a queued job usually has none yet. */
+  steps?: { name: string; status: string }[];
+}
+
+/**
+ * Reduce a run's jobs to the host-neutral {@link DeployProgress} the editor consumes:
+ * is this run waiting for a runner, and what is it doing right now?
+ *
+ * Pure, so the interesting cases are unit-tested without the network. Note what it
+ * deliberately does *not* do: count steps. A run's later jobs don't exist in the jobs API
+ * until the earlier ones finish (`deploy.yml`'s Pages job appears only once `build` is
+ * done), and Actions injects implicit setup/teardown steps that no one wrote, so any
+ * "step N of M" would have a denominator that jumps mid-run. The step name is worth
+ * showing; the step count isn't worth trusting (SPEC §12).
+ *
+ * With jobs running in parallel the first in-flight one names the phase — arbitrary but
+ * deterministic, and `deploy.yml`'s jobs are sequential anyway.
+ */
+export function summarizeRunProgress(
+  jobs: readonly WorkflowJobSummary[],
+): DeployProgress | undefined {
+  // No jobs yet: the run exists but Actions hasn't scheduled anything — still queued.
+  if (jobs.length === 0) return { phase: 'queued' };
+  const active = jobs.find((job) => job.status === 'in_progress');
+  if (!active) {
+    // Every job either finished or hasn't started. If none has *ever* started we're
+    // genuinely queued; otherwise we're in the gap between one job and the next, which is
+    // running — just with nothing nameable in flight.
+    const started = jobs.some((job) => job.status === 'completed');
+    return { phase: started ? 'running' : 'queued' };
+  }
+  const step = active.steps?.find((s) => s.status === 'in_progress');
+  return step ? { phase: 'running', label: step.name } : { phase: 'running' };
+}
 
 /**
  * The rebase overlay for a publish (SPEC §11): given WIP's changed paths since the
@@ -141,6 +189,9 @@ export class RepoClient implements HostProvider {
     this.deploy = {
       getLatestDeploy: (branch) => this.getLatestWorkflowRun(this.deployWorkflow, branch),
       triggerDeploy: (ref) => this.dispatchWorkflow(this.deployWorkflow, ref),
+      getTypicalDeployDurationMs: (branch) =>
+        this.getTypicalRunDurationMs(this.deployWorkflow, branch),
+      getDeployProgress: (runId) => this.getWorkflowRunProgress(runId),
     };
   }
 
@@ -590,7 +641,58 @@ export class RepoClient implements HostProvider {
       url: run.html_url,
       headBranch: run.head_branch ?? null,
       createdAt: run.created_at,
+      id: String(run.id),
+      // `run_started_at` is when a runner picked the run up; `created_at` is when it was
+      // queued. Keeping them apart is what stops queue time from inflating the elapsed
+      // side of the progress estimate (SPEC §12).
+      ...(run.run_started_at ? { startedAt: run.run_started_at } : {}),
     };
+  }
+
+  /**
+   * How long a successful deploy of this workflow typically takes, in ms — the basis for
+   * the build banner's ETA and progress bar (SPEC §12). Measured from the last few
+   * **successful** runs (failures are excluded: a build that died in its first minute is
+   * no guide to how long a working one takes), median-averaged by `medianDurationMs`.
+   *
+   * `undefined` when there's nothing to learn from — a site's first deploy, or a repo
+   * whose history predates the workflow. The editor then shows an unestimated
+   * "Building…" rather than asserting a duration it hasn't measured.
+   */
+  async getTypicalRunDurationMs(
+    workflowFile: string,
+    branch?: string,
+  ): Promise<number | undefined> {
+    const { data } = await this.octokit.rest.actions.listWorkflowRuns({
+      owner: this.owner,
+      repo: this.repo,
+      workflow_id: workflowFile,
+      status: 'success',
+      per_page: TIMING_SAMPLE_SIZE,
+      ...(branch ? { branch } : {}),
+    });
+    return medianDurationMs(
+      data.workflow_runs.map((run) => ({
+        // Same reasoning as `getLatestWorkflowRun`: measure execution, not queue time, so
+        // the estimate stays comparable with the elapsed time it's matched against.
+        startedAt: run.run_started_at ?? run.created_at,
+        endedAt: run.updated_at,
+      })),
+    );
+  }
+
+  /** What a running deploy is doing right now (SPEC §12) — see {@link summarizeRunProgress}. */
+  async getWorkflowRunProgress(runId: string): Promise<DeployProgress | undefined> {
+    const { data } = await this.octokit.rest.actions.listJobsForWorkflowRun({
+      owner: this.owner,
+      repo: this.repo,
+      run_id: Number(runId),
+      // `latest` (the default) drops superseded attempts of a re-run job, which would
+      // otherwise offer a stale step as the one currently executing.
+      filter: 'latest',
+      per_page: 100,
+    });
+    return summarizeRunProgress(data.jobs);
   }
 
   /**

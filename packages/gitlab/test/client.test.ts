@@ -343,3 +343,115 @@ describe('GitLabClient — DeployBackend over CI/CD pipelines', () => {
     expect(post.body).toEqual({ ref: 'main' });
   });
 });
+
+describe('GitLabClient — deploy progress (SPEC §12)', () => {
+  it('carries the pipeline id, so progress can be asked about it', async () => {
+    const { c } = client({
+      [`GET ${P}/pipelines`]: () => ({
+        json: [
+          {
+            id: 77,
+            status: 'running',
+            web_url: 'https://gitlab.example/jane/site/-/pipelines/77',
+            ref: 'main',
+            created_at: '2026-08-03T10:00:00Z',
+            updated_at: '2026-08-03T10:01:00Z',
+          },
+        ],
+      }),
+    });
+    expect(await c.deploy!.getLatestDeploy('main')).toMatchObject({ id: '77' });
+  });
+
+  it('normalizes a not-yet-started pipeline to queued rather than in_progress', async () => {
+    const mk = (status: string) =>
+      client({
+        [`GET ${P}/pipelines`]: () => ({
+          json: [
+            {
+              id: 1,
+              status,
+              web_url: 'https://gitlab.example/p/1',
+              ref: 'main',
+              created_at: '2026-08-03T10:00:00Z',
+            },
+          ],
+        }),
+      }).c;
+
+    // Still "not completed" — deployState reads every one of these as building, exactly
+    // as before — but distinguishable, so the bar can sit indeterminate while a pipeline
+    // waits for a runner instead of creeping through time it hasn't spent building.
+    for (const status of ['created', 'waiting_for_resource', 'preparing', 'pending']) {
+      expect(await mk(status).deploy!.getLatestDeploy('main')).toMatchObject({
+        status: 'queued',
+        conclusion: null,
+      });
+    }
+    expect(await mk('running').deploy!.getLatestDeploy('main')).toMatchObject({
+      status: 'in_progress',
+    });
+  });
+
+  it('estimates a typical duration from recent successful pipelines', async () => {
+    const { c, log } = client({
+      [`GET ${P}/pipelines`]: () => ({
+        json: [
+          {
+            id: 3,
+            status: 'success',
+            web_url: 'https://gitlab.example/p/3',
+            created_at: '2026-08-03T10:00:00Z',
+            updated_at: '2026-08-03T10:02:00Z',
+          },
+          {
+            id: 2,
+            status: 'success',
+            web_url: 'https://gitlab.example/p/2',
+            created_at: '2026-08-03T09:00:00Z',
+            updated_at: '2026-08-03T09:04:00Z',
+          },
+          {
+            id: 1,
+            status: 'success',
+            web_url: 'https://gitlab.example/p/1',
+            created_at: '2026-08-03T08:00:00Z',
+            updated_at: '2026-08-03T08:03:00Z',
+          },
+        ],
+      }),
+    });
+    expect(await c.deploy!.getTypicalDeployDurationMs!('main')).toBe(180_000);
+    expect(log.at(-1)!.query.get('status')).toBe('success');
+    expect(log.at(-1)!.query.get('ref')).toBe('main');
+  });
+
+  it('has no estimate for a project with no successful pipeline yet', async () => {
+    const { c } = client({ [`GET ${P}/pipelines`]: () => ({ json: [] }) });
+    expect(await c.deploy!.getTypicalDeployDurationMs!('main')).toBeUndefined();
+  });
+
+  it('names the running job — GitLab progress is job-grained, not step-grained', async () => {
+    const { c } = client({
+      [`GET ${P}/pipelines/77/jobs`]: () => ({
+        json: [
+          { name: 'build', status: 'success' },
+          { name: 'pages', status: 'running' },
+        ],
+      }),
+    });
+    expect(await c.deploy!.getDeployProgress!('77')).toEqual({
+      phase: 'running',
+      label: 'pages',
+    });
+  });
+
+  it('reads a pipeline whose jobs have all yet to start as queued', async () => {
+    const { c } = client({
+      [`GET ${P}/pipelines/77/jobs`]: () => ({
+        json: [{ name: 'build', status: 'pending' }],
+      }),
+    });
+    expect(await c.deploy!.getDeployProgress!('77')).toEqual({ phase: 'queued' });
+  });
+});

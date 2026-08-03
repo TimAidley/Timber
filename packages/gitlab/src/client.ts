@@ -1,8 +1,10 @@
+import { medianDurationMs } from '@timber/host';
 import type {
   ChangedPath,
   CommitFilesInput,
   CommitResult,
   DeployBackend,
+  DeployProgress,
   DeployRun,
   FileWrite,
   GetToken,
@@ -104,7 +106,51 @@ function pipelineOutcome(status: string): { status: string; conclusion: string |
   if (status === 'failed' || status === 'canceled' || status === 'skipped') {
     return { status: 'completed', conclusion: 'failure' };
   }
+  // Not started yet: normalized to the port's `queued` so the progress UI can show an
+  // indeterminate "waiting for a runner" rather than a bar creeping along against time
+  // the pipeline hasn't actually spent building. Still "not completed", so `deployState`
+  // reads it as building exactly as before.
+  if (status === 'created' || status === 'waiting_for_resource' || status === 'preparing') {
+    return { status: 'queued', conclusion: null };
+  }
+  if (status === 'pending' || status === 'scheduled' || status === 'manual') {
+    return { status: 'queued', conclusion: null };
+  }
   return { status: 'in_progress', conclusion: null };
+}
+
+/**
+ * How many recent successful pipelines the duration estimate averages over — see the
+ * GitHub adapter's constant of the same name for why the window is deliberately short.
+ */
+const TIMING_SAMPLE_SIZE = 5;
+
+/** The pipeline fields this adapter reads from GitLab's list endpoint. */
+interface PipelineSummary {
+  id: number;
+  status: string;
+  web_url: string;
+  ref?: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+/**
+ * Reduce a pipeline's jobs to the port's {@link DeployProgress}. GitLab's job statuses
+ * are the pipeline statuses over again (`created`/`pending` before, `running` during),
+ * so "has anything started?" is what separates queued from running. Pure, so it's
+ * unit-tested without the network; the first running job names the phase.
+ */
+export function summarizePipelineJobs(
+  jobs: readonly { name: string; status: string }[],
+): DeployProgress | undefined {
+  if (jobs.length === 0) return { phase: 'queued' };
+  const active = jobs.find((job) => job.status === 'running');
+  if (active) return { phase: 'running', label: active.name };
+  const started = jobs.some(
+    (job) => job.status === 'success' || job.status === 'failed' || job.status === 'canceled',
+  );
+  return { phase: started ? 'running' : 'queued' };
 }
 
 /**
@@ -149,6 +195,8 @@ export class GitLabClient implements HostProvider {
     this.deploy = {
       getLatestDeploy: (branch) => this.getLatestPipeline(branch),
       triggerDeploy: (ref) => this.triggerPipeline(ref),
+      getTypicalDeployDurationMs: (branch) => this.getTypicalPipelineDurationMs(branch),
+      getDeployProgress: (runId) => this.getPipelineProgress(runId),
     };
   }
 
@@ -506,9 +554,7 @@ export class GitLabClient implements HostProvider {
 
   private async getLatestPipeline(branch?: string): Promise<DeployRun | undefined> {
     const q = `?per_page=1&order_by=id&sort=desc${branch ? `&ref=${encodeURIComponent(branch)}` : ''}`;
-    const list = await this.json<
-      { status: string; web_url: string; ref?: string; created_at: string }[]
-    >(this.repoPath(`/pipelines${q}`));
+    const list = await this.json<PipelineSummary[]>(this.repoPath(`/pipelines${q}`));
     const pipeline = list[0];
     if (!pipeline) return undefined;
     const { status, conclusion } = pipelineOutcome(pipeline.status);
@@ -518,6 +564,11 @@ export class GitLabClient implements HostProvider {
       url: pipeline.web_url,
       headBranch: pipeline.ref ?? null,
       createdAt: pipeline.created_at,
+      id: String(pipeline.id),
+      // No `startedAt`: GitLab's pipeline *list* carries only created/updated, and the
+      // exact `started_at` needs a per-pipeline GET. Callers fall back to `createdAt`,
+      // which folds in queue time — tolerable, since the estimate below is measured the
+      // same way and the two therefore stay comparable.
     };
   }
 
@@ -526,5 +577,40 @@ export class GitLabClient implements HostProvider {
       method: 'POST',
       body: JSON.stringify({ ref }),
     });
+  }
+
+  /**
+   * How long a successful pipeline typically takes, in ms (SPEC §12) — the ETA behind the
+   * editor's build progress bar, measured from recent **successful** pipelines rather
+   * than guessed.
+   *
+   * Approximated as `updated_at - created_at` off the list endpoint. GitLab does expose an
+   * exact `duration`, but only on a per-pipeline GET, which would cost one request per
+   * sample; the list-derived span is within seconds of it and costs one request total.
+   * Since {@link getLatestPipeline} also measures from `created_at`, estimate and elapsed
+   * include queue time alike, so the comparison stays honest.
+   */
+  private async getTypicalPipelineDurationMs(branch?: string): Promise<number | undefined> {
+    const q = `?status=success&per_page=${TIMING_SAMPLE_SIZE}&order_by=id&sort=desc${
+      branch ? `&ref=${encodeURIComponent(branch)}` : ''
+    }`;
+    const list = await this.json<PipelineSummary[]>(this.repoPath(`/pipelines${q}`));
+    return medianDurationMs(
+      list.map((p) => ({ startedAt: p.created_at, endedAt: p.updated_at ?? p.created_at })),
+    );
+  }
+
+  /**
+   * What a running pipeline is doing right now (SPEC §12). GitLab's unit of work is a
+   * **job**, not a step within a job, so the label is coarser than the GitHub adapter's —
+   * a Pages pipeline that builds in one job shows one name for its whole run. The
+   * time-driven progress bar is unaffected, which is why the editor measures progress in
+   * elapsed time rather than counting units that mean different things per host.
+   */
+  private async getPipelineProgress(runId: string): Promise<DeployProgress | undefined> {
+    const jobs = await this.json<{ name: string; status: string }[]>(
+      this.repoPath(`/pipelines/${encodeURIComponent(runId)}/jobs?per_page=100`),
+    );
+    return summarizePipelineJobs(jobs);
   }
 }
