@@ -339,6 +339,19 @@ export class Autosaver {
     return !this.hasPending();
   }
 
+  /**
+   * Wait for any in-flight flush to finish **without starting a new one** — the fence
+   * a discard/revert needs. Those flows forget the target's pending local state and
+   * then read the branch to decide what to reset; but a flush already in flight has
+   * snapshotted the dirty maps *before* the forget, and its commit can land after the
+   * reset commit, resurrecting the very edits being discarded. The sequence is:
+   * forget → settle → forget again (a failed flush restores its snapshot into the
+   * dirty maps) → then read the branch, which now tells the truth.
+   */
+  async settle(): Promise<void> {
+    if (this.inFlight) await this.inFlight;
+  }
+
   private schedule(): void {
     if (this.idleTimer) clearTimeout(this.idleTimer);
     // After a failure, back off exponentially (5s, 10s, 20s… capped) rather than the
@@ -506,6 +519,8 @@ export interface Autosave {
    * {@link Autosaver.saveNow}.
    */
   saveNow: () => Promise<boolean>;
+  /** Wait out an in-flight flush without starting one — see {@link Autosaver.settle}. */
+  settle: () => Promise<void>;
 }
 
 /**
@@ -595,5 +610,6 @@ export function useAutosave(
     getDirtyObject: (path) => saver.getDirtyObject(path),
     getDirtyFile: (path) => saver.getDirtyFile(path),
     saveNow: () => saver.saveNow(),
+    settle: () => saver.settle(),
   };
 }

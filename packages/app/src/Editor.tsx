@@ -790,6 +790,12 @@ export function Editor({
     setDiscarding(true);
     try {
       autosave.forgetBundle(bundleDir); // stop autosave re-committing what we discard
+      // Fence against a flush already in flight: it snapshotted the dirty maps before
+      // the forget, and its commit could land after our reset, resurrecting the very
+      // changes being discarded. Wait it out, then forget again — a failed flush
+      // restores its snapshot — so the branch reads below tell the truth.
+      await autosave.settle();
+      autosave.forgetBundle(bundleDir);
 
       let bundleChanges: Awaited<ReturnType<typeof session.client.compareChangedPaths>> =
         [];

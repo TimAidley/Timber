@@ -363,6 +363,51 @@ describe('Autosaver', () => {
     expect(dirtyPathSets.at(-1)).toEqual([]);
   });
 
+  it('settle() waits out an in-flight flush without starting a new one', async () => {
+    let release: () => void = () => undefined;
+    const commit = vi.fn<CommitFn>(() => new Promise<void>((resolve) => (release = resolve)));
+    const { saver } = setup(commit);
+
+    await saver.settle(); // idle → resolves immediately, commits nothing
+    expect(commit).not.toHaveBeenCalled();
+
+    saver.markObjectDirty('content/events/a/index.md', { title: 'A' }, 'body');
+    await vi.advanceTimersByTimeAsync(2000); // flush starts, commit hangs
+    let settled = false;
+    const settling = saver.settle().then(() => (settled = true));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(settled).toBe(false); // still in flight
+
+    release();
+    await settling;
+    expect(commit).toHaveBeenCalledTimes(1); // settle never triggered a second flush
+  });
+
+  // The discard fence: forget → settle → forget again. A flush in flight when the
+  // discard starts snapshotted the dirty maps BEFORE the forget; if it fails, it
+  // restores that snapshot — and without the second forget the next flush would
+  // re-commit the very edits the user just discarded.
+  it('forget → settle → forget clears edits a failing in-flight flush restored', async () => {
+    let reject: (e: Error) => void = () => undefined;
+    const commit = vi
+      .fn<CommitFn>()
+      .mockImplementationOnce(() => new Promise<void>((_, rej) => (reject = rej)))
+      .mockResolvedValue(undefined);
+    const { saver } = setup(commit);
+
+    saver.markObjectDirty('content/events/a/index.md', { title: 'A' }, 'body');
+    await vi.advanceTimersByTimeAsync(2000); // flush 1 in flight
+
+    saver.forgetBundle('content/events/a'); // discard begins
+    reject(new Error('network')); // flush 1 fails → restores its snapshot
+    await saver.settle();
+    saver.forgetBundle('content/events/a'); // fence: forget the restored snapshot
+
+    expect(saver.getDirtyObject('content/events/a/index.md')).toBeUndefined();
+    await vi.advanceTimersByTimeAsync(60000);
+    expect(commit).toHaveBeenCalledTimes(1); // nothing left to re-commit
+  });
+
   it('saveNow() flushes immediately without waiting for the idle timer', async () => {
     const commit = vi.fn<CommitFn>(async () => undefined);
     const { saver } = setup(commit);

@@ -182,6 +182,14 @@ export function useAdvanced(
     const file = files?.find((f) => f.path === path);
     if (!file) return;
 
+    // Drop the file's queued edit and fence against a flush already in flight (its
+    // snapshot predates the forget; were its commit to land after the checks below,
+    // the reverted edit would resurface as a saved change). Forget again afterwards —
+    // a failed flush restores its snapshot — so the WIP comparison tells the truth.
+    autosave.forgetFile(path);
+    await autosave.settle();
+    autosave.forgetFile(path);
+
     let published: string | null;
     try {
       published = await session.client.readFile(path, session.defaultBranch);
@@ -204,12 +212,11 @@ export function useAdvanced(
     }
 
     if (published === null) {
-      // Added on WIP (e.g. a just-created type) → remove it entirely.
+      // Added on WIP (e.g. a just-created type) → remove it entirely. (Not on WIP →
+      // the edit was local-only and already forgotten above; nothing to commit.)
       if (onWip) {
         autosave.markPathsDeleted([path]);
         autosave.saveNow();
-      } else {
-        autosave.forgetFile(path);
       }
       void draftStore.current?.delete(repoKey, path);
       setFiles((prev) => (prev ?? []).filter((f) => f.path !== path));
@@ -225,12 +232,11 @@ export function useAdvanced(
     }
 
     // Reset to the published version. Committing the (known-valid) published text back
-    // to WIP yields main's blob, so the path drops out of the main…WIP diff.
+    // to WIP yields main's blob, so the path drops out of the main…WIP diff. (Not on
+    // WIP → the edit was local-only and already forgotten above; nothing to commit.)
     if (onWip) {
       autosave.markFileDirty(path, published);
       autosave.saveNow();
-    } else {
-      autosave.forgetFile(path);
     }
     void draftStore.current?.delete(repoKey, path);
     setText((prev) => new Map(prev).set(path, published));
