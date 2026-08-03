@@ -10,6 +10,7 @@ import {
 import { getToken } from '../host/auth.js';
 import { repoConfig } from '../host/config.js';
 import { createHostProvider, hostTargetFromConfig } from '../host/hostProvider.js';
+import { OwnWrites, recordingClient } from './ownWrites.js';
 
 /**
  * An open editing session against the configured host repo (SPEC §11). Content is loaded
@@ -27,6 +28,14 @@ export interface RepoSession {
   baseSha: string;
   /** Which branch the loaded snapshot came from (wip if it existed, else default). */
   loadedRef: string;
+  /**
+   * The WIP tip this session started from, or undefined if the branch didn't exist yet.
+   * The baseline for spotting a **foreign** write to the shared WIP branch (SPEC §11) —
+   * a second tab or another device moving the tip out from under us.
+   */
+  wipSha: string | undefined;
+  /** Commits this tab has landed, so a moved tip can be told from someone else's work. */
+  ownWrites: OwnWrites;
   model: ContentModel;
   /**
    * The loaded branch's full file tree (paths + blob SHAs). Object delete/rename read
@@ -101,7 +110,15 @@ export async function derivePendingDeletions(
  * editor's content source.
  */
 export async function loadRepoSession(): Promise<RepoSession> {
-  const client = createHostProvider(hostTargetFromConfig(repoConfig), getToken);
+  // Every commit made through this session's client is recorded, so the foreign-write
+  // watcher can recognise our own work. Wrapping here (rather than at each call site)
+  // means autosave, discard, theme import and publish are all covered — including any
+  // write path added later.
+  const ownWrites = new OwnWrites();
+  const client = recordingClient(
+    createHostProvider(hostTargetFromConfig(repoConfig), getToken),
+    ownWrites,
+  );
 
   const login = await client.getAuthenticatedLogin();
   const defaultBranch = await client.getDefaultBranch();
@@ -137,6 +154,8 @@ export async function loadRepoSession(): Promise<RepoSession> {
     defaultBranch,
     baseSha,
     loadedRef,
+    wipSha,
+    ownWrites,
     model,
     treeEntries: tree.entries,
     deletedObjects,

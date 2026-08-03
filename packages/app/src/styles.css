@@ -2232,6 +2232,135 @@ button.langmenu__row {
 }
 
 /* -----------------------------------------------------------------------------
+   Foreign-write warning — another tab/device committed to your WIP branch
+   ----------------------------------------------------------------------------- */
+.foreign-banner {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 1rem;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border-strong);
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+/* Louder only when it actually clashes with what you're editing. */
+.foreign-banner--clash {
+  background: var(--warning-soft);
+  border-bottom-color: color-mix(in srgb, var(--warning) 35%, transparent);
+}
+
+.foreign-banner__glyph {
+  font-size: 1rem;
+  line-height: 1;
+  color: var(--text-muted);
+}
+
+.foreign-banner--clash .foreign-banner__glyph {
+  color: var(--warning);
+}
+
+.foreign-banner__text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.foreign-banner__btn {
+  flex: none;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.75rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: border-color var(--ease), color var(--ease);
+}
+
+.foreign-banner__btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.foreign-dialog__intro {
+  margin: 0.75rem 0 0.5rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.foreign-dialog__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--border);
+}
+
+.foreign-dialog__item {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.foreign-dialog__row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.foreign-dialog__chevron {
+  color: var(--text-faint);
+  font-size: 0.75em;
+}
+
+.foreign-dialog__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 600;
+}
+
+.foreign-dialog__status {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.foreign-dialog__tag {
+  font-size: 0.7rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+}
+
+.foreign-dialog__tag--clash {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.foreign-dialog__path {
+  display: block;
+  margin: 0.15rem 0 0 1.1rem;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-faint);
+}
+
+.foreign-dialog__diff {
+  margin-top: 0.5rem;
+}
+
+/* -----------------------------------------------------------------------------
    Diagnostics panel — the log behind "Save failed — <reason>"
    ----------------------------------------------------------------------------- */
 .diag-panel {

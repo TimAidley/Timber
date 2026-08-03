@@ -58,6 +58,15 @@ export interface AutosaverDeps {
   retryMs?: number;
   /** Cap for the exponential retry backoff (default 60s). */
   maxRetryMs?: number;
+  /**
+   * Random spread (0–1) applied to every scheduled flush. Defaults to **0** so the
+   * timing tests stay deterministic; the React binding turns it on, because two editor
+   * tabs that collide on the same branch would otherwise back off by exactly the same
+   * amount and collide again on the retry.
+   */
+  jitterRatio?: number;
+  /** Injectable randomness (defaults to `Math.random`), so jitter is testable. */
+  random?: () => number;
 }
 
 /** A bundle name from an index.md path, e.g. `content/events/fete/index.md` → `fete`. */
@@ -114,11 +123,21 @@ export class Autosaver {
   private readonly idleMs: number;
   private readonly retryMs: number;
   private readonly maxRetryMs: number;
+  private readonly jitterRatio: number;
+  private readonly random: () => number;
 
   constructor(private readonly deps: AutosaverDeps) {
     this.idleMs = deps.idleMs ?? 5000; // SPEC §11: ~5–15s idle, not per-keystroke
     this.retryMs = deps.retryMs ?? 5000;
     this.maxRetryMs = deps.maxRetryMs ?? 60000;
+    this.jitterRatio = deps.jitterRatio ?? 0;
+    this.random = deps.random ?? Math.random;
+  }
+
+  /** Spread a delay by ±`jitterRatio` so concurrent editors don't retry in lockstep. */
+  private jittered(delay: number): number {
+    if (this.jitterRatio <= 0) return delay;
+    return Math.round(delay * (1 + (this.random() * 2 - 1) * this.jitterRatio));
   }
 
   /** Emit the current "editing" path set (uncommitted edits + in-flight). */
@@ -307,7 +326,7 @@ export class Autosaver {
       this.failures > 0
         ? Math.min(this.retryMs * 2 ** (this.failures - 1), this.maxRetryMs)
         : this.idleMs;
-    this.idleTimer = setTimeout(() => void this.flush(), delay);
+    this.idleTimer = setTimeout(() => void this.flush(), this.jittered(delay));
   }
 
   /**
@@ -501,6 +520,9 @@ export function useAutosave(
         onWarn: (message, detail) => {
           diagnostics.warn('autosave', message, detail);
         },
+        // Spread both the idle debounce and the failure backoff, so two tabs editing the
+        // same branch stop colliding on the same schedule.
+        jitterRatio: 0.25,
         onState: (state) => {
           // A landed commit clears the failure; 'saving' deliberately doesn't, so the
           // reason stays readable while the retry is in flight.

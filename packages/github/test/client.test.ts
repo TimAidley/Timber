@@ -17,7 +17,8 @@ const REPO = 'Timber-test-sandbox';
 const FAKE_TOKEN = 'fake-test-token';
 
 function makeClient(getToken = async () => FAKE_TOKEN): RepoClient {
-  return new RepoClient({ owner: OWNER, repo: REPO, getToken });
+  // No real waiting in tests: the ref-race retry's backoff is injected as a no-op.
+  return new RepoClient({ owner: OWNER, repo: REPO, getToken, sleep: async () => undefined });
 }
 
 // Each test spins up its own msw server bound to one recorded cassette and tears
@@ -123,6 +124,28 @@ describe('RepoClient (replayed from fixtures recorded against the real sandbox r
     // …and the branch tip was re-read after the failure (2 GET ref calls).
     expect(served.filter((r) => r.method === 'GET' && r.pathname.includes('/git/ref/')).length).toBe(2);
     // The blob is uploaded only ONCE and reused across the retry.
+    expect(served.filter((r) => r.method === 'POST' && r.pathname.endsWith('/git/blobs')).length).toBe(1);
+    expect(isExhausted()).toBe(true);
+  });
+
+  it('commitFiles() waits out a lagging ref read rather than failing the save', async () => {
+    // GitHub's ref reads are eventually consistent: right after the rejected update the
+    // re-read can still return the sha we already had. That's lag, not a real deadlock —
+    // the update was rejected, so the tip HAS moved. Giving up here is what surfaced a
+    // "branch moved under us" the user could do nothing about (two tabs editing
+    // different files must never bother anyone). So: wait, look again, then proceed.
+    const { served, isExhausted } = useCassette('commit-retry-stale-ref');
+
+    const result = await makeClient().commitFiles({
+      branch: 'retry_wip',
+      message: 'edit page',
+      files: [{ path: 'content/pages/home/index.md', content: 'Edited.\n' }],
+    });
+
+    expect(result.sha).toBe('c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2');
+    // Three ref reads: the initial one, the stale one, and the one that caught up.
+    expect(served.filter((r) => r.method === 'GET' && r.pathname.includes('/git/ref/')).length).toBe(3);
+    // Still never forced, and the blob is still uploaded once.
     expect(served.filter((r) => r.method === 'POST' && r.pathname.endsWith('/git/blobs')).length).toBe(1);
     expect(isExhausted()).toBe(true);
   });

@@ -32,6 +32,11 @@ export interface RepoClientOptions {
    * the {@link DeployBackend} capability. Defaults to the site-template's `deploy.yml`.
    */
   deployWorkflow?: string;
+  /**
+   * Wait between attempts when a ref update races another writer (see `commitFiles`).
+   * Defaults to a real `setTimeout`; tests inject a no-op so the retry path is free.
+   */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 /**

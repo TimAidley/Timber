@@ -84,6 +84,16 @@ function isNonFastForwardError(err: unknown): boolean {
 }
 
 /**
+ * How long to wait before re-reading a ref that came back stale, growing per attempt
+ * (~150ms, 300ms, 600ms… capped at 2s) with **±50% jitter** so two editor tabs that
+ * collided don't then retry in lockstep and collide again.
+ */
+function refReadBackoffMs(attempt: number): number {
+  const base = Math.min(150 * 2 ** (attempt - 1), 2000);
+  return Math.round(base * (0.5 + Math.random()));
+}
+
+/**
  * Load a repo's content into memory, edit a file, commit back (SPEC §11 / build
  * order Phase 2). Built on the low-level Git Data API (blob -> tree -> commit ->
  * ref update) rather than the Contents API, because Phase 5 needs coalesced
@@ -109,10 +119,14 @@ export class RepoClient implements HostProvider {
    */
   readonly deploy: DeployBackend;
 
+  /** Injectable wait, so the ref-race retry costs nothing in tests. */
+  private readonly sleep: (ms: number) => Promise<void>;
+
   constructor(options: RepoClientOptions) {
     this.owner = options.owner;
     this.repo = options.repo;
     this.deployWorkflow = options.deployWorkflow ?? DEFAULT_DEPLOY_WORKFLOW;
+    this.sleep = options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
     this.octokit = new Octokit();
     this.octokit.hook.before('request', async (requestOptions) => {
       const token = await options.getToken();
@@ -373,7 +387,15 @@ export class RepoClient implements HostProvider {
     // we re-read the tip and re-apply our overlay on top of it — never forcing, so a
     // genuinely concurrent commit is preserved, not clobbered. Our files are layered
     // over `base_tree`, so the other commit's changes survive too.
-    const MAX_ATTEMPTS = 4;
+    //
+    // Two editor tabs writing DIFFERENT files must never bother the user: the overlay
+    // makes that case conflict-free at the tree level, so all that's needed is to win
+    // the ref update eventually. The one thing that stops us converging is GitHub's
+    // eventually-consistent ref read — right after a write the re-read can still hand
+    // back the sha we already have, which no amount of immediate retrying fixes. So a
+    // stale read is waited out (jittered, so two tabs don't retry in lockstep) rather
+    // than surfaced as a "branch moved under us" the user can do nothing about.
+    const MAX_ATTEMPTS = 6;
     for (let attempt = 1; ; attempt += 1) {
       const { data: baseCommit } = await this.octokit.rest.git.getCommit({
         owner: this.owner,
@@ -405,18 +427,18 @@ export class RepoClient implements HostProvider {
         });
         return { sha: newCommit.sha };
       } catch (err) {
-        const latest = await this.getBranchSha(branch);
-        // Give up if we're out of attempts, it's not a fast-forward race, or the tip
-        // hasn't actually advanced (a stale read that a retry can't fix — let the
-        // caller's backoff retry once the refs read catches up).
-        if (
-          attempt >= MAX_ATTEMPTS ||
-          !isNonFastForwardError(err) ||
-          !latest ||
-          latest === tipSha
-        ) {
-          throw err;
+        if (attempt >= MAX_ATTEMPTS || !isNonFastForwardError(err)) throw err;
+
+        let latest = await this.getBranchSha(branch);
+        if (!latest || latest === tipSha) {
+          // The ref update was rejected, so the tip HAS moved; a read that still shows
+          // the old sha is lag, not truth. Wait it out and look again.
+          await this.sleep(refReadBackoffMs(attempt));
+          latest = await this.getBranchSha(branch);
         }
+        // Still nothing new after waiting — something we don't understand is going on;
+        // hand it to the caller's backoff rather than spinning here.
+        if (!latest || latest === tipSha) throw err;
         tipSha = latest;
       }
     }

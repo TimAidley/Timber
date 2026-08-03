@@ -194,6 +194,28 @@ describe('Autosaver', () => {
     expect(commit).toHaveBeenCalledTimes(3);
   });
 
+  it('spreads the flush delay by the jitter ratio, so two tabs stop colliding in lockstep', async () => {
+    // Two editor tabs on the same WIP branch fail together, then back off by exactly the
+    // same amount and collide again. Jitter breaks the tie; the class defaults it off so
+    // the timing tests above stay exact.
+    const commit = vi.fn<CommitFn>(async () => undefined);
+    const saver = new Autosaver({
+      commit,
+      assetBytes: async () => new Uint8Array([1]),
+      onState: () => undefined,
+      idleMs: 2000,
+      jitterRatio: 0.5,
+      random: () => 1, // the top of the range → 2000 * 1.5
+    });
+
+    saver.markObjectDirty('content/events/a/index.md', { title: 'A' }, 'body');
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(commit).not.toHaveBeenCalled(); // stretched past the nominal debounce
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(commit).toHaveBeenCalledTimes(1);
+  });
+
   it('coalesces a deletion into the commit and names it, dropping any pending edit', async () => {
     const commit = vi.fn<CommitFn>(async () => undefined);
     const { saver } = setup(commit);

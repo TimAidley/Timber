@@ -53,6 +53,8 @@ import { PublishDialog } from './components/PublishDialog.js';
 import { ChangesPanel, type ChangeEntry } from './components/ChangesPanel.js';
 import { DiagnosticsPanel } from './components/DiagnosticsPanel.js';
 import { diagnostics } from './state/diagnostics.js';
+import { ForeignChangesBanner, ForeignChangesDialog } from './components/ForeignChanges.js';
+import { useForeignChanges } from './state/foreignChanges.js';
 import { kindOf } from './advanced/loadAdvancedFiles.js';
 import { objectChangeState, siteFileChanges, summarizeChanges } from './state/changes.js';
 import { useDeployPoll } from './state/useDeployPoll.js';
@@ -255,7 +257,6 @@ export function Editor({
   const [showChanges, setShowChanges] = useState(false);
   // Diagnostics panel (the log behind "Save failed — <reason>"), same header anchor.
   const [showDiagnostics, setShowDiagnostics] = useState(false);
-
   // The Publish button's morph state (idle → publishing → building → done/failed) and,
   // for the deploy poll, the created-time of the newest run seen *before* we publish —
   // so a stale completed run can't be mistaken for our new one.
@@ -271,6 +272,18 @@ export function Editor({
     publishPhase === 'building',
     deploySince,
   );
+
+  // Another tab or device writing to the shared WIP branch (SPEC §11) — warn, don't merge.
+  const [showForeign, setShowForeign] = useState(false);
+  const foreign = useForeignChanges({
+    client: session.client,
+    branch: session.wipBranch,
+    own: session.ownWrites,
+    initialSha: session.wipSha,
+    editingPaths: autosave.editingPaths,
+    // A commit of our own is in flight here — its tip would read as someone else's.
+    paused: autosave.syncState === 'saving' || publishPhase === 'publishing',
+  });
 
   // --- Out-of-date editor check (SPEC §12) ------------------------------------------
   // The editor bundle is built from a pinned Timber checkout; when the branch it follows
@@ -1499,6 +1512,13 @@ export function Editor({
           onReload={() => window.location.reload()}
         />
       ) : null}
+      {foreign.change ? (
+        <ForeignChangesBanner
+          change={foreign.change}
+          onReview={() => setShowForeign(true)}
+          onDismiss={foreign.dismiss}
+        />
+      ) : null}
       <header className="app__banner">
         <div className="app__banner-left">
           <button
@@ -1896,6 +1916,13 @@ export function Editor({
         />
       ) : null}
 
+      {showForeign && foreign.change ? (
+        <ForeignChangesDialog
+          change={foreign.change}
+          client={session.client}
+          onClose={() => setShowForeign(false)}
+        />
+      ) : null}
       {showPublish ? (
         <PublishDialog
           client={session.client}

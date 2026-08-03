@@ -105,6 +105,17 @@ The port is split by capability so a host provides what it can:
 | Who is signed in | `HostIdentity` | `getAuthenticatedLogin()` drives the per-user `<login>_wip` branch (SPEC §11). |
 | Trigger/observe a build | `DeployBackend` (**optional**) | `getLatestDeploy()` / `triggerDeploy()`. A host with **no CI** omits it, and the editor degrades — no publish-status morph, no out-of-date banner. GitHub maps it onto the `deploy.yml` workflow; **GitLab** onto CI/CD **pipelines** (a real second implementation); Codeberg omits it (branch-based Pages, no run to observe). |
 
+**Concurrency on the WIP branch is handled in two places, on purpose.** The *ref race* is
+the adapter's problem — `commitFiles` re-reads the moved tip, rebuilds its overlay and
+waits out a lagging ref read (`packages/github/src/client.ts`), so concurrent writes to
+different files never reach the UI at all. The *content* hazard is the app's problem —
+two tabs editing the same file overwrite each other with no error — so the editor keeps a
+per-tab record of the commits it landed (`state/ownWrites.ts`, a `Proxy` over the port so
+every write path is covered) and watches the tip for anyone else's
+(`state/foreignChanges.ts` → a warning + per-file diffs). *Adding a new commit path →
+nothing to do; it's recorded automatically. Changing what counts as a clash → also update
+`components/ForeignChanges.tsx` and SPEC §11.*
+
 **Failures are normalised in the port, not in the UI.** Each adapter throws its own shape — Octokit's `RequestError`, the Gitea/GitLab `fetch` errors, a bare `TypeError` offline — so `describeHostError()` (`@timber/host`) maps all of them onto one small vocabulary (*auth · permission · not-found · rate-limit · conflict · too-large · invalid · network · server*) plus a reason, a hint, and **whether a retry could work**. The editor's diagnostics log (`packages/app/src/state/diagnostics.ts` — a bounded, redacted, in-memory ring buffer) and the header's save-status both read that verdict, so **adding a fourth adapter needs no UI change**: give the thrown error a `status` (and, if you can, an Octokit-shaped `response.headers` + body `message`) and every failure surface reports it correctly. *Change the vocabulary → also update the badge in `components/ChangeBadges.tsx` and SPEC §11.*
 
 **Page hosting is host-neutral in the generator.** It turned out nothing GitHub-specific
