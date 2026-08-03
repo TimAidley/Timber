@@ -112,8 +112,12 @@ different files never reach the UI at all. The *content* hazard is the app's pro
 two tabs editing the same file overwrite each other with no error — so the editor keeps a
 per-tab record of the commits it landed (`state/ownWrites.ts`, a `Proxy` over the port so
 every write path is covered) and watches the tip for anyone else's
-(`state/foreignChanges.ts` → a warning + per-file diffs). *Adding a new commit path →
-nothing to do; it's recorded automatically. Changing what counts as a clash → also update
+(`state/foreignChanges.ts` → a warning + per-file diffs). The own-write record is also an
+**event source**: `OwnWrites.subscribe` fires on every recorded commit, and the editor's
+saved-state refresh (the `main…wip` compare behind the "Saved" badges and the Publish
+gate) listens to it — so the counts follow every commit, whichever feature landed it.
+*Adding a new commit path → nothing to do; it's recorded automatically and the change
+counts refresh automatically. Changing what counts as a clash → also update
 `components/ForeignChanges.tsx` and SPEC §11.*
 
 **Failures are normalised in the port, not in the UI.** Each adapter throws its own shape — Octokit's `RequestError`, the Gitea/GitLab `fetch` errors, a bare `TypeError` offline — so `describeHostError()` (`@timber/host`) maps all of them onto one small vocabulary (*auth · permission · not-found · rate-limit · conflict · too-large · invalid · network · server*) plus a reason, a hint, and **whether a retry could work**. The editor's diagnostics log (`packages/app/src/state/diagnostics.ts` — a bounded, redacted, in-memory ring buffer) and the header's save-status both read that verdict, so **adding a fourth adapter needs no UI change**: give the thrown error a `status` (and, if you can, an Octokit-shaped `response.headers` + body `message`) and every failure surface reports it correctly. *Change the vocabulary → also update the badge in `components/ChangeBadges.tsx` and SPEC §11.*
@@ -246,6 +250,19 @@ Cross-cutting things and every file they touch:
   + `host/buildInfo.ts` (resolve) + `state/upstreamVersion.ts` +
   `components/UpdateBanner.tsx` + `site-template/.github/workflows/deploy.yml` (optional
   explicit overrides) + `packages/app/.env.example`.
+- **The change lifecycle (editing → saved → published, SPEC §8/§11) is fed by two
+  invariants — keep both total.** (1) The autosaver's dirty union
+  (`state/autosave.ts` `notifyDirtyPaths`) spans EVERY dirty collection — objects, raw
+  files, staged assets, deletions, moves; a new kind of pending change joins the union
+  or it's invisible until it reaches the branch (that bug shipped twice: advanced files,
+  then assets). Invalid advanced drafts (uncommittable, but kept + resurfacing on reload)
+  are unioned in by the editor (`useAdvanced.invalidDraftPaths`). (2) The saved set is a
+  **derivation of the branch**, recomputed on every tip movement — own commits via the
+  `OwnWrites.subscribe` event (see the concurrency note above), foreign ones via the
+  watcher — never hand-invalidated per call site. Classification (object vs colocated
+  asset vs site file) goes through the **one path grammar**
+  (`@timber/content` `paths.ts` — `parseObjectPath` & friends); never write a second
+  `content/...` regex, that drift is how deleted translations went missing.
 - **The two-axis status model** (storage: On this device ⇄ Backed up; publication:
   Draft/Public — SPEC §5/§8/§11) → `packages/content/src/visibility.ts` (publication flag)
   + `packages/app/src/state/changes.ts` (per-object state) + the autosave WIP-commit filter
@@ -330,7 +347,11 @@ Cross-cutting things and every file they touch:
   files, `--engine`/autodetect via `detectEngine`) and the **browser**
   (`packages/app/src/theme/importTheme.ts`: `fflate` unzip → plan → `commitFiles`; UI in
   `components/ImportThemeDialog.tsx` with an engine picker). Both write into a **`themes/<name>/`
-  folder** (§13) and **activate** it by patching `settings.activeTheme` (`setFrontMatterScalar`).
+  folder** (§13). **Activation** (`settings.activeTheme`) differs by edge on purpose: the CLI
+  patches the file on disk (`setFrontMatterScalar` — no live editor to race), while the browser
+  activates through the editor's **settings-edit pipeline** (`Editor.activateTheme` → autosave):
+  the settings singleton is a live content object with one writer, and a direct commit built
+  from load-time content both reverted session edits and could be undone by a queued flush.
   Guide: `docs/importing-themes.md`. **Change an engine's transform → keep the manifest's
   `engine` id, `themeRuntime`, and the render-mode wiring in lockstep.**
 - **The `index.md` byte format → change it in exactly one place, and re-run `timber fmt`
@@ -355,9 +376,11 @@ Cross-cutting things and every file they touch:
   scoped to the active theme — `loadAdvancedFiles`/`kindOf`, `newFile.ts`, `reconcileDrafts.ts`,
   `media/{siteAssets,assetName,assetReferences}.ts` — all take a `ThemePaths` (Editor resolves it
   once from `activeTheme` and threads it). The **Themes panel** (`advanced/ThemeManager.tsx`,
-  discovery in `theme/themeFolders.ts`) switches (`commitFiles` the `activeTheme` flip) and
-  deletes (`commitFiles` the folder's paths) on the WIP branch. Add a theme-scoped path anywhere
-  → resolve it through `resolveThemePaths`, never a hardcoded `templates/`/`assets/` literal.
+  discovery in `theme/themeFolders.ts`) switches via the editor's settings-edit pipeline
+  (`onSwitch` → `Editor.activateTheme`; see the theme-import bullet — one writer for settings)
+  and deletes (`commitFiles` the folder's paths) on the WIP branch. Add a theme-scoped path
+  anywhere → resolve it through `resolveThemePaths`, never a hardcoded
+  `templates/`/`assets/` literal.
 - **The site scaffold** (theme, schemas, sample content, workflows) → edit **`site-template/`**
   only; the mirror regenerates the template repo. Never edit `Timber-site-template` directly.
 - **Setup instructions** → **`INSTALL.md`** only (canonical); the template's README is a stub.
