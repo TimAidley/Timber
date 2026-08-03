@@ -204,15 +204,13 @@ export function Editor({
   // creates the folder); build/preview do the robust tree-existence check. Unset → legacy root.
   const theme = useMemo(() => resolveThemePaths(activeTheme, () => true), [activeTheme]);
 
-  // The settings singleton's file (path + current content), so importing a theme can flip
-  // `activeTheme` to it in the same commit (SPEC §13). Undefined when the site has no settings
-  // singleton — the import then tells the user to set `activeTheme` by hand.
-  const settingsFile = useMemo(() => {
-    const settings = model.objects.find((o) => model.schemas.get(o.type)?.page === false);
-    return settings
-      ? { path: settings.path, source: reassembleDocument(settings.data, settings.body) }
-      : undefined;
-  }, [model]);
+  // Whether the site has a settings singleton at all — the gate for theme switching
+  // and import-time activation (SPEC §13). Without one, the user sets `activeTheme`
+  // by hand.
+  const hasSettings = useMemo(
+    () => model.objects.some((o) => model.schemas.get(o.type)?.page === false),
+    [model],
+  );
   const [showNew, setShowNew] = useState(false);
   const [showNewType, setShowNewType] = useState(false);
   const [showNewFile, setShowNewFile] = useState(false);
@@ -950,6 +948,30 @@ export function Editor({
     setShowRename(false);
   }
 
+  // Activate a theme (SPEC §13) as an ORDINARY edit to the live settings object,
+  // flushed through the shared autosaver. The settings singleton has exactly one
+  // writer — this pipeline. A direct settings commit built from load-time content
+  // (as theme switch/import once did) both reverted any settings edits made this
+  // session and could itself be silently undone by a queued autosave flush that
+  // still carried the old front matter. Resolves `true` once the change is on the
+  // WIP branch (`false` ⇒ still local, autosave is retrying — it will land).
+  async function activateTheme(name: string): Promise<boolean> {
+    const settings = objects.find((o) => model.schemas.get(o.type)?.page === false);
+    if (!settings) return false;
+    const dirty = autosave.getDirtyObject(settings.path);
+    const body = dirty?.body ?? settings.body;
+    const data: FrontMatter = { ...(dirty?.data ?? settings.data), activeTheme: name };
+    autosave.markObjectDirty(settings.path, data, body);
+    void draftStore.current?.put(repoKey, settings.path, data, body);
+    setObjects((prev) => prev.map((o) => (o.path === settings.path ? { ...o, data } : o)));
+    // If the settings page is open in the form, fold the change into the live buffer
+    // so the next autosave of that buffer carries it too.
+    if (editingPath === settings.path) {
+      setEdit((prev) => ({ data: { ...prev.data, activeTheme: name }, body: prev.body }));
+    }
+    return autosave.saveNow();
+  }
+
   const validation = useMemo(() => {
     if (!selected || !schema) return undefined;
     const candidate: ContentObject = {
@@ -1287,7 +1309,7 @@ export function Editor({
         <ThemeManager
           session={session}
           {...(activeTheme ? { activeTheme } : {})}
-          {...(settingsFile ? { settingsFile } : {})}
+          {...(hasSettings ? { onSwitch: (name: string) => activateTheme(name) } : {})}
           treeEntries={session.treeEntries}
         />
       ) : advancedMode === 'assets' ? (
@@ -1888,7 +1910,7 @@ export function Editor({
       {showImportTheme ? (
         <ImportThemeDialog
           session={session}
-          {...(settingsFile ? { settingsFile } : {})}
+          {...(hasSettings ? { onActivate: (name: string) => activateTheme(name) } : {})}
           onClose={() => setShowImportTheme(false)}
         />
       ) : null}

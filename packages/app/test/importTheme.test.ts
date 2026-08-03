@@ -82,7 +82,11 @@ describe('browser theme import', () => {
     );
   });
 
-  it('activates the theme by flipping settings.activeTheme in the same commit', async () => {
+  // Activation is deliberately NOT part of the import commit: the settings singleton
+  // is a live content object whose one writer is the editor's edit pipeline. A settings
+  // copy committed here (from whatever content the caller held at load time) raced the
+  // autosaver — reverting session edits, or being undone by a queued settings flush.
+  it('never writes the settings singleton — activation belongs to the editor', async () => {
     let committed: CommitFilesInput | undefined;
     const session: ImportSession = {
       client: {
@@ -94,17 +98,8 @@ describe('browser theme import', () => {
       wipBranch: 'alice_wip',
       defaultBranch: 'main',
     };
-    await importThemeFromZip(session, makeZip(THEME), {
-      themeName: 'acme',
-      activate: {
-        path: 'content/settings/index.md',
-        source: '---\ntitle: My Site\n---\n',
-      },
-    });
-    const settings = committed!.files.find((f) => f.path === 'content/settings/index.md');
-    expect(settings).toBeDefined();
-    expect('content' in settings! ? settings.content : '').toContain('activeTheme: acme');
-    expect('content' in settings! ? settings.content : '').toContain('title: My Site');
+    await importThemeFromZip(session, makeZip(THEME), { themeName: 'acme' });
+    expect(committed!.files.every((f) => !f.path.startsWith('content/'))).toBe(true);
   });
 
   it('autodetects a Liquid Eleventy zip and commits its theme.json manifest', async () => {

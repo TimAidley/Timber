@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { setFrontMatterScalar } from '@timber/jekyll-compat';
 import type { TreeEntry } from '@timber/host';
 import type { RepoSession } from '../state/repoSession.js';
 import { listThemes, themeFolderPaths } from '../theme/themeFolders.js';
@@ -9,10 +8,14 @@ interface ThemeManagerProps {
   /** The currently active theme (settings.activeTheme), or undefined for the legacy root. */
   activeTheme?: string;
   /**
-   * The settings singleton's file (path + current content). Switching writes `activeTheme`
-   * into it; absent (no settings singleton) → switching is disabled.
+   * Activate a theme by name, resolving `true` once the change is on the WIP branch.
+   * The editor implements this as a **normal edit to the live settings object**
+   * (through autosave), never as a direct commit built from load-time content: the
+   * settings singleton has one writer, so a theme switch can neither revert settings
+   * edits made this session nor be silently undone by a queued autosave flush.
+   * Absent (no settings singleton) → switching is disabled.
    */
-  settingsFile?: { path: string; source: string };
+  onSwitch?: (name: string) => Promise<boolean>;
   /** The loaded repo tree, for discovering theme folders and their delete sets. */
   treeEntries: readonly TreeEntry[];
 }
@@ -28,7 +31,7 @@ interface ThemeManagerProps {
 export function ThemeManager({
   session,
   activeTheme,
-  settingsFile,
+  onSwitch,
   treeEntries,
 }: ThemeManagerProps): React.JSX.Element {
   const themes = listThemes(treeEntries);
@@ -37,49 +40,38 @@ export function ThemeManager({
   const [done, setDone] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
-  async function commit(message: string, input: Parameters<typeof run>[0]): Promise<void> {
+  function switchTo(name: string): void {
+    if (!onSwitch || busy) return;
     setBusy(true);
     setError(null);
-    try {
-      await run(input, message);
-      setDone(message);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function run(
-    input: { files?: { path: string; content: string }[]; deletions?: string[] },
-    message: string,
-  ): Promise<void> {
-    await session.client.commitFiles({
-      branch: session.wipBranch,
-      baseBranch: session.defaultBranch,
-      message,
-      files: input.files ?? [],
-      ...(input.deletions ? { deletions: input.deletions } : {}),
-    });
-  }
-
-  function switchTo(name: string): void {
-    if (!settingsFile || busy) return;
-    void commit(`Switch active theme to "${name}"`, {
-      files: [
-        {
-          path: settingsFile.path,
-          content: setFrontMatterScalar(settingsFile.source, 'activeTheme', name),
-        },
-      ],
-    });
+    void onSwitch(name)
+      .then((saved) => {
+        if (saved) setDone(`Switched the active theme to "${name}" — committed to your working branch`);
+        // Not saved ⇒ the edit is queued locally and autosave is retrying; the header
+        // shows the failure and the switch will still land, so don't call it an error.
+        else setDone(`Switching the active theme to "${name}" — the edit is queued and will keep retrying`);
+      })
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+      .finally(() => setBusy(false));
   }
 
   function remove(name: string): void {
     if (busy) return;
     const paths = themeFolderPaths(treeEntries, name);
     setConfirmDelete(null);
-    void commit(`Delete theme "${name}"`, { deletions: paths });
+    setBusy(true);
+    setError(null);
+    void session.client
+      .commitFiles({
+        branch: session.wipBranch,
+        baseBranch: session.defaultBranch,
+        message: `Delete theme "${name}"`,
+        files: [],
+        deletions: paths,
+      })
+      .then(() => setDone(`Deleted theme "${name}" — committed to your working branch`))
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+      .finally(() => setBusy(false));
   }
 
   if (done) {
@@ -90,7 +82,7 @@ export function ThemeManager({
             <h2>Themes</h2>
           </div>
         </header>
-        <p>{done}. Committed to your working branch.</p>
+        <p>{done}.</p>
         <p className="new-type__hint">Reload the editor to see the change.</p>
         <div className="modal__actions">
           <button
@@ -139,9 +131,9 @@ export function ThemeManager({
                         <button
                           type="button"
                           className="is-primary"
-                          disabled={busy || !settingsFile}
+                          disabled={busy || !onSwitch}
                           title={
-                            settingsFile
+                            onSwitch
                               ? undefined
                               : 'Add a settings singleton to switch themes'
                           }

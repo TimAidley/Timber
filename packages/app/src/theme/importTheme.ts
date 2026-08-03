@@ -1,7 +1,6 @@
 import { unzipSync, strFromU8 } from 'fflate';
 import {
   planThemeImport,
-  setFrontMatterScalar,
   type PlanThemeOptions,
   type ThemeFiles,
   type ThemeImportPlan,
@@ -13,8 +12,15 @@ import type { FileWrite, HostProvider } from '@timber/host';
  * Browser-side Jekyll theme import (SPEC §2 → Tier A) — the "do everything from a browser"
  * path. Unzips an uploaded theme, runs the shared, isomorphic {@link planThemeImport} into a
  * self-contained `themes/<name>/` folder, and commits the resulting templates + assets (SCSS
- * source included, compiled later by @timber/sass) to the site's WIP branch in one commit —
- * optionally flipping `settings.activeTheme` in the same commit so it goes live. No terminal.
+ * source included, compiled later by @timber/sass) to the site's WIP branch in one commit.
+ * No terminal.
+ *
+ * Deliberately does NOT touch `settings.activeTheme`: the settings singleton is a live,
+ * editable content object with exactly one writer — the editor's normal edit pipeline. A
+ * settings copy written here (built from whatever content the caller happened to hold)
+ * once raced the autosaver: it could revert settings edits made this session, and a queued
+ * settings flush could silently undo the activation. The editor activates the imported
+ * theme as an ordinary settings edit instead.
  */
 
 /** Files read as UTF-8 text; everything else (images, fonts) is kept as bytes. */
@@ -82,29 +88,22 @@ export interface ImportSession {
 }
 
 export interface BrowserImportOptions extends PlanThemeOptions {
-  /**
-   * Activate the imported theme in the same commit: `path` is the settings singleton's
-   * `index.md`, `source` its current content. The commit includes a copy with `activeTheme`
-   * flipped to the new folder, so the theme goes live on publish without a second step. Any
-   * previous theme stays on disk under its own `themes/<name>/`, so switching back is one edit.
-   */
-  activate?: { path: string; source: string };
   /** Source engine by name (`jekyll`/`eleventy`); omit or `auto` to autodetect from the zip. */
   engineName?: string;
 }
 
 /**
  * Import a Jekyll theme from a zip and commit it to the site's WIP branch in one commit.
- * Writes into `themes/<name>/` (name from `options.themeName`, else the archive's wrapper dir),
- * and — when `activate` is given — flips `settings.activeTheme` to it in the same commit.
+ * Writes into `themes/<name>/` (name from `options.themeName`, else the archive's wrapper dir).
  * Returns the plan (templates written, layouts chosen, type wiring) for the UI to report.
+ * Activation (flipping `settings.activeTheme`) is the editor's job — see the module doc.
  */
 export async function importThemeFromZip(
   session: ImportSession,
   zip: Uint8Array,
   options: BrowserImportOptions = {},
 ): Promise<ThemeImportPlan> {
-  const { activate, engineName, ...planOptions } = options;
+  const { engineName, ...planOptions } = options;
   const { files: themeFiles, rootName } = readZip(zip);
   const themeName =
     planOptions.themeName ?? (rootName ? slugifyThemeName(rootName) : 'theme');
@@ -114,12 +113,6 @@ export async function importThemeFromZip(
     (engineName && engineName !== 'auto' ? engineByName(engineName) : detectEngine(themeFiles));
   const plan = planThemeImport(themeFiles, { ...planOptions, themeName, engine });
   const files = planToFileWrites(plan);
-  if (activate) {
-    files.push({
-      path: activate.path,
-      content: setFrontMatterScalar(activate.source, 'activeTheme', themeName),
-    });
-  }
   await session.client.commitFiles({
     branch: session.wipBranch,
     baseBranch: session.defaultBranch,

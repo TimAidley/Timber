@@ -7,9 +7,10 @@ import type { RepoSession } from '../src/state/repoSession.js';
 import '../src/styles.css';
 
 /**
- * Drives the theme manager in a live DOM: it lists the themes/<name>/ folders, and the
- * switch/delete buttons commit the right payloads (settings.activeTheme flip, folder deletion)
- * to the working branch (SPEC §13).
+ * Drives the theme manager in a live DOM: it lists the themes/<name>/ folders; switching
+ * goes through the editor's settings-edit pipeline (the onSwitch callback — the settings
+ * singleton has one writer), and deleting commits the folder's removal to the working
+ * branch (SPEC §13).
  */
 
 let root: Root | null = null;
@@ -22,8 +23,9 @@ const TREE: TreeEntry[] = [
   { path: 'themes/minima/assets/css/style.scss', type: 'blob', sha: '4' },
 ] as TreeEntry[];
 
-function mount(): { commits: CommitFilesInput[] } {
+function mount(): { commits: CommitFilesInput[]; switches: string[] } {
   const commits: CommitFilesInput[] = [];
+  const switches: string[] = [];
   const session = {
     wipBranch: 'me_wip',
     defaultBranch: 'main',
@@ -42,11 +44,15 @@ function mount(): { commits: CommitFilesInput[] } {
     React.createElement(ThemeManager, {
       session,
       activeTheme: 'default',
-      settingsFile: { path: 'content/settings/index.md', source: '---\ntitle: T\n---\n' },
+      // Switching goes through the editor's settings-edit pipeline, not a commit here.
+      onSwitch: async (name: string) => {
+        switches.push(name);
+        return true;
+      },
       treeEntries: TREE,
     }),
   );
-  return { commits };
+  return { commits, switches };
 }
 
 afterEach(() => {
@@ -83,19 +89,17 @@ describe('ThemeManager (rendered)', () => {
     expect(rowFor('minima')?.querySelector('button')).not.toBeNull();
   });
 
-  it('switches the active theme by committing settings.activeTheme', async () => {
-    const { commits } = mount();
+  it('switches the active theme through the settings-edit pipeline, never a direct commit', async () => {
+    const { commits, switches } = mount();
     const use = await waitFor(() =>
       rowFor('minima')?.querySelector<HTMLButtonElement>('button.is-primary'),
     );
     use.click();
-    await waitFor(() => (commits.length ? true : null));
-    const [c] = commits;
-    expect(c!.branch).toBe('me_wip');
-    const settings = c!.files.find((f) => f.path === 'content/settings/index.md');
-    expect(settings && 'content' in settings ? settings.content : '').toMatch(
-      /activeTheme: minima/,
-    );
+    await waitFor(() => (switches.length ? true : null));
+    expect(switches).toEqual(['minima']);
+    // The settings singleton has one writer (the editor); no commit happens here.
+    expect(commits).toEqual([]);
+    await waitFor(() => (document.body.textContent?.includes('Switched the active theme') ? true : null));
   });
 
   it('deletes a theme folder after confirmation, removing every path under it', async () => {

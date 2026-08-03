@@ -10,11 +10,13 @@ import {
 interface ImportThemeDialogProps {
   session: RepoSession;
   /**
-   * The settings singleton to activate the imported theme in (its `index.md` path + current
-   * content). When present, the import flips `activeTheme` to the new folder in the same commit
-   * so it goes live. Absent (no settings singleton) → the user sets `activeTheme` by hand.
+   * Activate the imported theme (flip `settings.activeTheme` to it) once the import commit
+   * has landed. The editor implements this as a normal edit to the **live** settings object
+   * through autosave — never a settings copy written here from stale content, which once
+   * raced the autosaver (see importTheme.ts). Absent (no settings singleton) → the user
+   * sets `activeTheme` by hand.
    */
-  settingsFile?: { path: string; source: string };
+  onActivate?: (themeName: string) => Promise<boolean>;
   onClose: () => void;
 }
 
@@ -33,7 +35,7 @@ function reloadEditor(): void {
  */
 export function ImportThemeDialog({
   session,
-  settingsFile,
+  onActivate,
   onClose,
 }: ImportThemeDialogProps): React.JSX.Element {
   const [bytes, setBytes] = useState<Uint8Array | null>(null);
@@ -42,6 +44,7 @@ export function ImportThemeDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<ThemeImportPlan | null>(null);
+  const [activated, setActivated] = useState(false);
 
   async function onFile(file: File | null): Promise<void> {
     setError(null);
@@ -62,11 +65,10 @@ export function ImportThemeDialog({
     setBusy(true);
     setError(null);
     try {
-      const plan = await importThemeFromZip(session, bytes, {
-        themeName,
-        engineName,
-        ...(settingsFile ? { activate: settingsFile } : {}),
-      });
+      const plan = await importThemeFromZip(session, bytes, { themeName, engineName });
+      // Activation is a separate, ordinary settings edit through the editor — after the
+      // import commit, so a failed import never leaves activeTheme pointing at nothing.
+      if (onActivate) setActivated(await onActivate(plan.themeName ?? themeName));
       setDone(plan);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -89,7 +91,7 @@ export function ImportThemeDialog({
               <strong>{done.engine ?? 'jekyll'}</strong> template(s) into{' '}
               <code>themes/{done.themeName}/</code> (root layout{' '}
               <code>{done.rootLayout}</code>, default <code>{done.defaultLayout}</code>).
-              {settingsFile ? ' It’s now your active theme.' : ''} Committed to your working
+              {activated ? ' It’s now your active theme.' : ''} Committed to your working
               branch.
             </p>
             <p className="new-type__hint">
@@ -114,7 +116,7 @@ export function ImportThemeDialog({
               <code>.zip</code> (e.g. a repo’s “Download ZIP”). Its templates become native
               Timber templates and its assets (incl. SCSS) are carried over into a{' '}
               <code>themes/&lt;name&gt;/</code> folder — then committed to your working branch
-              {settingsFile ? ' and set as the active theme' : ''}.
+              {onActivate ? ' and set as the active theme' : ''}.
             </p>
             <label className="new-type__group">
               <span>Theme .zip</span>
