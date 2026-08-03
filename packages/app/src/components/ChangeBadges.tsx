@@ -1,6 +1,7 @@
 import { summarizeHostError, type HostErrorInfo } from '@timber/host';
 import type { SyncState } from '../state/autosave.js';
 import type { ChangeState } from '../state/changes.js';
+import { deployProgressText, type DeployProgressView } from '../state/deploy.js';
 import { Spinner } from './Spinner.js';
 
 /**
@@ -215,6 +216,12 @@ interface PublishButtonProps {
   /** Whether there's anything to publish (unsaved or saved-but-unpublished). */
   hasChanges: boolean;
   /**
+   * Build progress while `phase === 'building'`, when the host can report it (SPEC §12).
+   * The button is too small for a bar of its own, so it *becomes* the bar — a fill behind
+   * the label — and carries the ETA in its tooltip. Absent → today's plain "Building…".
+   */
+  progress?: DeployProgressView;
+  /**
    * Whether the click is being prepared — pending edits are being flushed to the branch
    * before the review dialog can show an accurate diff. Named for what's happening
    * ("Saving…"), because nothing has been published yet and it can still be called off.
@@ -233,10 +240,16 @@ export function PublishButton({
   phase,
   hasChanges,
   preparing = false,
+  progress,
   onPublish,
 }: PublishButtonProps): React.JSX.Element {
   const busy = preparing || phase === 'publishing' || phase === 'building';
   const disabled = busy || (phase === 'idle' && !hasChanges);
+  // The fill is a CSS custom property rather than markup, so the button gains a progress
+  // indicator without gaining a child element that could shift its layout mid-build.
+  const building = phase === 'building' ? progress : undefined;
+  const fill = building?.fraction;
+  const tip = building ? deployProgressText(building) : undefined;
   return (
     <button
       type="button"
@@ -244,6 +257,14 @@ export function PublishButton({
       disabled={disabled}
       aria-busy={busy}
       onClick={onPublish}
+      {...(tip ? { title: tip } : {})}
+      {...(fill === undefined
+        ? {}
+        : {
+            style: {
+              '--publish-progress': `${Math.round(fill * 100)}%`,
+            } as React.CSSProperties,
+          })}
     >
       {busy ? <Spinner /> : null}
       {preparing ? 'Saving…' : PUBLISH_LABEL[phase]}

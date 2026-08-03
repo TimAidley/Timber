@@ -356,6 +356,7 @@ body {
 /* Out-of-date editor notice: a full-width strip above the app banner offering a
    one-click redeploy when the followed Timber branch has moved on (SPEC §12). */
 .update-banner {
+  position: relative; /* anchors the build progress bar to the strip's bottom edge */
   flex: none;
   display: flex;
   align-items: center;
@@ -365,6 +366,68 @@ body {
   border-bottom: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
   color: var(--warning);
   font-size: 0.9rem;
+}
+
+/* Build progress (SPEC §12): a hairline along the banner's existing bottom border, the
+   familiar page-loading idiom — it adds no row and shifts nothing when it appears. */
+.deploy-progress {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 3px;
+  background: color-mix(in srgb, var(--warning) 18%, transparent);
+  overflow: hidden;
+}
+
+.deploy-progress__fill {
+  height: 100%;
+  width: 0;
+  background: var(--warning);
+  /* Slightly longer than the 5s poll so each sample glides into the next rather than
+     jumping; linear, because the underlying estimate advances linearly with time. */
+  transition: width 5.2s linear;
+}
+
+/* Queued (no runner yet) and overrun (past the estimate) are both *indeterminate*: there
+   is no honest number, so the bar sweeps instead of filling. Freezing a determinate bar
+   at its cap would read as a hung build — the thing this feature exists to disprove. */
+.deploy-progress--queued .deploy-progress__fill,
+.deploy-progress--overrun .deploy-progress__fill {
+  width: 30%;
+  transition: none;
+  animation: deploy-progress-sweep 1.8s ease-in-out infinite;
+}
+
+@keyframes deploy-progress-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(433%); /* 100% of the track, in units of the 30%-wide fill */
+  }
+}
+
+/* A perpetual sweep is exactly the kind of motion vestibular triggers react to; the bar
+   is decorative here (the readout beside it carries the state), so hold it still. */
+@media (prefers-reduced-motion: reduce) {
+  .deploy-progress__fill {
+    transition: none;
+  }
+
+  .deploy-progress--queued .deploy-progress__fill,
+  .deploy-progress--overrun .deploy-progress__fill {
+    width: 100%;
+    animation: none;
+    opacity: 0.35;
+  }
+}
+
+/* The ticking readout: aria-hidden (see DeployProgressBar.tsx), so it's styled to be
+   glanceable rather than prominent — the banner's own sentence carries the message. */
+.deploy-progress__text {
+  flex: none;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .update-banner__icon {
@@ -2581,6 +2644,28 @@ button.langmenu__row {
 .publish-btn--building {
   background: var(--text-muted);
   border-color: var(--text-muted);
+}
+
+/* The button *is* the progress bar during a build — a fill behind the label, sized by the
+   --publish-progress custom property the component sets (SPEC §12). A pseudo-element
+   rather than a gradient because gradients don't interpolate: `width` animates, so the
+   fill glides between the 5s poll samples instead of stepping. It's out of flow, so
+   nothing about the button's size or layout changes mid-build, and with no property set
+   (queued, or no estimate) it's a zero-width no-op — the button looks as it always did. */
+.publish-btn--building {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.publish-btn--building::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--publish-progress, 0%);
+  background: var(--accent);
+  transition: width 5.2s linear;
+  z-index: -1;
 }
 
 .publish-btn--done {

@@ -7,6 +7,8 @@
  */
 
 import { Spinner } from './Spinner.js';
+import { DeployProgressBar, DeployProgressText } from './DeployProgressBar.js';
+import type { DeployProgressView } from '../state/deploy.js';
 
 /** Where a triggered update is in its lifecycle. */
 export type UpdatePhase = 'idle' | 'updating' | 'done' | 'failed';
@@ -15,6 +17,13 @@ interface UpdateBannerProps {
   /** How many commits behind the followed ref the build is (for the message). */
   behindBy: number | undefined;
   phase: UpdatePhase;
+  /**
+   * How far along the rebuild is, when the host can say (SPEC §12). Absent for a host
+   * with no progress support and for a site with no previous deploy to estimate from —
+   * in which case the banner promises no duration at all, rather than the fixed "about a
+   * minute" it used to assert to everyone regardless of what their build actually took.
+   */
+  progress?: DeployProgressView;
   /** Trigger a redeploy (idle) or retry a failed one. */
   onUpdate: () => void;
   /** Reload the page to pick up the freshly deployed bundle (after `done`). */
@@ -29,6 +38,7 @@ function commitsBehind(n: number | undefined): string {
 export function UpdateBanner({
   behindBy,
   phase,
+  progress,
   onUpdate,
   onReload,
 }: UpdateBannerProps): React.JSX.Element {
@@ -39,14 +49,19 @@ export function UpdateBanner({
       </span>
       {phase === 'updating' ? (
         <>
+          {/* This sentence is what the live region announces, so it stays fixed for the
+              whole phase — the ticking detail lives in the aria-hidden readout beside
+              it, and in the bar's own aria-valuetext. */}
           <span className="update-banner__text">
-            Rebuilding with the latest Timber — this takes about a minute. You can keep
-            editing; we’ll offer a reload when it’s ready.
+            Rebuilding with the latest Timber. You can keep editing; we’ll offer a reload
+            when it’s ready.
           </span>
+          {progress ? <DeployProgressText progress={progress} /> : null}
           <button type="button" className="update-banner__action" disabled aria-busy="true">
             <Spinner />
             Building…
           </button>
+          {progress ? <DeployProgressBar progress={progress} /> : null}
         </>
       ) : phase === 'done' ? (
         <>

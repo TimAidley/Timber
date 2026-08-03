@@ -95,6 +95,7 @@ absorbs it and the port stays clean — a map of where the abstraction earns its
 | Changed paths | `compare` file list | **tree-diff** by path+sha | `compare` file list (**rename-aware**) | callers only need added/modified/removed(/renamed) |
 | Reset WIP | force-update ref | force-update ref | **delete + recreate** (no force-update) | `resetBranch` is intent, not a ref-update primitive |
 | Deploy | GitHub Actions | **none** (Codeberg Pages is branch-based) | **CI/CD pipelines** | `DeployBackend` is optional; GitLab implements it, Codeberg omits it |
+| Deploy **progress** | Actions **steps** within jobs | — | pipeline **jobs** (coarser label) | progress is measured in *elapsed time vs a typical run*, never counted steps — so a coarser host label costs the label, not the bar |
 | Addressing | `owner`/`repo` | `owner`/`repo` | URL-encoded **project path** (nested groups) | the port has no `owner`/`repo`; it's adapter construction config |
 
 The port is split by capability so a host provides what it can:
@@ -104,6 +105,7 @@ The port is split by capability so a host provides what it can:
 | Read/write git content + **publish** | `HostRepo` | Always required. Publish is the intent-level `publishSquash()` — the app computes the *plan* (validity gate, clean-vs-rebase, conflict detection, all host-neutral); the adapter owns the host-specific mechanics of building the squashed commit (GitHub's blob→tree→commit model stays inside `@timber/github`). Also exposes repo **visibility** via `getVisibility()` → `public` / `private` / `unknown` (the last for a host that can't report it — both shipped adapters do). |
 | Who is signed in | `HostIdentity` | `getAuthenticatedLogin()` drives the per-user `<login>_wip` branch (SPEC §11). |
 | Trigger/observe a build | `DeployBackend` (**optional**) | `getLatestDeploy()` / `triggerDeploy()`. A host with **no CI** omits it, and the editor degrades — no publish-status morph, no out-of-date banner. GitHub maps it onto the `deploy.yml` workflow; **GitLab** onto CI/CD **pipelines** (a real second implementation); Codeberg omits it (branch-based Pages, no run to observe). |
+| Report **build progress** | `getTypicalDeployDurationMs()` / `getDeployProgress()` on `DeployBackend` (**optional within an optional capability**) | Feeds the banner's progress bar + ETA and the Publish button's fill (SPEC §12). Adapters return only facts (a typical duration, what's executing now); the *presentation* — fill, wording, cap, overrun, queued — is the app's (`state/deploy.ts`), so it can't drift per host. Implement neither and the editor shows the previous plain `Building…`; a failing call degrades the same way and never breaks the status leg beside it. |
 
 **Concurrency on the WIP branch is handled in two places, on purpose.** The *ref race* is
 the adapter's problem — `commitFiles` re-reads the moved tip, rebuilds its overlay and

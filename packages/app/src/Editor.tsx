@@ -277,7 +277,7 @@ export function Editor({
   // by a second of nothing.
   const [preparingPublish, setPreparingPublish] = useState(false);
   const [deploySince, setDeploySince] = useState<string | undefined>(undefined);
-  const deployState = useDeployPoll(
+  const deployStatus = useDeployPoll(
     session.client.deploy,
     session.defaultBranch,
     publishPhase === 'building',
@@ -328,7 +328,7 @@ export function Editor({
   const [updatePhase, setUpdatePhase] = useState<UpdatePhase>('idle');
   const [updateSince, setUpdateSince] = useState<string | undefined>(undefined);
   const [updateArmed, setUpdateArmed] = useState(false);
-  const updateDeployState = useDeployPoll(
+  const updateDeployStatus = useDeployPoll(
     session.client.deploy,
     session.defaultBranch,
     updatePhase === 'updating' && updateArmed,
@@ -338,9 +338,9 @@ export function Editor({
     if (updatePhase !== 'updating') return;
     // The freshly deployed bundle is live once the run completes, but this tab is still
     // running the old code — surface a Reload rather than swapping under the user.
-    if (updateDeployState === 'published') setUpdatePhase('done');
-    else if (updateDeployState === 'failed') setUpdatePhase('failed');
-  }, [updateDeployState, updatePhase]);
+    if (updateDeployStatus.state === 'published') setUpdatePhase('done');
+    else if (updateDeployStatus.state === 'failed') setUpdatePhase('failed');
+  }, [updateDeployStatus.state, updatePhase]);
 
   // Trigger (or retry) a redeploy that ships the newer Timber. Show "Building…" at once
   // for feedback, but capture the pre-dispatch run as the poll baseline and dispatch
@@ -1107,13 +1107,13 @@ export function Editor({
   // Drive the Publish button's morph from the deploy poll while a build is running.
   useEffect(() => {
     if (publishPhase !== 'building') return;
-    if (deployState === 'published') {
+    if (deployStatus.state === 'published') {
       setPublishPhase('done');
       void refreshSaved(); // WIP was reset to the new main → "Saved" clears
-    } else if (deployState === 'failed') {
+    } else if (deployStatus.state === 'failed') {
       setPublishPhase('failed');
     }
-  }, [deployState, publishPhase, refreshSaved]);
+  }, [deployStatus.state, publishPhase, refreshSaved]);
 
   // Publish: flush any pending edits to WIP first (so they're included), record the
   // current deploy baseline, then open the review dialog.
@@ -1603,6 +1603,7 @@ export function Editor({
         <UpdateBanner
           behindBy={update.behindBy}
           phase={updatePhase}
+          {...(updateDeployStatus.progress ? { progress: updateDeployStatus.progress } : {})}
           onUpdate={() => void startUpdate()}
           onReload={() => window.location.reload()}
         />
@@ -1713,6 +1714,7 @@ export function Editor({
             phase={publishPhase}
             preparing={preparingPublish}
             hasChanges={hasChanges}
+            {...(deployStatus.progress ? { progress: deployStatus.progress } : {})}
             onPublish={() =>
               void (publishPhase === 'failed' ? retryDeploy() : startPublish())
             }
