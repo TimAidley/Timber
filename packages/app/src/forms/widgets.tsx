@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { FieldSchema } from '@timber/content';
+import { datetimeFromInput, datetimeToInput, isZonelessDatetime } from './datetime.js';
 
 /** One reference-picker option: an object's id and a human label (its title). */
 export interface ReferenceOption {
@@ -74,6 +75,48 @@ function TagsField({
 }
 
 /**
+ * Date-and-time input (SPEC §8). The native control speaks local wall-clock strings
+ * with no zone; front matter stores RFC 3339. `@timber/app/forms/datetime` translates
+ * both ways — see its header for why a datetime is stored as a `Z`-stamped wall clock.
+ *
+ * Content written by the earlier, unconverted version of this widget carries the
+ * zone-less shape, which the validator rejects: the page shows the right date and still
+ * refuses to leave draft, and re-picking the same minute fires no change event, so the
+ * author has no way out from the form. Such a value is upgraded on mount — only ever a
+ * value that is already invalid, and it lands as an ordinary pending edit the author can
+ * see in the changes panel and discard.
+ */
+function DatetimeField({
+  id,
+  value,
+  onChange,
+}: {
+  id: string;
+  value: unknown;
+  onChange: (value: unknown) => void;
+}): React.JSX.Element {
+  useEffect(() => {
+    if (isZonelessDatetime(value)) onChange(datetimeFromInput(datetimeToInput(value)));
+    // Keyed on the value alone: `onChange` is a fresh closure every render, and re-running
+    // this on each of those would be pointless work (the upgraded value is no longer
+    // zone-less, so the second pass is a no-op anyway).
+  }, [value]);
+
+  const local = datetimeToInput(value);
+  return (
+    <input
+      id={id}
+      type="datetime-local"
+      // Offer a seconds spinner only when the stored value actually has seconds; the
+      // ordinary case stays a minute-granularity picker.
+      step={local.length > 16 ? 1 : undefined}
+      value={local}
+      onChange={(e) => onChange(datetimeFromInput(e.target.value))}
+    />
+  );
+}
+
+/**
  * A schema-driven widget: one control per {@link FieldSchema} kind (SPEC §8). This
  * covers the plain kinds; `image`, `video`, and `reference` have dedicated
  * components ({@link ReferenceField} is the search-and-pick picker) that
@@ -126,14 +169,7 @@ export function FieldWidget({
       );
 
     case 'datetime':
-      return (
-        <input
-          id={id}
-          type="datetime-local"
-          value={asString(value)}
-          onChange={(e) => onChange(e.target.value)}
-        />
-      );
+      return <DatetimeField id={id} value={value} onChange={onChange} />;
 
     case 'enum':
       return (
