@@ -123,7 +123,17 @@ export function Editor({
     }
     return false;
   };
-  const autosave = useAutosave(session, assetStore, isDeviceOnlyPath);
+  // The device-local draft store (SPEC §11) — opened by the recovery effect below,
+  // used throughout for draft/asset persistence. Declared here so the autosaver's
+  // commit callback can reference it.
+  const repoKey = `${repoConfig.owner}/${repoConfig.repo}`;
+  const draftStore = useRef<LocalDraftStore | null>(null);
+  // Once a flush lands staged assets on the branch, their local byte copies (the
+  // crash-safety net; see persistStagedAsset) are no longer needed — the branch is
+  // the durable copy. Device-only assets never commit, so theirs live on.
+  const autosave = useAutosave(session, assetStore, isDeviceOnlyPath, (paths) => {
+    for (const p of paths) void draftStore.current?.deleteAsset(repoKey, p);
+  });
   // Repo visibility (SPEC §5), for the honest "backed up = visible to whom" wording. Read
   // once through the host port; `unknown` (the default) stays conservative if it can't tell.
   const [repoVisibility, setRepoVisibility] = useState<RepoVisibility>('unknown');
@@ -456,8 +466,6 @@ export function Editor({
 
   // Device-local draft persistence (SPEC §11): recover unsaved edits after a
   // reload/crash before the WIP commit landed.
-  const repoKey = `${repoConfig.owner}/${repoConfig.repo}`;
-  const draftStore = useRef<LocalDraftStore | null>(null);
   useEffect(() => {
     let cancelled = false;
     void LocalDraftStore.open()
@@ -492,12 +500,23 @@ export function Editor({
           }
         }
 
-        // Re-stage device-only bundles' persisted asset bytes into memory (SPEC §5/§8), so a
-        // colocated image an on-device object references renders again after a reload — the
-        // local counterpart to the branch AssetLoader that backed-up objects rely on.
+        // Re-stage every locally-persisted asset's bytes into memory (SPEC §5/§8/§11), so a
+        // staged image renders again after a reload — the local counterpart to the branch
+        // AssetLoader that committed assets rely on. Assets outside a device-only bundle
+        // are the crash-recovery case (staged, but the WIP commit hadn't landed): re-queue
+        // them so they reach the branch like the recovered text drafts they belong with.
+        // (If a commit landed but the cleanup didn't, the re-queue re-commits identical
+        // bytes — a harmless no-op change on the branch.)
+        const inDeviceBundle = (p: string): boolean => {
+          for (const idx of devicePaths) {
+            if (p.startsWith(idx.slice(0, -'index.md'.length))) return true;
+          }
+          return false;
+        };
         for (const asset of await store.allAssetsForRepo(repoKey)) {
           if (cancelled) return;
           assetStore.stage(asset.path, asset.blob);
+          if (!inDeviceBundle(asset.path)) autosave.markAssetDirty(asset.path);
         }
 
         // Recover backed-up drafts (already on the branch) as unsaved edits; autosave
@@ -540,20 +559,22 @@ export function Editor({
     void draftStore.current?.put(repoKey, selectedPath, next.data, next.body);
   }
 
-  // A colocated image was staged for the selected object. For a device-only object the
-  // bytes must NOT go to the branch — persist the Blob to IndexedDB so it survives a
-  // reload (re-staged on load); for a backed-up object it rides the WIP commit as usual.
+  // A colocated image was staged for the selected object. The bytes are persisted
+  // locally in EVERY case: for a device-only object that's their durable home; for a
+  // backed-up object it's the crash-safety net until the WIP commit lands (the text
+  // draft already survived a reload, but the image lived only in memory — the
+  // recovered page then referenced an asset that never reached the branch). The
+  // autosaver drops the local copy once the commit lands (see useAutosave above).
   function onContentAssetStaged(path: string): void {
-    if (deviceOnlyPaths.has(selectedPath)) {
-      void persistDeviceAsset(path, path);
-    } else {
+    void persistStagedAsset(path, path);
+    if (!deviceOnlyPaths.has(selectedPath)) {
       autosave.markAssetDirty(path);
     }
   }
 
-  // Persist a staged asset's bytes locally (device-only bundles, SPEC §5/§8), optionally at
-  // a different path (for rename). Reads bytes from the in-memory staged Blob.
-  async function persistDeviceAsset(fromPath: string, toPath: string): Promise<void> {
+  // Persist a staged asset's bytes locally (SPEC §5/§8/§11), optionally at a
+  // different path (for rename). Reads bytes from the in-memory staged Blob.
+  async function persistStagedAsset(fromPath: string, toPath: string): Promise<void> {
     const blob = assetStore.blobFor(fromPath);
     if (!blob) return;
     const bytes = new Uint8Array(await blob.arrayBuffer());
@@ -792,6 +813,16 @@ export function Editor({
         published = null;
       }
 
+      // Locally-persisted staged assets for the bundle go too — left behind, the next
+      // load's crash recovery would re-queue the very bytes being discarded.
+      const dropPersistedAssets = async (): Promise<void> => {
+        const store = draftStore.current;
+        if (!store) return;
+        for (const a of await store.allAssetsForRepo(repoKey)) {
+          if (a.path.startsWith(`${bundleDir}/`)) await store.deleteAsset(repoKey, a.path);
+        }
+      };
+
       if (published === null) {
         // Brand-new page: remove it (delete any WIP copy of the bundle) and drop it.
         if (bundleChanges.length > 0) {
@@ -804,6 +835,7 @@ export function Editor({
           });
         }
         void draftStore.current?.delete(repoKey, target.path);
+        void dropPersistedAssets();
         const remaining = objects.filter((o) => o.path !== target.path);
         setObjects(remaining);
         if (selectedPath === target.path) setSelectedPath(remaining[0]?.path ?? '');
@@ -846,6 +878,7 @@ export function Editor({
         setBodySeed((s) => s + 1);
       }
       void draftStore.current?.delete(repoKey, target.path);
+      void dropPersistedAssets();
       await refreshSaved();
     } catch (err) {
       diagnostics.error('discard', 'discard changes failed', err);
@@ -890,7 +923,7 @@ export function Editor({
         const movedPath = `${newDir}/${asset.path.slice(oldDir.length + 1)}`;
         assetStore.stage(movedPath, asset.blob);
         const oldAssetPath = asset.path;
-        void persistDeviceAsset(movedPath, movedPath).then(() =>
+        void persistStagedAsset(movedPath, movedPath).then(() =>
           draftStore.current?.deleteAsset(repoKey, oldAssetPath),
         );
       }
@@ -1319,6 +1352,9 @@ export function Editor({
           assetStore={assetStore}
           sources={assetSources}
           onStage={(path) => {
+            // Same crash-safety net as a content image: persist the bytes locally
+            // until the commit lands (the autosaver then drops the copy).
+            void persistStagedAsset(path, path);
             autosave.markAssetDirty(path);
             autosave.saveNow();
           }}

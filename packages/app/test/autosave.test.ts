@@ -326,6 +326,30 @@ describe('Autosaver', () => {
     expect(dirtyPathSets.at(-1)).toEqual([]);
   });
 
+  // Staged assets are persisted locally as a crash net; the saver announces which ones
+  // a landed commit carried so those local copies can be dropped — and stays silent on
+  // failure, when the local copy is still the only copy.
+  it('reports committed asset paths on success, never on failure', async () => {
+    const committed: string[][] = [];
+    const commit = vi.fn<CommitFn>().mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce(undefined);
+    const saver = new Autosaver({
+      commit,
+      assetBytes: async () => new Uint8Array([1]),
+      onState: () => undefined,
+      onAssetsCommitted: (paths) => committed.push([...paths].sort()),
+      idleMs: 2000,
+      retryMs: 5000,
+    });
+
+    saver.markAssetDirty('content/events/a/images/p.webp');
+    saver.markAssetDirty('assets/logo.webp');
+    await vi.advanceTimersByTimeAsync(2000); // attempt 1 fails
+    expect(committed).toEqual([]);
+
+    await vi.advanceTimersByTimeAsync(5000); // backoff retry succeeds
+    expect(committed).toEqual([['assets/logo.webp', 'content/events/a/images/p.webp']]);
+  });
+
   it('keeps an object in the editing set while a failing commit retries', async () => {
     const commit = vi.fn<CommitFn>().mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce(undefined);
     const { saver, dirtyPathSets } = setup(commit);

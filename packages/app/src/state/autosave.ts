@@ -49,6 +49,13 @@ export interface AutosaverDeps {
    */
   onWarn?: (message: string, detail?: Record<string, unknown>) => void;
   /**
+   * Notified once a flush lands with the asset paths it committed, so their locally
+   * persisted byte copies (the crash-safety net in IndexedDB) can be dropped — the
+   * branch is the durable copy from here on. Device-only assets never commit, so they
+   * never appear here and their local copies live on.
+   */
+  onAssetsCommitted?: (paths: string[]) => void;
+  /**
    * Whether an object path is parked **On this device** (SPEC §5/§8 storage axis).
    * Device-only objects are held out of the WIP commit entirely — their durable copy
    * is the IndexedDB draft, not the branch. Editing routes them around the autosaver,
@@ -443,6 +450,7 @@ export class Autosaver {
       );
       if (this.failures > 0) this.deps.onRecovered?.(this.failures);
       this.failures = 0; // success resets the backoff
+      if (assets.length > 0) this.deps.onAssetsCommitted?.(assets);
       this.flushingPaths = new Set(); // landed → these become "saved", not "editing"
       this.notifyDirtyPaths();
       const stillDirty = this.hasPending();
@@ -509,6 +517,7 @@ export function useAutosave(
   session: RepoSession,
   assetStore: AssetStore,
   isDeviceOnly?: (path: string) => boolean,
+  onAssetsCommitted?: (paths: string[]) => void,
 ): Autosave {
   const [syncState, setSyncState] = useState<SyncState>('idle');
   const [editingPaths, setEditingPaths] = useState<ReadonlySet<string>>(new Set());
@@ -516,6 +525,8 @@ export function useAutosave(
 
   const isDeviceOnlyRef = useRef(isDeviceOnly);
   isDeviceOnlyRef.current = isDeviceOnly;
+  const onAssetsCommittedRef = useRef(onAssetsCommitted);
+  onAssetsCommittedRef.current = onAssetsCommitted;
 
   const saver = useMemo(
     () =>
@@ -532,6 +543,7 @@ export function useAutosave(
         },
         assetBytes: (path) => assetStore.bytes(path),
         isDeviceOnly: (path) => isDeviceOnlyRef.current?.(path) ?? false,
+        onAssetsCommitted: (paths) => onAssetsCommittedRef.current?.(paths),
         onError: (error) => {
           // Normalise + record the cause, and keep the verdict for the UI: a 401 means
           // the retry loop can never succeed, and the header should say so rather than

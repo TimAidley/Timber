@@ -24,11 +24,16 @@ const STORE = 'drafts';
  */
 const STORAGE_STORE = 'storage';
 /**
- * Colocated **asset bytes** for objects kept On this device (SPEC §5/§8). A device-only
- * object never commits to the branch, so its images have nowhere durable to live — they'd
- * vanish on reload. This store keeps their Blobs locally (keyed by repo + path) so they
- * survive a reload, and they're re-queued to the branch if the object is later backed up.
- * Only device-only bundles' assets land here; backed-up assets come from the branch.
+ * **Staged asset bytes** (SPEC §5/§8/§11), keyed by repo + path. Two populations share
+ * this store, with different lifetimes:
+ *
+ * - A device-only object's colocated assets: this is their durable home — the object
+ *   never commits, so without this they'd vanish on reload.
+ * - Every other staged asset (a backed-up object's image, a site asset): a **crash
+ *   safety net**, exactly like the text drafts. The bytes otherwise live only in the
+ *   in-memory AssetStore until the debounced WIP commit lands — a reload in that
+ *   window kept the recovered draft but lost its image. Dropped once the commit
+ *   lands; re-staged and re-queued on load if it hadn't.
  */
 const ASSET_STORE = 'assets';
 
