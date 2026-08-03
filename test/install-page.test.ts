@@ -3,6 +3,8 @@ import { fileURLToPath } from 'node:url';
 import { JSDOM } from 'jsdom';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { WORDMARK_CSS } from '../packages/generator/src/wordmarkStyle.js';
+// @ts-expect-error — a plain .mjs build script, imported for its conversion function.
+import { installMarkdown } from '../scripts/gen-install-markdown.mjs';
 
 // docs/install.html carries the setup instructions for every host / sign-in /
 // deploy combination and shows one path at a time. Nothing else validates it —
@@ -241,6 +243,67 @@ describe('docs/install.html', () => {
     const html = readFileSync(PAGE, 'utf8');
     expect(html).toContain('data:font/woff2;base64,');
     expect(html).not.toMatch(/src:\s*url\((?!data:)/);
+  });
+
+  it('keeps INSTALL.md in step with the page', () => {
+    const { markdown } = installMarkdown(readFileSync(PAGE, 'utf8'));
+    const committed = readFileSync(
+      fileURLToPath(new URL('../INSTALL.md', import.meta.url)),
+      'utf8',
+    );
+    expect(
+      committed === markdown,
+      'INSTALL.md is stale — run `node scripts/gen-install-markdown.mjs`',
+    ).toBe(true);
+  });
+
+  it('carries every condition through to the Markdown', () => {
+    // A condition that reaches no prose leaves a conditional instruction reading as an
+    // unconditional one — a wrong document, not merely an incomplete one.
+    const { unrepresented } = installMarkdown(readFileSync(PAGE, 'utf8'));
+    expect(
+      unrepresented,
+      `conditions lost in conversion: ${unrepresented.join(', ')}`,
+    ).toEqual([]);
+  });
+
+  it('names every condition it prints, in both views', () => {
+    // A label that falls back to the raw value ("app-device") means a chooser option was
+    // renamed without the Markdown following.
+    const { markdown } = installMarkdown(readFileSync(PAGE, 'utf8'));
+    const values = install.axes.flatMap((axis) =>
+      [...doc.querySelectorAll<HTMLInputElement>(`input[name="${axis}"]`)].map(
+        (i) => i.value,
+      ),
+    );
+    for (const raw of values) {
+      expect(markdown, `"${raw}" leaked into the Markdown as a raw value`).not.toContain(
+        `(${raw}`,
+      );
+    }
+  });
+
+  it('rewrites doc links for a file that sits at the repo root', () => {
+    // install.html lives in docs/; INSTALL.md does not, so `../DEVELOPMENT.md` and
+    // `pagination.md` are both wrong by one level in opposite directions.
+    const { markdown } = installMarkdown(readFileSync(PAGE, 'utf8'));
+    expect(markdown).toContain('](DEVELOPMENT.md)');
+    expect(markdown).toContain('](docs/pagination.md)');
+    expect(markdown).not.toContain('](../');
+  });
+
+  it('gives each view its own framing where the page refers to itself', () => {
+    const { markdown } = installMarkdown(readFileSync(PAGE, 'utf8'));
+    // "hit Show every path above" is meaningless in a document with no chooser.
+    expect(markdown).not.toContain('Show every path');
+    expect(markdown).toContain('Every symptom is listed');
+    // …and the Markdown-only framing must stay out of the rendered page.
+    expect(
+      doc.querySelector('[data-view="markdown"]') as HTMLElement | null,
+    ).toBeTruthy();
+    expect(doc.querySelector('#troubleshooting .hint')?.getAttribute('data-view')).toBe(
+      'interactive',
+    );
   });
 
   it('reads without JavaScript — no block is hidden by default markup', () => {

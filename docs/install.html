@@ -72,6 +72,8 @@
 
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
+/* Blocks written for the generated INSTALL.md, where there is no chooser to refer to. */
+[data-view="markdown"] { display: none; }
 
 body {
   margin: 0;
@@ -729,8 +731,12 @@ footer.page { border-top: 1px solid var(--line); margin-top: 2.5rem; padding-top
     <li data-when="auth:app-device">On the General page, also tick <strong>Enable Device
       Flow</strong>.</li>
   </ul>
-  <p>Create it and copy the <strong>Client ID</strong><span data-when="auth:app-redirect">, then
-    generate a <strong>Client secret</strong></span>.</p>
+  <!-- Kept as separate blocks rather than one sentence with a conditional clause: an inline
+       condition serializes badly into the Markdown view, where a dropped clause would read as
+       an unconditional instruction. Conditions belong on block boundaries. -->
+  <p>Create it and copy the <strong>Client ID</strong>.</p>
+  <p data-when="auth:app-redirect">Then generate a <strong>Client secret</strong> — the redirect
+    flow is the one that needs it.</p>
   <p data-when="auth:app-device">The device flow uses <strong>no client secret</strong>, so there's
     no need to generate one.</p>
   <p>Then <strong>Install App</strong> → your account → <strong>Only select repositories</strong> →
@@ -869,9 +875,15 @@ footer.page { border-top: 1px solid var(--line); margin-top: 2.5rem; padding-top
 
 <section id="troubleshooting">
   <h2>Troubleshooting</h2>
-  <p class="hint" style="color:var(--muted);font-size:0.9rem">
+  <!-- The two views need different framing: the page filters this list, the Markdown can't.
+       `data-view` picks one per view — CSS hides the Markdown-only copy here, and the
+       converter skips the interactive-only one. -->
+  <p class="hint" data-view="interactive">
     Filtered to your choices. If your symptom isn't here, hit <strong>Show every path</strong>
     above — a mis-selected option is a common reason an answer looks missing.
+  </p>
+  <p data-view="markdown">
+    Every symptom is listed; each one is labelled with the choices it applies to.
   </p>
   <ul>
     <li data-when="auth:app-redirect,app-device"><strong>App "does not need repository access" at

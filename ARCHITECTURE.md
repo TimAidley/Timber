@@ -351,13 +351,19 @@ Cross-cutting things and every file they touch:
   → resolve it through `resolveThemePaths`, never a hardcoded `templates/`/`assets/` literal.
 - **The site scaffold** (theme, schemas, sample content, workflows) → edit **`site-template/`**
   only; the mirror regenerates the template repo. Never edit `Timber-site-template` directly.
-- **Setup instructions** → **`docs/install.html`** only (canonical); `INSTALL.md` and the
-  template's README are stubs that link to it. It's a single dependency-free page: the
-  `data-when="host:… auth:… deploy:…"` attributes hide the paths that don't apply, and
+- **Setup instructions** → **`docs/install.html`** only (canonical); the template's README
+  links to it and **`INSTALL.md` is generated from it**. It's a single dependency-free page:
+  the `data-when="host:… auth:… deploy:…"` attributes hide the paths that don't apply, and
   `data-var` slots hold URLs derived from the owner/repo/domain the reader types in. Add a
-  setup step → add a `<section class="step">` with the `data-when` terms it applies to;
-  `test/install-page.test.ts` drives the page in jsdom and fails on an unknown axis value, a
-  duplicate step id, or a combination that loses a required step.
+  setup step → add a `<section class="step">` with the `data-when` terms it applies to, then
+  rerun **`scripts/gen-install-markdown.mjs`**, which writes the same content to `INSTALL.md`
+  with each block *labelled* by those conditions instead of filtered by them (so the document
+  cannot describe a combination the page doesn't implement). Blocks that only make sense in
+  one view carry `data-view="interactive"` or `data-view="markdown"`. Put conditions on block
+  boundaries, never mid-sentence — an inline one serialises badly, and a dropped clause reads
+  as an unconditional instruction. `test/install-page.test.ts` drives the page in jsdom and
+  fails on an unknown axis value, a duplicate step id, a combination that loses a required
+  step, a stale `INSTALL.md`, or a condition that never reaches the Markdown.
 - **Auth flow / mode** → `host/{auth,oauth,deviceFlow,token}.ts` + the sign-in components
   + `docs/auth-github-app.md`.
 - **The Timber wordmark → keep the three font copies in lockstep.** The brand wordmark renders in

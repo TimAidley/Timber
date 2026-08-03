@@ -20,7 +20,8 @@ The broker can be run for free on Cloudflare as a Cloudflare worker.
 
 | Doc | What it's for |
 |---|---|
-| **[Setup guide](https://timaidley.github.io/Timber/install.html)** | **Set up a hosted site** — pick your git host, sign-in method and deploy target and it shows only the steps you need. No local tooling. ([`docs/install.html`](docs/install.html); [INSTALL.md](INSTALL.md) points here.) |
+| **[Setup guide](https://timaidley.github.io/Timber/install.html)** | **Set up a hosted site** — pick your git host, sign-in method and deploy target and it shows only the steps you need. No local tooling. Source: [`docs/install.html`](docs/install.html). |
+| **[INSTALL.md](INSTALL.md)** | The same guide as a printable document — every path shown, each block labelled with the choices it applies to. **Generated** from the page. |
 | **[DEVELOPMENT.md](DEVELOPMENT.md)** | **Run Timber locally** or hack on it — run the editor on your machine, build a site by hand, deploy the broker directly. |
 | **[ARCHITECTURE.md](ARCHITECTURE.md)** | How the pieces fit — repos, packages, the dependency graph, auth modes, the workflows. |
 | **[SPEC.md](SPEC.md)** | The authoritative design and rationale. |
