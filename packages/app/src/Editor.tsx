@@ -360,12 +360,19 @@ export function Editor({
   // WIP blobs after a commit advances the branch tip (paths alone can't detect a same-path
   // content change).
   const [saveSeq, setSaveSeq] = useState(0);
+  // Monotonic ticket for refreshes: two overlapping compares can resolve out of
+  // order (a slow pre-publish one landing after the fast post-publish one), and the
+  // stale response must never overwrite the fresh state — only the newest call may
+  // write.
+  const refreshTicket = useRef(0);
   const refreshSaved = useCallback(async () => {
+    const ticket = ++refreshTicket.current;
     try {
       const changed = await session.client.compareChangedPaths(
         session.defaultBranch,
         session.wipBranch,
       );
+      if (ticket !== refreshTicket.current) return; // superseded by a newer refresh
       setSavedPaths(new Set(changed.map((c) => c.path)));
       setAddedIndexPaths(
         new Set(
@@ -374,23 +381,43 @@ export function Editor({
             .map((c) => c.path),
         ),
       );
+      setSaveSeq((s) => s + 1);
     } catch (err) {
-      // Usually benign: the WIP branch doesn't exist yet (nothing saved), so there's
-      // nothing published-pending. But the same catch hides a real host failure, which
-      // would quietly zero the change counts — so record it either way, at `warn`.
-      diagnostics.record('warn', 'changes', 'could not compare branches for the change counts', err);
-      setSavedPaths(new Set());
-      setAddedIndexPaths(new Set());
-    } finally {
+      if (ticket !== refreshTicket.current) return;
+      const isNotFound =
+        typeof err === 'object' && err !== null && 'status' in err &&
+        (err as { status: unknown }).status === 404;
+      if (isNotFound) {
+        // Benign: the WIP branch doesn't exist yet, so nothing is published-pending.
+        setSavedPaths(new Set());
+        setAddedIndexPaths(new Set());
+      } else {
+        // A real host failure. Keep the last-known state rather than zeroing it —
+        // a transient network blip must not erase every "Saved" badge and (via the
+        // counts gate) hide the Publish button for changes that are still pending.
+        diagnostics.record('warn', 'changes', 'could not compare branches for the change counts', err);
+      }
       setSaveSeq((s) => s + 1);
     }
   }, [session]);
   useEffect(() => {
     void refreshSaved();
   }, [refreshSaved]);
+  // Refresh whenever ANY commit of ours lands, whichever code path landed it —
+  // autosave flushes (including one that lands while more edits are queued, which
+  // never reaches the quiet 'saved' state), discard resets, theme import/switch/
+  // delete, publish. Subscribing to the session's own-write record is what makes
+  // this total: a future feature that commits through the session client gets
+  // correct counts without having to remember to ask for them.
+  useEffect(
+    () => session.ownWrites.subscribe(() => void refreshSaved()),
+    [session, refreshSaved],
+  );
+  // And when someone ELSE moves the WIP branch (another tab or device): the warning
+  // dialog names their files, but the badges/counts must also follow the branch.
   useEffect(() => {
-    if (autosave.syncState === 'saved') void refreshSaved();
-  }, [autosave.syncState, refreshSaved]);
+    if (foreign.change) void refreshSaved();
+  }, [foreign.change, refreshSaved]);
 
   const [selectedPath, setSelectedPath] = useState<string>(model.objects[0]?.path ?? '');
   const selected: ContentObject | undefined = objects.find(

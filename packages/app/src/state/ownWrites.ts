@@ -15,18 +15,35 @@ export class OwnWrites {
   private readonly shas = new Set<string>();
   private readonly order: string[] = [];
   private last: string | undefined;
+  private readonly listeners = new Set<(sha: string) => void>();
 
   constructor(private readonly limit = 64) {}
 
   record(sha: string): void {
     this.last = sha;
-    if (this.shas.has(sha)) return;
-    this.shas.add(sha);
-    this.order.push(sha);
-    while (this.order.length > this.limit) {
-      const oldest = this.order.shift();
-      if (oldest) this.shas.delete(oldest);
+    if (!this.shas.has(sha)) {
+      this.shas.add(sha);
+      this.order.push(sha);
+      while (this.order.length > this.limit) {
+        const oldest = this.order.shift();
+        if (oldest) this.shas.delete(oldest);
+      }
     }
+    for (const listener of this.listeners) listener(sha);
+  }
+
+  /**
+   * Observe every commit this tab lands, whoever landed it — autosave, discard, a
+   * theme import, publish. Because {@link recordingClient} funnels all write paths
+   * through {@link record}, subscribing here is the one place "our branch just
+   * moved" can be watched **without a per-call-site hook that each new feature has
+   * to remember** — forgetting exactly that is how theme imports once left the
+   * header counts stale (and the Publish button disabled) until a reload.
+   * Returns an unsubscribe function.
+   */
+  subscribe(listener: (sha: string) => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
   }
 
   has(sha: string): boolean {

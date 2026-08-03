@@ -54,6 +54,23 @@ describe('OwnWrites', () => {
     expect(own.has('a')).toBe(true);
     expect(own.has('b')).toBe(true);
   });
+
+  // The saved-state refresh subscribes here so EVERY commit — autosave, discard,
+  // theme import, publish — updates the counts without per-call-site plumbing.
+  it('notifies subscribers on every recorded write, until unsubscribed', () => {
+    const own = new OwnWrites();
+    const seen: string[] = [];
+    const unsubscribe = own.subscribe((sha) => seen.push(sha));
+
+    own.record('a');
+    own.record('a'); // duplicate sha still moved the branch → still notifies
+    expect(seen).toEqual(['a', 'a']);
+
+    unsubscribe();
+    own.record('b');
+    expect(seen).toEqual(['a', 'a']);
+    expect(own.has('b')).toBe(true); // recording itself is unaffected
+  });
 });
 
 describe('recordingClient', () => {
