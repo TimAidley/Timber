@@ -68,11 +68,34 @@ describe('pageSeo', () => {
   });
 
   it('absolutizes the first image field as the OG image', () => {
-    const seo = pageSeo(obj({ title: 'T', poster: 'content/events/summer-fete/images/p.webp' }), eventsSchema, site);
-    expect(seo.ogImage).toBe('https://example.com/content/events/summer-fete/images/p.webp');
+    // An image field stores a bundle-relative path, which resolves against the page's URL
+    // (the build copies a bundle's files flat next to the page), not the site root.
+    const seo = pageSeo(obj({ title: 'T', poster: 'images/p.webp' }), eventsSchema, site);
+    expect(seo.ogImage).toBe('https://example.com/events/summer-fete/images/p.webp');
 
     const none = pageSeo(obj({ title: 'T' }), eventsSchema, site);
     expect(none.ogImage).toBeUndefined();
+  });
+
+  it('absolutizes the repo paths older content stored in an image field', () => {
+    const seo = pageSeo(obj({ title: 'T', poster: 'content/events/summer-fete/images/p.webp' }), eventsSchema, site);
+    expect(seo.ogImage).toBe('https://example.com/events/summer-fete/images/p.webp');
+  });
+
+  it('leaves a site-wide image at the site root, and an external one alone', () => {
+    const siteWide = pageSeo(obj({ title: 'T', poster: '/assets/logo.png' }), eventsSchema, site);
+    expect(siteWide.ogImage).toBe('https://example.com/assets/logo.png');
+
+    const external = pageSeo(obj({ title: 'T', poster: 'https://cdn.test/l.png' }), eventsSchema, site);
+    expect(external.ogImage).toBe('https://cdn.test/l.png');
+  });
+
+  it('resolves the OG image against the page URL the caller routed to', () => {
+    const seo = pageSeo(obj({ title: 'T', poster: 'images/p.webp' }), eventsSchema, site, { url: '/' });
+    expect(seo.ogImage).toBe('https://example.com/images/p.webp');
+
+    const noBase = pageSeo(obj({ title: 'T', poster: 'images/p.webp' }), eventsSchema, {});
+    expect(noBase.ogImage).toBe('/events/summer-fete/images/p.webp');
   });
 
   it('degrades gracefully with no settings (relative canonical, no site suffix)', () => {

@@ -85,22 +85,41 @@ function basePathOf(baseUrl: string | undefined): string {
   }
 }
 
-/** Make an image reference absolute against the site base URL (best-effort). */
-function absolute(baseUrl: string | undefined, ref: string): string {
+/**
+ * Make an image reference absolute for `og:image` (which must be a full URL).
+ *
+ * An `image` field stores the path **relative to the object's bundle**
+ * (`images/photo.webp`) — the build copies a bundle's files flat next to the page it
+ * renders, so the reference resolves against the **page's** URL, not the site root.
+ * A root-relative reference (`/assets/logo.png`) is site-root-based already, and an
+ * absolute URL belongs to somebody else and passes through.
+ */
+function absolute(baseUrl: string | undefined, pageUrl: string, ref: string): string {
   if (/^https?:\/\//i.test(ref)) return ref;
-  if (!baseUrl) return ref;
-  return `${baseUrl}/${ref.replace(/^\/+/, '')}`;
+  // A throwaway origin resolves any `./` or `../`; only the path part is kept.
+  const path = ref.startsWith('/')
+    ? ref
+    : new URL(ref, `https://timber.invalid${pageUrl}`).pathname;
+  if (!baseUrl) return path;
+  return `${baseUrl}${path}`;
 }
 
-/** The first `image`-kind field on the object that has a value (for the OG image). */
+/**
+ * The first `image`-kind field on the object that has a value (for the OG image),
+ * as a bundle-relative reference. Older content holds the object's **repo path**
+ * (`content/events/fete/images/p.webp`) — what the editor used to write — so that
+ * prefix is stripped, leaving both forms in the one coordinate system.
+ */
 function firstImage(
   object: ContentObject,
   schema: ContentTypeSchema,
 ): string | undefined {
+  const bundlePrefix = `${object.path.replace(/\/[^/]*$/, '')}/`;
   for (const [name, field] of Object.entries(schema.fields)) {
     if (field.type === 'image') {
       const value = str(object.data[name]);
-      if (value) return value;
+      if (value)
+        return value.startsWith(bundlePrefix) ? value.slice(bundlePrefix.length) : value;
     }
   }
   return undefined;
@@ -110,7 +129,7 @@ function firstImage(
  * Derive an object's SEO metadata (SPEC §13) — computed in the generator so templates
  * stay dumb. Title/description fall back through front matter → site defaults; the
  * canonical URL is `site.baseUrl` + the object's URL; the OG image is the first image
- * field, absolutized.
+ * field, absolutized against that page URL.
  */
 export function pageSeo(
   object: ContentObject,
@@ -134,7 +153,7 @@ export function pageSeo(
   const canonical = baseUrl ? `${baseUrl}${path}` : path;
 
   const image = firstImage(object, schema);
-  const ogImage = image ? absolute(baseUrl, image) : undefined;
+  const ogImage = image ? absolute(baseUrl, path, image) : undefined;
 
   return {
     title,

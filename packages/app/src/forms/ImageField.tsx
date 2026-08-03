@@ -1,12 +1,16 @@
 import { useEffect, useState } from 'react';
 import { processImage } from '../media/processImage.js';
-import { bundleImagePath } from '../media/assetName.js';
+import {
+  bundleImagePath,
+  bundleRelativeSrc,
+  bodySrcToRepoPath,
+} from '../media/assetName.js';
 import type { ProcessedImage } from '../media/types.js';
 import type { AssetStore } from '../state/assets.js';
 
 interface ImageFieldProps {
   fieldKey: string;
-  /** Current stored asset path (repo-relative). */
+  /** Current stored asset path (relative to the object's bundle — see below). */
   value: unknown;
   /** Current alt text (stored in a sibling `<key>Alt` front-matter key). */
   alt: unknown;
@@ -46,6 +50,14 @@ function describe(result: ProcessedImage): string {
  * re-encode to WebP, sanitize SVG, keep animated GIF) → stage the bytes and store
  * the bundle path. Shows a live thumbnail + what the pipeline did, and requires
  * **alt text** (mandatory for accessibility — caption ≠ alt).
+ *
+ * Two coordinate systems meet here, exactly as they do for a body image
+ * ({@link ../media/assetName}): the field stores the path **relative to the bundle**
+ * (`images/photo.webp`), because the build copies a bundle's files flat next to the page
+ * it renders, so that is what a template's `<img src>` resolves to on the published site.
+ * The asset store, autosave and git all key on the **repo path**
+ * (`content/posts/hello/images/photo.webp`), so the stored value is mapped back before
+ * any lookup — which also keeps the repo paths written by older content displaying.
  */
 export function ImageField({
   fieldKey,
@@ -61,7 +73,8 @@ export function ImageField({
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ProcessedImage | null>(null);
 
-  const path = typeof value === 'string' ? value : '';
+  const stored = typeof value === 'string' ? value : '';
+  const path = stored ? bodySrcToRepoPath(bundleDir, stored) : undefined;
   // Staged uploads resolve immediately; a committed image (after a reload, before
   // publish) is lazily re-fetched from the branch so the thumbnail returns.
   const [previewUrl, setPreviewUrl] = useState<string | undefined>(() =>
@@ -100,7 +113,7 @@ export function ImageField({
       const target = bundleImagePath(bundleDir, file.name, processed.mime);
       assetStore.stage(target, processed.blob);
       setResult(processed);
-      onChangePath(target);
+      onChangePath(bundleRelativeSrc(bundleDir, target));
       onStaged?.(target);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -118,7 +131,7 @@ export function ImageField({
       {previewUrl ? (
         <div className="image-field__preview">
           <img src={previewUrl} alt={typeof alt === 'string' ? alt : ''} />
-          <code>{path}</code>
+          <code>{stored}</code>
           {result ? <span className="image-field__stats">{describe(result)}</span> : null}
         </div>
       ) : null}

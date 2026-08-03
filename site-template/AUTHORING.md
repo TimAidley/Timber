@@ -121,6 +121,12 @@ the prefix yourself is what breaks: it would be doubled.
 Images and files that belong to the object are the exception — those are referenced by
 bare filename, because they sit in the same folder (see [Object layout](#object-layout)).
 
+An **image field** in the front matter holds that same folder-relative path (the editor's
+upload widget writes `images/photo.webp`), so a template renders it directly on the
+object's own page — `<img src="{{ page.poster }}">`. On a **listing** page the reference
+is being shown somewhere else, so join it with the object's own URL there:
+`<img src="{{ post.url | relative_url }}{{ post.poster }}">`.
+
 ## Where a post's excerpt ends
 
 A listing page — a blog home page, say — shows the *opening* of each post rather than the

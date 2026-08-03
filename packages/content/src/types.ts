@@ -18,7 +18,7 @@ export type FieldKind =
   | 'enum' // single-select from `options`
   | 'tags' // multi-select: array of strings
   | 'color' // CSS colour (hex), edited with a picker
-  | 'image' // path to a colocated/asset image
+  | 'image' // bundle-relative path to a colocated image (or `/assets/…` site-wide)
   | 'reference' // stores a target object's id, displays its title
   | 'video'; // external URL, provider-allowlisted
 
