@@ -23,6 +23,13 @@ export interface ReconcileResult {
   text: Map<string, string>;
   /** Valid drafts to re-queue to autosave (uncommitted edits + resurrected files). */
   requeue: { path: string; content: string }[];
+  /**
+   * Differing drafts that DON'T validate — kept locally (never committed) but still
+   * pending work the user has. The editor counts these as "editing" alongside the
+   * autosaver's dirty set; leaving them out showed "No unpublished changes" for a
+   * draft that would nonetheless resurface on the next reload.
+   */
+  invalid: string[];
 }
 
 /**
@@ -47,6 +54,7 @@ export function reconcileAdvancedDrafts(
   const byPath = new Map(loadedFiles.map((f) => [f.path, f] as const));
   const text = new Map(loadedFiles.map((f) => [f.path, f.content]));
   const requeue: { path: string; content: string }[] = [];
+  const invalid: string[] = [];
   const extra: AdvancedFile[] = [];
 
   for (const draft of drafts) {
@@ -56,6 +64,8 @@ export function reconcileAdvancedDrafts(
         text.set(draft.path, draft.body);
         if (validateAdvancedFile({ ...existing, content: draft.body }).valid) {
           requeue.push({ path: draft.path, content: draft.body });
+        } else {
+          invalid.push(draft.path);
         }
       }
       continue;
@@ -67,6 +77,8 @@ export function reconcileAdvancedDrafts(
     text.set(draft.path, draft.body);
     if (validateAdvancedFile(file).valid) {
       requeue.push({ path: draft.path, content: draft.body });
+    } else {
+      invalid.push(draft.path);
     }
   }
 
@@ -76,5 +88,5 @@ export function reconcileAdvancedDrafts(
       )
     : loadedFiles;
 
-  return { files, text, requeue };
+  return { files, text, requeue, invalid };
 }

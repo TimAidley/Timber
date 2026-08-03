@@ -19,6 +19,14 @@ export interface Advanced {
   value: string;
   validation: AdvancedValidation | undefined;
   onEdit: (next: string) => void;
+  /**
+   * Paths whose draft differs from the file but doesn't validate — pending work that
+   * autosave will never commit (an invalid file must not reach the branch), yet real:
+   * the draft is kept in IndexedDB and resurfaces on reload. The editor unions these
+   * into the "editing" set so the header/badges never claim nothing is pending while
+   * an invalid draft exists.
+   */
+  invalidDraftPaths: ReadonlySet<string>;
   /** Create a new content type's schema file and open it for editing (SPEC §8). */
   createType: (opts: NewTypeOptions) => void;
   /** Create a new template (`.liquid`) or config (`.yml`) file and open it (SPEC §8). */
@@ -62,6 +70,18 @@ export function useAdvanced(
   const [selectedPath, setSelectedPath] = useState<string>('');
   // The working text per file (draft/dirty/committed), keyed by path.
   const [text, setText] = useState<Map<string, string>>(new Map());
+  // Differing-but-invalid drafts (see Advanced.invalidDraftPaths).
+  const [invalidDraftPaths, setInvalidDraftPaths] = useState<ReadonlySet<string>>(new Set());
+
+  function setInvalidDraft(path: string, isInvalid: boolean): void {
+    setInvalidDraftPaths((prev) => {
+      if (prev.has(path) === isInvalid) return prev;
+      const next = new Set(prev);
+      if (isInvalid) next.add(path);
+      else next.delete(path);
+      return next;
+    });
+  }
 
   const repoKey = `${repoConfig.owner}/${repoConfig.repo}`;
   const draftStore = useRef<LocalDraftStore | null>(null);
@@ -78,12 +98,13 @@ export function useAdvanced(
         if (cancelled) return;
         draftStore.current = store;
         const drafts = await store.allForRepo(repoKey);
-        const { files, text, requeue } = reconcileAdvancedDrafts(loadedFiles, drafts, theme);
+        const { files, text, requeue, invalid } = reconcileAdvancedDrafts(loadedFiles, drafts, theme);
         // Re-queue any uncommitted valid drafts (in-progress edits + resurrected files).
         for (const { path, content } of requeue) autosave.markFileDirty(path, content);
         if (cancelled) return;
         setFiles(files);
         setText(text);
+        setInvalidDraftPaths(new Set(invalid));
         setSelectedPath((prev) => prev || files[0]?.path || '');
       } catch (e) {
         if (!cancelled) setLoadError(e instanceof Error ? e.message : String(e));
@@ -106,10 +127,15 @@ export function useAdvanced(
   function onEdit(next: string): void {
     if (!selected) return;
     setText((prev) => new Map(prev).set(selected.path, next));
-    // Always keep a local draft (nothing is lost); only commit valid files.
+    // Always keep a local draft (nothing is lost); only commit valid files. An
+    // invalid edit still counts as pending work (it resurfaces on reload), so it's
+    // tracked for the editing badges even though autosave won't take it.
     void draftStore.current?.put(repoKey, selected.path, {}, next);
     if (validateAdvancedFile({ ...selected, content: next }).valid) {
       autosave.markFileDirty(selected.path, next);
+      setInvalidDraft(selected.path, false);
+    } else {
+      setInvalidDraft(selected.path, next !== selected.content);
     }
   }
 
@@ -189,6 +215,7 @@ export function useAdvanced(
     autosave.forgetFile(path);
     await autosave.settle();
     autosave.forgetFile(path);
+    setInvalidDraft(path, false); // whatever the draft was, it's going away
 
     let published: string | null;
     try {
@@ -251,6 +278,7 @@ export function useAdvanced(
     value,
     validation,
     onEdit,
+    invalidDraftPaths,
     createType,
     createFile,
     revert,

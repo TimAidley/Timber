@@ -257,6 +257,9 @@ export function Editor({
   // Only load advanced files once the user first opens that view (lazy). Once seen,
   // the hook keeps its state so switching back and forth is instant.
   const [advancedSeen, setAdvancedSeen] = useState(false);
+  // Advanced/admin state (templates + config), lazily loaded on first visit. Its file
+  // list renders in the shared sidebar and its editor/preview in the shared work area.
+  const advanced = useAdvanced(session, autosave, advancedSeen, theme);
 
   // Publish dialog + the conflict base SHA, which advances each time we publish.
   const [showPublish, setShowPublish] = useState(false);
@@ -1022,16 +1025,25 @@ export function Editor({
     return validator.validateObject(candidate, workingModel);
   }, [selected, schema, edit, validator, workingModel]);
 
+  // The full "editing" set: the autosaver's pending changes plus advanced-area drafts
+  // too invalid to commit. The latter never reach the branch, but they're real pending
+  // work (kept in IndexedDB, resurfacing on reload) — leaving them out showed
+  // "No unpublished changes" while a draft sat waiting.
+  const editingPaths = useMemo(() => {
+    if (advanced.invalidDraftPaths.size === 0) return autosave.editingPaths;
+    return new Set([...autosave.editingPaths, ...advanced.invalidDraftPaths]);
+  }, [autosave.editingPaths, advanced.invalidDraftPaths]);
+
   // Header change counts ("Editing 1 · Saved 4"), tallied over the working objects.
   const counts = useMemo(
     () =>
       summarizeChanges(
         objects.map((o) => o.path),
-        autosave.editingPaths,
+        editingPaths,
         savedPaths,
         deletedPaths,
       ),
-    [objects, autosave.editingPaths, savedPaths, deletedPaths],
+    [objects, editingPaths, savedPaths, deletedPaths],
   );
   const hasChanges = counts.editing > 0 || counts.saved > 0 || counts.deleting > 0;
   // Objects kept On this device (SPEC §5/§8) — shown in the header, but not "pending
@@ -1175,10 +1187,6 @@ export function Editor({
     );
   }
 
-  // Advanced/admin state (templates + config), lazily loaded on first visit. Its file
-  // list renders in the shared sidebar and its editor/preview in the shared work area.
-  const advanced = useAdvanced(session, autosave, advancedSeen, theme);
-
   // Site assets (binary /assets files) for the asset manager: the committed set is read
   // straight from the loaded tree (no extra fetch); the manager overlays this session's
   // uploads/deletes locally. Templates + stylesheets feed the delete-reference guard.
@@ -1207,7 +1215,7 @@ export function Editor({
     for (const o of objects) {
       const state = objectChangeState(
         o.path,
-        autosave.editingPaths,
+        editingPaths,
         savedPaths,
         deletedPaths,
       );
@@ -1227,7 +1235,7 @@ export function Editor({
     // Templates/config/assets: listed with their own lifecycle state, so an advanced-area
     // edit shows as Editing straight away rather than appearing only once it reaches WIP.
     // (Content-area paths never appear here — they roll up into their object.)
-    for (const { path, state } of siteFileChanges(autosave.editingPaths, savedPaths)) {
+    for (const { path, state } of siteFileChanges(editingPaths, savedPaths)) {
       const k = kindOf(path, theme);
       entries.push({
         path,
@@ -1248,7 +1256,7 @@ export function Editor({
     return entries;
   }, [
     objects,
-    autosave.editingPaths,
+    editingPaths,
     savedPaths,
     deletedPaths,
     advanced,
@@ -1814,7 +1822,7 @@ export function Editor({
                     <AdvancedList
                       files={advanced.files}
                       selectedPath={advancedMode === 'files' ? advanced.selectedPath : undefined}
-                      editingPaths={autosave.editingPaths}
+                      editingPaths={editingPaths}
                       savedPaths={savedPaths}
                       onSelect={(path) => {
                         setAdvancedMode('files');

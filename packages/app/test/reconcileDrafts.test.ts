@@ -33,20 +33,24 @@ describe('reconcileAdvancedDrafts', () => {
 
   it('does not re-queue a draft that is invalid (kept as working text only)', () => {
     const broken = 'kind: collection\nfields:\n  title:\n    type: nonsense\n';
-    const { text, requeue } = reconcileAdvancedDrafts(
+    const { text, requeue, invalid } = reconcileAdvancedDrafts(
       [pagesSchema],
       [{ path: pagesSchema.path, body: broken }],
     );
     expect(text.get(pagesSchema.path)).toBe(broken); // shown, so nothing is lost
     expect(requeue).toEqual([]); // but never committed
+    // …and reported as pending anyway: a draft that resurfaces on reload must not
+    // hide behind "No unpublished changes".
+    expect(invalid).toEqual([pagesSchema.path]);
   });
 
   it('ignores a draft identical to the loaded file', () => {
-    const { requeue } = reconcileAdvancedDrafts(
+    const { requeue, invalid } = reconcileAdvancedDrafts(
       [pagesSchema],
       [{ path: pagesSchema.path, body: pagesSchema.content }],
     );
     expect(requeue).toEqual([]);
+    expect(invalid).toEqual([]);
   });
 
   it('resurrects a draft for a schema not in the loaded tree (a new, uncommitted type)', () => {
