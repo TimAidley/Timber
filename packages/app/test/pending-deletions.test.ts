@@ -43,6 +43,47 @@ describe('derivePendingDeletions (branch-derived pending deletes, SPEC §5)', ()
     ]);
   });
 
+  // On a multilingual site every collection object lives at the four-segment
+  // content/<type>/<lang>/<slug>/index.md. A hand-rolled three-segment regex here once
+  // missed them all: a deleted translation reloaded with no struck-through entry and no
+  // Restore, its removed paths dangling as unclassifiable "site files".
+  it('reconstructs a removed multilingual object (content/<type>/<lang>/<slug>/)', async () => {
+    const changed: ChangedPath[] = [
+      { path: 'content/events/fr/fete/index.md', status: 'removed' },
+      { path: 'content/events/fr/fete/hero.webp', status: 'removed' },
+    ];
+    const deps: PendingDeletionDeps = {
+      compareChangedPaths: vi.fn(async () => changed),
+      loadTree: vi.fn(async () =>
+        tree(['content/events/fr/fete/index.md', 'content/events/fr/fete/hero.webp']),
+      ),
+      readFile: vi.fn(async () => '---\nid: ev2\ntitle: Fête\nlang: fr\n---\nbody\n'),
+    };
+
+    const deleted = await derivePendingDeletions(deps, 'main', 'octocat_wip', schemas);
+
+    expect(deleted).toHaveLength(1);
+    expect(deleted[0]!.object.path).toBe('content/events/fr/fete/index.md');
+    expect(deleted[0]!.object.slug).toBe('fete');
+    expect(deleted[0]!.object.lang).toBe('fr');
+    expect(deleted[0]!.assets).toEqual([
+      { path: 'content/events/fr/fete/hero.webp', sha: 'sha:content/events/fr/fete/hero.webp' },
+    ]);
+  });
+
+  it('still ignores a removed singleton (never user-deletable)', async () => {
+    const deps: PendingDeletionDeps = {
+      compareChangedPaths: vi.fn(async () => [
+        { path: 'content/settings/index.md', status: 'removed' as const },
+      ]),
+      loadTree: vi.fn(async () => tree([])),
+      readFile: vi.fn(async () => ''),
+    };
+
+    expect(await derivePendingDeletions(deps, 'main', 'octocat_wip', schemas)).toEqual([]);
+    expect(deps.loadTree).not.toHaveBeenCalled();
+  });
+
   it('ignores non-removed changes and skips the tree read when nothing was deleted', async () => {
     const deps: PendingDeletionDeps = {
       compareChangedPaths: vi.fn(async () => [

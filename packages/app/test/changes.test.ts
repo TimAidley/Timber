@@ -22,6 +22,12 @@ describe('objectChangeState', () => {
     expect(objectChangeState(A, new Set(), new Set(['content/events/a/images/hero.webp']))).toBe('saved');
   });
 
+  // A staged-but-uncommitted image is exactly as unsaved as a typed edit; before the
+  // commit lands the object must read "editing", not "clean".
+  it('is "editing" when a colocated asset is staged but not yet committed', () => {
+    expect(objectChangeState(A, new Set(['content/events/a/images/hero.webp']), new Set())).toBe('editing');
+  });
+
   it('is "clean" when nothing pending', () => {
     expect(objectChangeState(A, new Set([B]), new Set([C]))).toBe('clean');
   });
@@ -91,13 +97,24 @@ describe('summarizeChanges', () => {
     const counts = summarizeChanges([A, B], new Set([css]), new Set([css]));
     expect(counts).toEqual({ editing: 1, saved: 0, deleting: 0 });
   });
+
+  it('counts a rename once — the old bundle’s removed paths are not extra site files', () => {
+    // B was renamed from `old`: the new bundle differs from main AND the old bundle's
+    // paths show as removed. Only the (renamed) object itself may be counted.
+    const counts = summarizeChanges(
+      [A, B],
+      new Set(),
+      new Set([B, 'content/events/old/index.md', 'content/events/old/images/hero.webp']),
+    );
+    expect(counts).toEqual({ editing: 0, saved: 1, deleting: 0 });
+  });
 });
 
 describe('siteFileChanges', () => {
   it('states each changed non-object path, editing winning over saved', () => {
     const css = 'themes/acme/assets/theme.css';
     const yml = 'config/schemas/pages.yml';
-    expect(siteFileChanges([A, B], new Set([css]), new Set([css, yml]))).toEqual([
+    expect(siteFileChanges(new Set([css]), new Set([css, yml]))).toEqual([
       { path: css, state: 'editing' },
       { path: yml, state: 'saved' },
     ]);
@@ -105,7 +122,19 @@ describe('siteFileChanges', () => {
 
   it('excludes objects and their bundles (those belong to the object)', () => {
     expect(
-      siteFileChanges([A, B], new Set([A]), new Set(['content/events/a/images/hero.webp'])),
+      siteFileChanges(new Set([A]), new Set(['content/events/a/images/hero.webp'])),
+    ).toEqual([]);
+  });
+
+  // After a rename the OLD bundle's paths are removed on WIP but belong to no live
+  // object; they are still content, not loose site files — the rename already counts
+  // once, through the renamed object.
+  it('excludes a renamed-away bundle’s removed paths (content is never a site file)', () => {
+    expect(
+      siteFileChanges(
+        new Set(),
+        new Set(['content/events/old/index.md', 'content/events/old/images/hero.webp']),
+      ),
     ).toEqual([]);
   });
 });

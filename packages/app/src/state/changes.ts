@@ -1,3 +1,5 @@
+import { isContentPath } from '@timber/content';
+
 /**
  * A content object's place on the change lifecycle (SPEC §8/§11), for the sidebar
  * badges and the header summary. Deliberately excludes the later `submitted`/
@@ -14,9 +16,10 @@ export type ChangeState = 'editing' | 'saved' | 'deleting' | 'clean';
 /**
  * Classify one object by its `index.md` path against the live change sets. A pending
  * deletion wins (the object is on its way out, whatever else it had). Otherwise
- * `editing` (uncommitted, the furthest-back state) wins over `saved`. An object counts
- * as `saved` when its `index.md` **or any colocated asset** under its bundle differs
- * from `main`, so an image-only change still surfaces.
+ * `editing` (uncommitted, the furthest-back state) wins over `saved`. A change to
+ * **any colocated asset** under the bundle counts like a change to the `index.md`
+ * itself — staged-but-uncommitted ⇒ `editing`, committed to WIP ⇒ `saved` — so an
+ * image-only change still surfaces.
  */
 export function objectChangeState(
   path: string,
@@ -27,7 +30,11 @@ export function objectChangeState(
   if (deleting?.has(path)) return 'deleting';
   if (editing.has(path)) return 'editing';
   if (saved.has(path)) return 'saved';
+  // Colocated-asset changes surface through their object, at whichever stage the
+  // asset itself is: a staged (uncommitted) image makes the object `editing`, a
+  // committed one makes it `saved`.
   const bundleDir = path.replace(/\/index\.md$/, '') + '/';
+  for (const p of editing) if (p.startsWith(bundleDir)) return 'editing';
   for (const p of saved) if (p.startsWith(bundleDir)) return 'saved';
   return 'clean';
 }
@@ -42,8 +49,8 @@ export function objectChangeState(
  * read "No unpublished changes" and, because the Publish button is gated on these counts,
  * the change could not be published at all without touching an unrelated object first.
  *
- * A site file is any changed path that is neither an object's `index.md` nor inside an
- * object's bundle — a colocated asset already counts towards its own object (see
+ * A site file is any changed path **outside the content area** — a colocated asset or
+ * an object's `index.md` already counts towards its object (see
  * {@link objectChangeState}) and must not be counted twice.
  *
  * Site files run the same two-stage lifecycle as objects: `editing` while the edit is
@@ -68,7 +75,7 @@ export function summarizeChanges(
     else if (state === 'saved') s += 1;
     else if (state === 'deleting') d += 1;
   }
-  for (const { state } of siteFileChanges(objectPaths, editing, saved)) {
+  for (const { state } of siteFileChanges(editing, saved)) {
     if (state === 'editing') e += 1;
     else s += 1;
   }
@@ -77,26 +84,25 @@ export function summarizeChanges(
 
 /**
  * The changed paths that belong to no content object — templates, styles, schemas,
- * config and stray site assets — each with its lifecycle state. An object's own
- * `index.md` and anything inside its bundle are excluded: those belong to the object
- * (see {@link objectChangeState}) and would otherwise be counted twice.
+ * config and stray site assets — each with its lifecycle state.
+ *
+ * Classified by the shared path grammar, not by membership in the current object
+ * list: anything under `content/` belongs to an object — a live one, a pending
+ * deletion, or the removed half of a rename — and is represented (or deliberately
+ * rolled up) there. Testing against the object list instead once let a renamed-away
+ * bundle's removed paths masquerade as loose "site files", inflating the counts.
  *
  * Shared by the header counts and the changes panel so the two can't disagree about
  * what's pending.
  */
 export function siteFileChanges(
-  objectPaths: readonly string[],
   editing: ReadonlySet<string>,
   saved: ReadonlySet<string>,
 ): { path: string; state: 'editing' | 'saved' }[] {
-  const owned = new Set(objectPaths);
-  const bundles = objectPaths.map((p) => p.replace(/\/index\.md$/, '') + '/');
-  const isSiteFile = (path: string): boolean =>
-    !owned.has(path) && !bundles.some((prefix) => path.startsWith(prefix));
   const out: { path: string; state: 'editing' | 'saved' }[] = [];
   const seen = new Set<string>();
   for (const path of [...editing, ...saved]) {
-    if (seen.has(path) || !isSiteFile(path)) continue;
+    if (seen.has(path) || isContentPath(path)) continue;
     seen.add(path);
     out.push({ path, state: editing.has(path) ? 'editing' : 'saved' });
   }

@@ -1,4 +1,5 @@
 import { parseFrontMatter } from '@timber/generator';
+import { parseObjectPath } from './paths.js';
 import { resolvePublic } from './visibility.js';
 import type {
   ContentModel,
@@ -7,14 +8,6 @@ import type {
   ModelError,
   RepoSnapshot,
 } from './types.js';
-
-// content/<type>/index.md                   -> singleton (no slug, no lang)
-// content/<type>/<slug>/index.md            -> collection object (slug = <slug>)
-// content/<type>/<lang>/<slug>/index.md     -> collection object in language <lang>
-// The two optional segments are captured greedily: a lone segment is the slug (group 2);
-// two segments are (lang, slug) (groups 2, 3). Slugs are single path components, so depth
-// disambiguates cleanly — no nested collections exist to make three levels ambiguous.
-const OBJECT_PATH = /^content\/([^/]+)\/(?:([^/]+)\/)?(?:([^/]+)\/)?index\.md$/;
 
 /** The i18n settings read from the site's singleton (SPEC §5 → Multilingual). */
 interface I18nConfig {
@@ -71,13 +64,10 @@ export function assembleContent(
   const i18nEnabled = languages.length > 0;
 
   for (const [path, contents] of snapshot) {
-    const match = OBJECT_PATH.exec(path);
-    if (!match) continue;
+    const parsed = parseObjectPath(path);
+    if (!parsed) continue;
 
-    const type = match[1]!;
-    // A lone middle segment is the slug; two segments are (lang, slug).
-    const pathLang = match[3] !== undefined ? match[2] : undefined;
-    const slugSegment = match[3] ?? match[2];
+    const { type, lang: pathLang, slug: slugSegment } = parsed;
     const schema = schemas.get(type);
 
     if (!schema) {

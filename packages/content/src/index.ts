@@ -8,6 +8,8 @@
  */
 export { loadSchemas, SchemaError } from './schema.js';
 export { assembleContent } from './assemble.js';
+export { parseObjectPath, isCollectionIndexPath, isContentPath } from './paths.js';
+export type { ParsedObjectPath } from './paths.js';
 export { Validator } from './validate.js';
 export {
   resolveReference,

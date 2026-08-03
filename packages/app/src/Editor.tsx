@@ -1116,7 +1116,6 @@ export function Editor({
   // Revert live); the diff itself is fetched lazily when a row is expanded.
   const changeEntries: ChangeEntry[] = useMemo(() => {
     const entries: ChangeEntry[] = [];
-    const bundlePrefixes: string[] = [];
     for (const o of objects) {
       const state = objectChangeState(
         o.path,
@@ -1125,7 +1124,6 @@ export function Editor({
         deletedPaths,
       );
       if (state === 'clean') continue;
-      bundlePrefixes.push(o.path.replace(/\/index\.md$/, '') + '/');
       entries.push({
         path: o.path,
         title: String(o.data.title ?? o.slug),
@@ -1140,12 +1138,8 @@ export function Editor({
     }
     // Templates/config/assets: listed with their own lifecycle state, so an advanced-area
     // edit shows as Editing straight away rather than appearing only once it reaches WIP.
-    for (const { path, state } of siteFileChanges(
-      objects.map((o) => o.path),
-      autosave.editingPaths,
-      savedPaths,
-    )) {
-      if (bundlePrefixes.some((p) => path.startsWith(p))) continue; // rolled into its object
+    // (Content-area paths never appear here — they roll up into their object.)
+    for (const { path, state } of siteFileChanges(autosave.editingPaths, savedPaths)) {
       const k = kindOf(path, theme);
       entries.push({
         path,

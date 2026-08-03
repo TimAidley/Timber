@@ -1,6 +1,7 @@
 import type { ChangedPath, HostProvider, RepoTree, TreeEntry } from '@timber/host';
 import {
   assembleContent,
+  isCollectionIndexPath,
   loadSchemas,
   type ContentModel,
   type ContentObject,
@@ -57,10 +58,6 @@ export interface DeletedObject {
   assets: { path: string; sha: string }[];
 }
 
-// A collection object's index.md: content/<type>/<slug>/index.md (singletons — one
-// path segment — are never user-deletable, so pending deletions are always collections).
-const OBJECT_INDEX = /^content\/[^/]+\/[^/]+\/index\.md$/;
-
 /** The minimal slice of the host port the deletion-derivation needs (fakeable in tests). */
 export interface PendingDeletionDeps {
   compareChangedPaths: (base: string, head: string) => Promise<ChangedPath[]>;
@@ -81,9 +78,14 @@ export async function derivePendingDeletions(
   wipBranch: string,
   schemas: Map<string, ContentTypeSchema>,
 ): Promise<DeletedObject[]> {
+  // Pending deletions are always collection objects (singletons are never
+  // user-deletable) — matched via the shared path grammar, which includes the
+  // multilingual content/<type>/<lang>/<slug>/index.md shape. A local regex here
+  // once predated that shape, and deleted translations silently lost their
+  // struck-through entry (and Restore) on reload.
   const changed = await deps.compareChangedPaths(defaultBranch, wipBranch);
   const removed = changed
-    .filter((c) => c.status === 'removed' && OBJECT_INDEX.test(c.path))
+    .filter((c) => c.status === 'removed' && isCollectionIndexPath(c.path))
     .map((c) => c.path);
   if (removed.length === 0) return [];
 
