@@ -21,15 +21,17 @@ export interface AutosaverDeps {
   /** Notified whenever the sync state changes (drives the indicator). */
   onState: (state: SyncState) => void;
   /**
-   * Notified whenever the set of paths with **local-only** (uncommitted) edits
+   * Notified whenever the set of paths with **local-only** (uncommitted) changes
    * changes — drives the per-item "Editing" badges + header count. Paths in flight
    * (being committed) stay included until the commit lands, so the badge doesn't
    * flicker to clean mid-save.
    *
-   * Covers content objects **and** raw site files (templates, styles, schemas, config)
-   * alike: an advanced-area edit is exactly as unsaved as a page edit, and leaving it
-   * out of this set is what made the header read "No unpublished changes" for the ~5s
-   * between typing in the code editor and the coalesced commit landing.
+   * Deliberately **total** over every dirty collection — objects, raw site files,
+   * staged assets, deletions and moves alike. Each kind left out of this union has
+   * produced the same bug in turn (first advanced-area files, then staged assets):
+   * the header read "No unpublished changes" while a change sat queued for commit.
+   * A new kind of pending change must be invisible-proof by construction, so
+   * {@link Autosaver.notifyDirtyPaths} unions ALL of them, always.
    */
   onDirtyPaths?: (paths: string[]) => void;
   /** Notified on a failed flush (before the backoff retry) — surfaces the cause. */
@@ -140,10 +142,22 @@ export class Autosaver {
     return Math.round(delay * (1 + (this.random() * 2 - 1) * this.jitterRatio));
   }
 
-  /** Emit the current "editing" path set (uncommitted edits + in-flight). */
+  /**
+   * Emit the current "editing" path set (uncommitted changes + in-flight). The union
+   * spans EVERY dirty collection (see {@link AutosaverDeps.onDirtyPaths}) — adding a
+   * new collection to this class means adding it here, or its changes are invisible
+   * until they reach the branch.
+   */
   private notifyDirtyPaths(): void {
     this.deps.onDirtyPaths?.([
-      ...new Set([...this.dirtyObjects.keys(), ...this.dirtyFiles.keys(), ...this.flushingPaths]),
+      ...new Set([
+        ...this.dirtyObjects.keys(),
+        ...this.dirtyFiles.keys(),
+        ...this.dirtyAssets,
+        ...this.dirtyDeletions,
+        ...this.dirtyMoves.keys(),
+        ...this.flushingPaths,
+      ]),
     ]);
   }
 
@@ -180,6 +194,7 @@ export class Autosaver {
 
   markAssetDirty(path: string): void {
     this.dirtyAssets.add(path);
+    this.notifyDirtyPaths();
     this.deps.onState('dirty');
     this.schedule();
   }
@@ -378,7 +393,15 @@ export class Autosaver {
     }
     // These paths are in transit but not yet on the branch, so they stay "editing"
     // (not clean, not saved) until the commit lands — no mid-save badge flicker.
-    this.flushingPaths = new Set([...objects.map(([p]) => p), ...rawFiles.map(([p]) => p)]);
+    // Total over the whole snapshot (assets, deletions and moves included), like the
+    // dirty union itself.
+    this.flushingPaths = new Set([
+      ...objects.map(([p]) => p),
+      ...rawFiles.map(([p]) => p),
+      ...assets,
+      ...deletions,
+      ...moves.map((m) => m.to),
+    ]);
     this.notifyDirtyPaths();
 
     this.flushing = true;
@@ -453,8 +476,9 @@ export interface Autosave {
    */
   lastError: HostErrorInfo | null;
   /**
-   * Paths with local-only (uncommitted) edits — drives the "Editing" badges. Includes
-   * raw site files (templates/styles/schemas/config) as well as content objects.
+   * Paths with local-only (uncommitted) changes — drives the "Editing" badges. Total
+   * over every kind of pending change: content objects, raw site files, staged
+   * assets, deletions and moves alike.
    */
   editingPaths: ReadonlySet<string>;
   markObjectDirty: (path: string, data: FrontMatter, body: string) => void;

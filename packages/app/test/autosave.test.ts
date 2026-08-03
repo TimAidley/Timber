@@ -289,6 +289,43 @@ describe('Autosaver', () => {
     expect(dirtyPathSets.at(-1)).toEqual([]);
   });
 
+  // The dirty union must be TOTAL: every kind of pending change (not just objects and
+  // raw files) is in the editing set from the moment it's queued. Staged assets were
+  // once left out, and a site-asset upload showed "No unpublished changes" until its
+  // commit landed — the same bug advanced-area files had before them.
+  it('includes staged assets and pending deletions in the editing set', async () => {
+    const commit = vi.fn<CommitFn>(async () => undefined);
+    const { saver, dirtyPathSets } = setup(commit);
+
+    saver.markAssetDirty('assets/logo.webp');
+    expect(dirtyPathSets.at(-1)).toEqual(['assets/logo.webp']);
+
+    saver.markPathsDeleted(['themes/acme/assets/old.css']);
+    expect(dirtyPathSets.at(-1)).toEqual(['assets/logo.webp', 'themes/acme/assets/old.css']);
+
+    await vi.advanceTimersByTimeAsync(2000);
+    // Landed → no longer local-only.
+    expect(dirtyPathSets.at(-1)).toEqual([]);
+  });
+
+  it('keeps a staged asset in the editing set while its commit is in flight', async () => {
+    let release: () => void = () => undefined;
+    const commit = vi.fn<CommitFn>(
+      () => new Promise<void>((resolve) => (release = resolve)),
+    );
+    const { saver, dirtyPathSets } = setup(commit);
+
+    saver.markAssetDirty('content/events/a/images/p.webp');
+    await vi.advanceTimersByTimeAsync(2000); // flush starts, commit pending
+    expect(commit).toHaveBeenCalledTimes(1);
+    // In transit ≠ saved: the asset stays "editing" until the commit lands.
+    expect(dirtyPathSets.at(-1)).toEqual(['content/events/a/images/p.webp']);
+
+    release();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(dirtyPathSets.at(-1)).toEqual([]);
+  });
+
   it('keeps an object in the editing set while a failing commit retries', async () => {
     const commit = vi.fn<CommitFn>().mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce(undefined);
     const { saver, dirtyPathSets } = setup(commit);
