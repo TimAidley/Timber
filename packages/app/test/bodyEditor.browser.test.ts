@@ -164,6 +164,51 @@ describe('BodyEditor toolbar + tabs (real browser)', () => {
     expect(latest.trim()).toBe('# hello');
   });
 
+  it('keeps the toolbar pinned (sticky + is-stuck) while a long body scrolls', async () => {
+    // Recreate the app's scrolling editor pane: BodyEditor lives inside `.app__main`
+    // (overflow-y: auto), and the toolbar's `position: sticky` pins against it. A
+    // short fixed height makes a modest document overflow the pane.
+    const pane = document.createElement('main');
+    pane.className = 'app__main';
+    pane.style.height = '260px';
+    document.body.appendChild(pane);
+    host = pane;
+    root = createRoot(pane);
+    const longBody = Array.from(
+      { length: 60 },
+      (_, i) => `Paragraph ${i + 1} of a long post.`,
+    ).join('\n\n');
+    root.render(
+      React.createElement(BodyEditor, {
+        docKey: 0,
+        assetStore: new AssetStore(),
+        bundleDir: 'content/pages/home',
+        value: longBody,
+        onChange: () => {},
+      }),
+    );
+    await waitFor(() => document.querySelector('.body-toolbar'));
+    await waitFor(() => (pane.scrollHeight > pane.clientHeight ? true : null));
+
+    // Not scrolled yet — the bar sits in the flow, unshadowed.
+    expect(document.querySelector('.body-toolbar.is-stuck')).toBeNull();
+
+    pane.scrollTop = pane.scrollHeight;
+    // The sentinel leaves the pane, the IntersectionObserver flips is-stuck on…
+    const bar = await waitFor(() =>
+      document.querySelector<HTMLElement>('.body-toolbar.is-stuck'),
+    );
+    // …and the bar itself is pinned at the pane's top edge, still fully visible.
+    const barRect = bar.getBoundingClientRect();
+    const paneRect = pane.getBoundingClientRect();
+    expect(barRect.top).toBeGreaterThanOrEqual(paneRect.top - 1);
+    expect(barRect.top).toBeLessThanOrEqual(paneRect.top + 2);
+
+    // Scrolling back up releases it and drops the shadow again.
+    pane.scrollTop = 0;
+    await waitFor(() => (document.querySelector('.body-toolbar.is-stuck') ? null : true));
+  });
+
   it('shows a Diff tab (only when diff props are supplied) with the page changes + Revert', async () => {
     let reverted = false;
     // Without diff props, the tab is absent (keeps the generic editor generic).

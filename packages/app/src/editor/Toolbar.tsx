@@ -1,4 +1,5 @@
 import type React from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 /**
  * The set of icons the body-editor toolbar can render. Each maps to a small inline
@@ -48,33 +49,61 @@ interface ToolbarProps {
  * Buttons fire on `onMouseDown` with `preventDefault` so clicking never moves focus
  * out of the editor: the editor keeps its caret/selection and the command applies to
  * it. (A plain `onClick` would blur the editor first, collapsing the selection.)
+ *
+ * The bar is `position: sticky`, so on a long body it pins to the top of the scrolling
+ * pane instead of scrolling away. A zero-height sentinel just above it feeds an
+ * IntersectionObserver: sentinel out of view ⇒ the bar is pinned ⇒ `is-stuck` adds a
+ * drop shadow so it reads as floating over the prose. (The sentinel can also leave via
+ * the bottom edge, but then the bar itself is offscreen, so the class is invisible.)
  */
 export function Toolbar({ groups, disabled = false }: ToolbarProps): React.JSX.Element {
+  const sentinel = useRef<HTMLDivElement>(null);
+  const [stuck, setStuck] = useState(false);
+
+  useEffect(() => {
+    const el = sentinel.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry) setStuck(!entry.isIntersecting);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <div className="body-toolbar" role="toolbar" aria-label="Formatting">
-      {groups.map((group, gi) => (
-        <div className="body-toolbar__group" key={gi}>
-          {group.map((action) => {
-            const title = action.shortcut ? `${action.label} (${action.shortcut})` : action.label;
-            return (
-              <button
-                key={action.label}
-                type="button"
-                className="body-toolbar__btn"
-                title={title}
-                aria-label={action.label}
-                disabled={disabled}
-                // Keep editor focus/selection — see component doc.
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={action.onClick}
-              >
-                <Icon name={action.icon} />
-              </button>
-            );
-          })}
-        </div>
-      ))}
-    </div>
+    <>
+      <div ref={sentinel} className="body-toolbar__sentinel" aria-hidden="true" />
+      <div
+        className={`body-toolbar${stuck ? ' is-stuck' : ''}`}
+        role="toolbar"
+        aria-label="Formatting"
+      >
+        {groups.map((group, gi) => (
+          <div className="body-toolbar__group" key={gi}>
+            {group.map((action) => {
+              const title = action.shortcut
+                ? `${action.label} (${action.shortcut})`
+                : action.label;
+              return (
+                <button
+                  key={action.label}
+                  type="button"
+                  className="body-toolbar__btn"
+                  title={title}
+                  aria-label={action.label}
+                  disabled={disabled}
+                  // Keep editor focus/selection — see component doc.
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={action.onClick}
+                >
+                  <Icon name={action.icon} />
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </>
   );
 }
 

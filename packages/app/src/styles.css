@@ -1589,7 +1589,17 @@ button.langmenu__row {
   line-height: 1.6;
 }
 
+/* Sticky so the formatting bar never scrolls out of reach on a long body: it pins to
+   the top of the scrolling pane (.app__main — the editor cards deliberately carry no
+   overflow clip, so the sticky reaches it) and releases when the Body card's end
+   scrolls past. `top: -1.25rem` cancels the pane's 1.25rem top padding so it pins
+   flush with the pane edge instead of hovering a padding-width below it (same trick
+   as .object-group__head in the sidebar). z-index above the ProseMirror prose it
+   floats over, below the reference-picker popover (5) and the header panels (40). */
 .body-toolbar {
+  position: sticky;
+  top: -1.25rem;
+  z-index: 4;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -1599,6 +1609,16 @@ button.langmenu__row {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface-2);
+}
+
+/* Toolbar.tsx toggles `is-stuck` (IntersectionObserver on the sentinel above the bar)
+   while the bar is pinned, so it visibly lifts off the prose scrolling beneath it. */
+.body-toolbar.is-stuck {
+  box-shadow: var(--shadow);
+}
+
+.body-toolbar__sentinel {
+  height: 0;
 }
 
 .body-toolbar__group {
