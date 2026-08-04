@@ -32,6 +32,7 @@ import {
 } from '@milkdown/kit/preset/commonmark';
 import { toggleStrikethroughCommand, insertTableCommand } from '@milkdown/kit/preset/gfm';
 import { remarkStringifyOptions } from './milkdown.js';
+import { bulletListSpreadFix, listItemSpreadFix } from './listSpread.js';
 import { preventBackspaceNav } from './backspaceFix.js';
 import { Toolbar } from './Toolbar.js';
 import {
@@ -109,6 +110,9 @@ function Wysiwyg({ value, onChange, docKey }: WysiwygProps): React.JSX.Element {
         })
         .use(commonmark)
         .use(gfm)
+        // After commonmark/gfm — replaces their list schemas (see listSpread.ts).
+        .use(bulletListSpreadFix)
+        .use(listItemSpreadFix)
         .use(listener)
         .use(cursor)
         // Undo/redo history (keymap: Ctrl/Cmd+Z, Ctrl+Y, Ctrl/Cmd+Shift+Z) plus the

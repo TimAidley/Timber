@@ -2,6 +2,7 @@ import { Editor, rootCtx, parserCtx, serializerCtx, remarkStringifyOptionsCtx } 
 import { commonmark } from '@milkdown/kit/preset/commonmark';
 import { gfm } from '@milkdown/kit/preset/gfm';
 import { remarkStringifyOptions } from './milkdown.js';
+import { bulletListSpreadFix, listItemSpreadFix } from './listSpread.js';
 import { figureRemark } from './figure/remark.js';
 import { figureSchema } from './figure/schema.js';
 
@@ -28,6 +29,9 @@ export async function roundTrip(markdown: string): Promise<string> {
     })
     .use(commonmark)
     .use(gfm)
+    // After commonmark/gfm — replaces their list schemas (see listSpread.ts).
+    .use(bulletListSpreadFix)
+    .use(listItemSpreadFix)
     .use(figureRemark)
     .use(figureSchema)
     .create();

@@ -18,9 +18,25 @@ const CANONICAL: Record<string, string> = {
     '',
   ].join('\n'),
 
-  // A list with nested sublists serializes "loose" (blank lines between items) —
-  // canonical form. Flat single-level lists (below) stay tight.
-  'nested bullet list': [
+  // Tight vs loose is the author's choice and must survive round-trips: a tight
+  // list (`- a\n- b`) renders `<li>a</li>`, a loose one (blank lines between
+  // items) renders the spaced `<li><p>a</p></li>`. The listSpread fix keeps each
+  // form byte-stable; Milkdown's unpatched presets rewrote every bullet list to
+  // loose, silently changing the published spacing.
+  'flat bullet list (tight)': ['- a', '- b', '- c', ''].join('\n'),
+
+  'flat bullet list (loose)': ['- a', '', '- b', '', '- c', ''].join('\n'),
+
+  'nested bullet list (tight)': [
+    '- one',
+    '- two',
+    '  - two a',
+    '  - two b',
+    '- three',
+    '',
+  ].join('\n'),
+
+  'nested bullet list (loose)': [
     '- one',
     '',
     '- two',
@@ -32,6 +48,10 @@ const CANONICAL: Record<string, string> = {
     '- three',
     '',
   ].join('\n'),
+
+  // An item holding two paragraphs needs its internal blank lines (and renders
+  // loose per CommonMark) — they must never be stripped by the tight default.
+  'multi-paragraph list item': ['- a', '', '  second paragraph', '', '- b', ''].join('\n'),
 
   'ordered list': ['1. first', '2. second', '3. third', ''].join('\n'),
 
@@ -59,8 +79,10 @@ const CANONICAL: Record<string, string> = {
     '',
   ].join('\n'),
 
-  // ...and emits task lists in "loose" form (blank line between items). Canonical.
-  'gfm task list': ['- [ ] todo', '', '- [x] done', ''].join('\n'),
+  // Task lists follow the same rule: authored tight/loose form is preserved.
+  'gfm task list (tight)': ['- [ ] todo', '- [x] done', ''].join('\n'),
+
+  'gfm task list (loose)': ['- [ ] todo', '', '- [x] done', ''].join('\n'),
 
   'gfm strikethrough': ['This is ~~gone~~ now.', ''].join('\n'),
 };
