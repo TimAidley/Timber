@@ -45,6 +45,10 @@ import { WORDMARK_FONT_DATA_URI } from './wordmarkFont.js';
  * bucks the page scheme (a dark footer band on a light page is the usual one), so that case
  * is served by saying so explicitly. In a browser too old for `light-dark()` the whole
  * declaration is invalid and colour simply inherits — degrading to the old behaviour.
+ *
+ * CASE — `text-transform: none`, because `text-transform` inherits: the wordmark is fixed
+ * brand text, not prose, so a theme slot that case-transforms its contents (an uppercased
+ * listing title is the usual one) must not turn "Timber" into "TIMBER".
  */
 const WORDMARK_CSS =
   `@font-face{` +
@@ -52,7 +56,7 @@ const WORDMARK_CSS =
   `src:url(${WORDMARK_FONT_DATA_URI}) format('woff2')}` +
   `.wordmark{` +
   `font-family:'Fraunces Timber',Georgia,'Times New Roman',serif;font-optical-sizing:auto;` +
-  `font-weight:440;letter-spacing:-0.005em;` +
+  `font-weight:440;letter-spacing:-0.005em;text-transform:none;` +
   `color:var(--wordmark-muted,light-dark(#5b6472,#9aa4b4));white-space:nowrap}` +
   `.wordmark__tim{font-weight:800;color:var(--wordmark-ink,light-dark(#1b2230,#e7eaf0));` +
   `font-variation-settings:'SOFT' 12,'WONK' 1}`;

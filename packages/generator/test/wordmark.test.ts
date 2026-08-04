@@ -66,6 +66,13 @@ describe('timber-logo wordmark shortcode', () => {
     expect(html).not.toContain('prefers-color-scheme');
   });
 
+  it('keeps its own letter case inside a case-transforming slot (an upcased listing title)', async () => {
+    // `text-transform` inherits; the wordmark is fixed brand text, so a theme that
+    // uppercases its listing titles must not turn "Timber" into "TIMBER".
+    const html = await renderPage({ markdown: ':timber-logo\n', template: PAGE });
+    expect(html).toContain('text-transform:none');
+  });
+
   it('lets a theme recolour it for a section that bucks the page scheme', async () => {
     const html = await renderPage({ markdown: ':timber-logo\n', template: PAGE });
     expect(html).toContain('var(--wordmark-ink,');
