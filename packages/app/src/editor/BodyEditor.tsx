@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   Editor,
   rootCtx,
@@ -350,6 +350,40 @@ export function BodyEditor({
     [onChange],
   );
 
+  // The Markdown tab's textarea auto-grows to fit the source, like the WYSIWYG
+  // surface: the page scrolls, the box doesn't (CSS keeps the empty-body floor via
+  // min-height, and disables manual resize — a drag handle would fight this).
+  const sourceRef = useRef<HTMLTextAreaElement | null>(null);
+  const autosizeSource = useCallback(() => {
+    const el = sourceRef.current;
+    if (!el) return;
+    // Collapse first so the box can shrink when lines are deleted; scrollHeight is
+    // content + padding, so add the borders back (border-box height includes them).
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`;
+  }, []);
+  // Layout effect so the height is right before paint — no small-box flash when the
+  // tab opens, no stale height on each keystroke.
+  useLayoutEffect(() => {
+    if (mode === 'source') autosizeSource();
+  }, [mode, value, autosizeSource]);
+  // Width changes re-wrap the text and change the needed height, without any edit:
+  // window resize, sidebar collapse. Observe width only — the observer also fires
+  // for our own height writes, which must not loop it.
+  useEffect(() => {
+    if (mode !== 'source' || typeof ResizeObserver === 'undefined') return;
+    const el = sourceRef.current;
+    if (!el) return;
+    let width = el.clientWidth;
+    const observer = new ResizeObserver(() => {
+      if (el.clientWidth === width) return;
+      width = el.clientWidth;
+      autosizeSource();
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [mode, autosizeSource]);
+
   // The published `index.md` for the Diff tab, fetched lazily the first time that tab
   // is opened and re-fetched when the document changes (docKey bumps on object switch).
   // Keyed by docKey so a stale base from the previously selected object is never shown.
@@ -478,6 +512,7 @@ export function BodyEditor({
             </>
           ) : (
             <textarea
+              ref={sourceRef}
               className="body-editor__source"
               value={value}
               onChange={onSourceChange}

@@ -1587,6 +1587,12 @@ button.langmenu__row {
   font-size: 0.85rem;
   color: var(--text);
   line-height: 1.6;
+  display: block;
+  /* Height is auto-fitted to the content by BodyEditor (the shared min-height above
+     is the empty-body floor). Manual resize would fight the auto-fit, and hidden
+     overflow keeps a scrollbar from flashing while the height is recomputed. */
+  resize: none;
+  overflow-y: hidden;
 }
 
 /* Sticky so the formatting bar never scrolls out of reach on a long body: it pins to

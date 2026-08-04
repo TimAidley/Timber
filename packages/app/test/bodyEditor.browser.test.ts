@@ -297,6 +297,62 @@ describe('BodyEditor toolbar + tabs (real browser)', () => {
     expect(document.querySelector('.body-toolbar')).toBeNull();
   });
 
+  it('auto-grows the Markdown source textarea to fit the text', async () => {
+    // A stateful harness: the textarea is controlled, so edits must flow back in
+    // through onChange for the auto-fit-on-edit half of the test to be real.
+    function Harness(): React.JSX.Element {
+      const [v, setV] = React.useState(
+        Array.from({ length: 40 }, (_, i) => `line ${i}`).join('\n\n'),
+      );
+      return React.createElement(BodyEditor, {
+        value: v,
+        onChange: setV,
+        docKey: 0,
+        assetStore: new AssetStore(),
+        bundleDir: 'content/pages/home',
+      });
+    }
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    root.render(React.createElement(Harness));
+
+    const sourceTab = await waitFor(() =>
+      [...document.querySelectorAll<HTMLButtonElement>('.body-editor__tab')].find(
+        (t) => t.textContent === 'Markdown',
+      ),
+    );
+    sourceTab.click();
+    const textarea = await waitFor(() =>
+      document.querySelector<HTMLTextAreaElement>('.body-editor__source'),
+    );
+
+    // Opens already fitted: all 79 lines visible, nothing to scroll inside the box.
+    await waitFor(() => (textarea.clientHeight >= textarea.scrollHeight ? true : null));
+    const fitted = textarea.getBoundingClientRect().height;
+    expect(fitted).toBeGreaterThan(400);
+
+    // Typing more grows it. Drive the native value setter + an input event — the
+    // path a real keystroke takes into React's onChange.
+    const setValue = Object.getOwnPropertyDescriptor(
+      HTMLTextAreaElement.prototype,
+      'value',
+    )!.set!;
+    setValue.call(textarea, `${textarea.value}\n\nmore\n\nlines\n\nat\n\nthe\n\nend`);
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    await waitFor(() =>
+      textarea.getBoundingClientRect().height > fitted ? true : null,
+    );
+    expect(textarea.clientHeight).toBeGreaterThanOrEqual(textarea.scrollHeight);
+
+    // Deleting shrinks it back down (to the CSS min-height floor for a short body).
+    setValue.call(textarea, 'short');
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    await waitFor(() =>
+      textarea.getBoundingClientRect().height < fitted ? true : null,
+    );
+  });
+
   it('gives the editable left padding so the caret is not flush to the edge', async () => {
     mount({ value: '', onChange: () => {} });
     const pm = await waitFor(() =>
