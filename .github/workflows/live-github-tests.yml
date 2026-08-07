@@ -28,6 +28,12 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # Workspace packages resolve each other through their built dist/ output
+      # (package.json "exports" point at dist), so the packages under test must
+      # be compiled before vitest can even import them. Build @timber/github and
+      # everything it depends on (notably @timber/host).
+      - run: pnpm --filter "@timber/github..." build
+
       - run: pnpm test:live
         env:
           TIMBER_SANDBOX_TOKEN: ${{ secrets.TIMBER_SANDBOX_TOKEN }}
