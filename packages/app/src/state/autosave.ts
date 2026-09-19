@@ -241,6 +241,21 @@ export class Autosaver {
   }
 
   /**
+   * Move raw site files (templates in a non-active theme, say) by **reusing their blob
+   * SHAs** — the type-rename path (SPEC §8) for files whose text the editor doesn't
+   * hold. Each `from` is dropped and re-added at `to` in the next coalesced commit.
+   */
+  markPathsMoved(moves: MoveEntry[]): void {
+    for (const move of moves) {
+      this.dirtyMoves.set(move.to, move);
+      this.dirtyFiles.delete(move.from);
+    }
+    this.notifyDirtyPaths();
+    this.deps.onState('dirty');
+    this.schedule();
+  }
+
+  /**
    * Stage a newly-created object plus any colocated assets copied by **reusing existing
    * blob SHAs** (SPEC §5 → Multilingual "Add translation"). The moves are `from === to`
    * re-adds at the new bundle's paths, so the source bundle's assets are copied, not
@@ -506,6 +521,7 @@ export interface Autosave {
   markFileDirty: (path: string, content: string) => void;
   markAssetDirty: (path: string) => void;
   markPathsDeleted: (paths: string[]) => void;
+  markPathsMoved: (moves: MoveEntry[]) => void;
   markObjectCreated: (path: string, data: FrontMatter, body: string, moves: MoveEntry[]) => void;
   markObjectRenamed: (oldPath: string, newPath: string, data: FrontMatter, body: string, moves: MoveEntry[]) => void;
   markObjectRestored: (path: string, data: FrontMatter, body: string, moves: MoveEntry[]) => void;
@@ -601,6 +617,7 @@ export function useAutosave(
     markFileDirty: (path, content) => saver.markFileDirty(path, content),
     markAssetDirty: (path) => saver.markAssetDirty(path),
     markPathsDeleted: (paths) => saver.markPathsDeleted(paths),
+    markPathsMoved: (moves) => saver.markPathsMoved(moves),
     markObjectCreated: (path, data, body, moves) => saver.markObjectCreated(path, data, body, moves),
     markObjectRenamed: (oldPath, newPath, data, body, moves) =>
       saver.markObjectRenamed(oldPath, newPath, data, body, moves),

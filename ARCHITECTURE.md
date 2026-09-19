@@ -369,6 +369,16 @@ Cross-cutting things and every file they touch:
   and enforced by `site-template/.github/workflows/validate.yml`. **Keep `fmt` out of
   `validate`:** a non-canonical object is valid, and merging the two would report a working
   page as broken.
+- **A type's name is woven through the repo → keep `planTypeRename` complete.** Renaming a
+  content type (SPEC §8) is planned in one pure module, `packages/app/src/advanced/renameType.ts`,
+  which enumerates every place the name lives: the schema file, every `content/<type>/**` bundle
+  (plus the redirect alias — an absolute-URL `aliases` entry, `aliasUrls` in `@timber/content`),
+  other schemas' `referenceType`, `paginate.collection` front matter, and the per-type
+  `<templatesDir>/<type>.liquid` in every theme folder. The editor (`Editor.renameType`) and the
+  advanced hook (`useAdvanced.applyTypeRename`) only execute the plan through the autosaver.
+  **Add a new place a type name is stored** (a new front-matter key, config file, or path
+  convention that embeds it) → add it to the planner and its test (`test/renameType.test.ts`),
+  or a rename will silently leave it dangling.
 - **Themes as folders → also update the resolver + every advanced path helper.** Which repo
   dirs are "the theme" is one seam: **`resolveThemePaths(activeTheme, exists)`** in
   `@timber/content` (`themePaths.ts`) → `{ templatesDir, assetsDir, sassLoadPaths }`, plus

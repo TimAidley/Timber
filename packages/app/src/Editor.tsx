@@ -62,6 +62,8 @@ import { NewObjectDialog } from './components/NewObjectDialog.js';
 import { DeleteDialog } from './components/DeleteDialog.js';
 import { DiscardDialog } from './components/DiscardDialog.js';
 import { RenameDialog } from './components/RenameDialog.js';
+import { RenameTypeDialog } from './components/RenameTypeDialog.js';
+import { planTypeRename, type RenameTypePlan } from './advanced/renameType.js';
 import { planBundleReset } from './state/discard.js';
 import { parseFrontMatter } from '@timber/generator';
 import { useAdvanced } from './advanced/useAdvanced.js';
@@ -223,6 +225,8 @@ export function Editor({
   );
   const [showNew, setShowNew] = useState(false);
   const [showNewType, setShowNewType] = useState(false);
+  // The schema file whose type is being renamed (SPEC §8), or null.
+  const [renameTypeTarget, setRenameTypeTarget] = useState<string | null>(null);
   const [showNewFile, setShowNewFile] = useState(false);
   const [showImportTheme, setShowImportTheme] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ContentObject | null>(null);
@@ -990,6 +994,76 @@ export function Editor({
     setShowRename(false);
   }
 
+  // Rename a content type (SPEC §8): execute the content half of a `planTypeRename`
+  // plan — every bundle under `content/<old>/` moves to `content/<new>/` (branch objects
+  // through the autosaver's rename primitive, device-only ones locally, exactly as a
+  // per-object rename does), objects elsewhere whose front matter names the type are
+  // rewritten, and the advanced hook moves the schema/templates. One flush lands it all
+  // as a single WIP commit; the caller then reloads, since the content model (and the
+  // schema map every field form reads) is built at load time.
+  async function renameType(plan: RenameTypePlan): Promise<boolean> {
+    const devicePaths = new Set(deviceOnlyPaths);
+    for (const m of plan.objectMoves) {
+      const oldDir = m.from.slice(0, -'/index.md'.length);
+      const newDir = m.to.slice(0, -'/index.md'.length);
+      if (deviceOnlyPaths.has(m.from)) {
+        void draftStore.current?.delete(repoKey, m.from);
+        void draftStore.current?.put(repoKey, m.to, m.data, m.body);
+        void draftStore.current?.deleteStorage(repoKey, m.from);
+        void draftStore.current?.setStorage(repoKey, m.to, 'device');
+        for (const asset of assetStore.all()) {
+          if (!asset.path.startsWith(`${oldDir}/`)) continue;
+          const movedPath = `${newDir}/${asset.path.slice(oldDir.length + 1)}`;
+          assetStore.stage(movedPath, asset.blob);
+          const oldAssetPath = asset.path;
+          void persistStagedAsset(movedPath, movedPath).then(() =>
+            draftStore.current?.deleteAsset(repoKey, oldAssetPath),
+          );
+        }
+        devicePaths.delete(m.from);
+        devicePaths.add(m.to);
+        continue;
+      }
+      autosave.markObjectRenamed(m.from, m.to, m.data, m.body, m.moves);
+      void draftStore.current?.delete(repoKey, m.from);
+      void draftStore.current?.put(repoKey, m.to, m.data, m.body);
+    }
+    for (const r of plan.objectRewrites) {
+      if (!deviceOnlyPaths.has(r.object.path)) autosave.markObjectDirty(r.object.path, r.data, r.object.body);
+      void draftStore.current?.put(repoKey, r.object.path, r.data, r.object.body);
+    }
+    setDeviceOnlyPaths(devicePaths);
+    advanced.applyTypeRename(plan);
+    return autosave.saveNow();
+  }
+
+  // The type a selected advanced file defines, if it's a schema the loaded content model
+  // knows (a schema created this session isn't in the model until a reload, and has no
+  // content to move anyway — so it isn't offered a rename).
+  function renameableType(file: { path: string; kind: string }): string | undefined {
+    if (file.kind !== 'schema') return undefined;
+    const name = schemaNameFromPath(file.path);
+    return name !== undefined && model.schemas.has(name) ? name : undefined;
+  }
+
+  // Plan a type rename over the live working state: the objects as edited right now (the
+  // open page's unsaved edit substituted in), pending deletions excluded, the advanced
+  // files with their working text.
+  function planRename(oldName: string, newName: string): RenameTypePlan {
+    return planTypeRename({
+      oldName,
+      newName,
+      schemas: model.schemas,
+      objects: objects.map((o) =>
+        o.path === editingPath ? { ...o, data: edit.data, body: edit.body } : o,
+      ),
+      deletedPaths,
+      treeEntries: session.treeEntries,
+      advancedFiles: advanced.workingFiles,
+      theme,
+    });
+  }
+
   // Activate a theme (SPEC §13) as an ORDINARY edit to the live settings object,
   // flushed through the shared autosaver. The settings singleton has exactly one
   // writer — this pipeline. A direct settings commit built from load-time content
@@ -1390,6 +1464,18 @@ export function Editor({
               <h2>{advanced.selected.path.split('/').pop()}</h2>
               <code>{advanced.selected.path}</code>
             </div>
+            {renameableType(advanced.selected) !== undefined ? (
+              <div className="editor-header__actions">
+                <button
+                  type="button"
+                  className="editor-header__rename"
+                  onClick={() => setRenameTypeTarget(renameableType(advanced.selected!)!)}
+                  title="Rename this content type and move all its content"
+                >
+                  Rename type
+                </button>
+              </div>
+            ) : null}
           </header>
           <AdvancedEditorPanel
             session={session}
@@ -1949,6 +2035,23 @@ export function Editor({
           }
           onClose={() => setShowNewType(false)}
           onCreate={(opts) => advanced.createType(opts)}
+        />
+      ) : null}
+
+      {renameTypeTarget !== null ? (
+        <RenameTypeDialog
+          typeName={renameTypeTarget}
+          existingNames={
+            new Set([
+              ...model.schemas.keys(),
+              ...(advanced.files ?? [])
+                .map((f) => schemaNameFromPath(f.path))
+                .filter((n): n is string => n !== undefined),
+            ])
+          }
+          plan={(newName) => planRename(renameTypeTarget, newName)}
+          onClose={() => setRenameTypeTarget(null)}
+          onRename={renameType}
         />
       ) : null}
 

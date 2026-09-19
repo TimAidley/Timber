@@ -38,20 +38,30 @@ function escapeHtml(value: string): string {
 }
 
 /**
- * The old URLs an object should redirect from — one per `aliases` entry, each an old
- * slug resolved through the type's `urlPattern` (SPEC §5: rename keeps references
- * working and leaves a redirect stub at the old address). Aliases that aren't strings,
- * or that equal the object's current slug, are ignored.
+ * The old URLs an object should redirect from — one per `aliases` entry (SPEC §5:
+ * rename keeps references working and leaves a redirect stub at the old address).
+ * Two alias shapes exist:
+ *
+ *   - a bare **slug** (`fete`) — an old slug, resolved through the type's *current*
+ *     `urlPattern` (a per-object rename);
+ *   - an absolute **URL** (`/events/fete/`) — a literal old address, used when the
+ *     pattern itself changed (a **type rename** moves every object from `/old/<slug>/`
+ *     to `/new/<slug>/`, so the old slug alone can no longer name the old URL).
+ *
+ * Aliases that aren't strings, that equal the object's current slug, or that resolve to
+ * the object's current URL are ignored (a stub must never overwrite the real page).
  */
 export function aliasUrls(object: ContentObject, schema: ContentTypeSchema): string[] {
   const raw = object.data.aliases;
   if (!Array.isArray(raw)) return [];
+  const current = urlFor(object, schema);
   const urls: string[] = [];
   for (const alias of raw) {
     if (typeof alias !== 'string' || alias === object.slug) continue;
-    // Reuse urlFor with the alias standing in as the slug.
-    const url = urlFor({ ...object, slug: alias }, schema);
-    if (!urls.includes(url)) urls.push(url);
+    // An absolute alias is the old URL itself; a slug reuses urlFor standing in as the slug.
+    const url = alias.startsWith('/') ? alias : urlFor({ ...object, slug: alias }, schema);
+    if (url === current || urls.includes(url)) continue;
+    urls.push(url);
   }
   return urls;
 }

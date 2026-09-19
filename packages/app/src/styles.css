@@ -3174,6 +3174,15 @@ button.langmenu__row {
   color: var(--text-muted);
 }
 
+.rename-type__warnings {
+  margin: 0.25rem 0 0;
+  padding-left: 1.25rem;
+}
+
+.rename-type__warnings li {
+  margin: 0.2rem 0;
+}
+
 .new-type__error {
   color: var(--danger-strong);
 }

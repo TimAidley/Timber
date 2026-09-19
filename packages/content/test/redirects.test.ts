@@ -49,6 +49,17 @@ describe('aliasUrls', () => {
     expect(aliasUrls(obj('fete'), events)).toEqual([]);
   });
 
+  it('treats an absolute alias as a literal old URL (a type rename moved the object)', () => {
+    expect(aliasUrls(obj('fete', ['/happenings/fete/', 'old']), events)).toEqual([
+      '/happenings/fete/',
+      '/events/old/',
+    ]);
+  });
+
+  it('never emits a stub at the object’s own current URL', () => {
+    expect(aliasUrls(obj('fete', ['/events/fete/']), events)).toEqual([]);
+  });
+
   it('honours a custom urlPattern', () => {
     const schema: ContentTypeSchema = { ...events, urlPattern: '/e/{slug}.html' };
     expect(aliasUrls(obj('new', ['old']), schema)).toEqual(['/e/old.html']);

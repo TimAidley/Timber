@@ -4,11 +4,12 @@ import type { RepoSession } from '../state/repoSession.js';
 import type { Autosave } from '../state/autosave.js';
 import { LocalDraftStore } from '../state/localDraft.js';
 import { repoConfig } from '../host/config.js';
-import { loadAdvancedFiles, type AdvancedFile } from './loadAdvancedFiles.js';
+import { kindOf, loadAdvancedFiles, type AdvancedFile } from './loadAdvancedFiles.js';
 import { validateAdvancedFile, type AdvancedValidation } from './validate.js';
 import { buildSchemaYaml, schemaPathFor, type NewTypeOptions } from './schemaTemplate.js';
 import { buildStarterFile, newFilePath, type NewFileOptions } from './newFile.js';
 import { reconcileAdvancedDrafts, KIND_ORDER } from './reconcileDrafts.js';
+import type { RenameTypePlan } from './renameType.js';
 
 export interface Advanced {
   files: AdvancedFile[] | null;
@@ -27,8 +28,22 @@ export interface Advanced {
    * an invalid draft exists.
    */
   invalidDraftPaths: ReadonlySet<string>;
+  /**
+   * Every advanced file with its **current working text** (a pending edit substituted
+   * for the loaded content), for callers that plan over the files as the author sees
+   * them — the type-rename planner, which must carry an unsaved schema/template edit
+   * across the move rather than the stale branch copy.
+   */
+  workingFiles: AdvancedFile[];
   /** Create a new content type's schema file and open it for editing (SPEC §8). */
   createType: (opts: NewTypeOptions) => void;
+  /**
+   * Apply the advanced-file half of a type rename (SPEC §8): move the schema and the
+   * active theme's per-type template to their new paths, rewrite the other schemas'
+   * `referenceType`, and move any other theme's template by SHA — all queued on the
+   * shared autosaver (the caller flushes). The content half is the editor's.
+   */
+  applyTypeRename: (plan: RenameTypePlan) => void;
   /** Create a new template (`.liquid`) or config (`.yml`) file and open it (SPEC §8). */
   createFile: (opts: NewFileOptions) => void;
   /**
@@ -118,6 +133,10 @@ export function useAdvanced(
 
   const selected = files?.find((f) => f.path === selectedPath);
   const value = selected ? (text.get(selected.path) ?? selected.content) : '';
+  const workingFiles = useMemo(
+    () => (files ?? []).map((f) => ({ ...f, content: text.get(f.path) ?? f.content })),
+    [files, text],
+  );
 
   const validation: AdvancedValidation | undefined = useMemo(
     () => (selected ? validateAdvancedFile({ ...selected, content: value }) : undefined),
@@ -151,6 +170,47 @@ export function useAdvanced(
       kind: 'schema',
       content: buildSchemaYaml(opts),
     });
+  }
+
+  function applyTypeRename(plan: RenameTypePlan): void {
+    const fileMoves = [plan.schema, ...plan.templateMoves];
+    const rewrites = new Map(plan.schemaRewrites.map((r) => [r.path, r.content] as const));
+
+    setFiles((prev) =>
+      (prev ?? [])
+        .filter((f) => !fileMoves.some((m) => m.from === f.path))
+        .concat(fileMoves.map((m) => ({ path: m.to, kind: kindOf(m.to, theme) ?? 'config', content: m.content })))
+        .sort((a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || a.path.localeCompare(b.path)),
+    );
+    setText((prev) => {
+      const next = new Map(prev);
+      for (const m of fileMoves) {
+        next.delete(m.from);
+        next.set(m.to, m.content);
+      }
+      for (const [path, content] of rewrites) next.set(path, content);
+      return next;
+    });
+    setInvalidDraftPaths((prev) => {
+      const next = new Set(prev);
+      for (const m of fileMoves) next.delete(m.from);
+      return next;
+    });
+
+    for (const m of fileMoves) {
+      // A pending edit to the old path must not resurface there after the move.
+      autosave.forgetFile(m.from);
+      autosave.markFileDirty(m.to, m.content);
+      void draftStore.current?.delete(repoKey, m.from);
+      void draftStore.current?.put(repoKey, m.to, {}, m.content);
+    }
+    autosave.markPathsDeleted(fileMoves.map((m) => m.from));
+    for (const [path, content] of rewrites) {
+      autosave.markFileDirty(path, content);
+      void draftStore.current?.put(repoKey, path, {}, content);
+    }
+    if (plan.templateShaMoves.length > 0) autosave.markPathsMoved(plan.templateShaMoves);
+    setSelectedPath(plan.schema.to);
   }
 
   /**
@@ -279,7 +339,9 @@ export function useAdvanced(
     validation,
     onEdit,
     invalidDraftPaths,
+    workingFiles,
     createType,
+    applyTypeRename,
     createFile,
     revert,
   };
