@@ -78,7 +78,8 @@ Two keys are special and not declared in the schema:
 - **`id`** — a stable identity used by reference fields and by `config/navigation.yml`.
   Give referenceable objects one. It must be unique across the site, and it should not
   change once other things point at it. Renaming the folder changes the URL; changing the
-  `id` breaks the links.
+  `id` breaks the links. The editor shows an object's `id` (with a copy button) in its
+  header, so you don't have to open the file to find it.
 - **`public`** — visibility. **Draft by default:** an object without `public: true` is a
   draft and the build skips it. Nothing goes live because a flag was forgotten, and a page
   cannot be made public until it validates.

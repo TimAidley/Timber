@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   assembleContent,
   canPublish,
+  navigationSource,
+  parseNavigation,
   resolvePublic,
   withPublic,
   Validator,
@@ -62,6 +64,7 @@ import { NewObjectDialog } from './components/NewObjectDialog.js';
 import { DeleteDialog } from './components/DeleteDialog.js';
 import { DiscardDialog } from './components/DiscardDialog.js';
 import { RenameDialog } from './components/RenameDialog.js';
+import { ObjectId } from './components/ObjectId.js';
 import { RenameTypeDialog } from './components/RenameTypeDialog.js';
 import { planTypeRename, type RenameTypePlan } from './advanced/renameType.js';
 import { planBundleReset } from './state/discard.js';
@@ -1373,6 +1376,20 @@ export function Editor({
   const previewWin = usePreviewWindow(previewHtml, previewError, selected?.path);
   previewWindowOpenRef.current = previewWin.isOpen;
 
+  // The site menu as currently authored (SPEC §13), for the delete guard's "this page is
+  // in the site menu" warning — `referrersTo` sweeps schema reference fields and can't
+  // see the nav file. Prefer the advanced area's *working* text, so an unsaved nav edit
+  // counts, and fall back to the copy the preview loaded: both surfaces are lazy, and the
+  // guard should work for whichever the author has already opened. Resolved through the
+  // same `navigationSource` the build uses, so both spellings of the filename work.
+  const navEntries = useMemo(() => {
+    const working = navigationSource(
+      new Map(advanced.workingFiles.map((f) => [f.path, f.content])),
+    );
+    if (working) return parseNavigation(working.raw);
+    return siteTheme?.navigationYml ? parseNavigation(siteTheme.navigationYml) : [];
+  }, [advanced.workingFiles, siteTheme]);
+
   // Drag the split divider to resize the preview pane; persist the width on drop.
   // Starting width is the current pane width (measured when we're at the equal default).
   const workRef = useRef<HTMLDivElement | null>(null);
@@ -1478,12 +1495,16 @@ export function Editor({
             ) : null}
           </header>
           <AdvancedEditorPanel
+            // Keyed by path so the panel's tab state starts fresh per file — the site
+            // menu opens on its structured editor, everything else on raw text.
+            key={advanced.selected.path}
             session={session}
             file={advanced.selected}
             value={advanced.value}
             validation={advanced.validation}
             onChange={advanced.onEdit}
             onRevert={advanced.revert}
+            model={workingModel}
           />
         </>
       ) : (
@@ -1514,6 +1535,9 @@ export function Editor({
           <div className="editor-header__title">
             <h2>{String(edit.data.title ?? selected.slug)}</h2>
             <code>{selected.path}</code>
+            {typeof edit.data.id === 'string' && edit.data.id ? (
+              <ObjectId id={edit.data.id} />
+            ) : null}
           </div>
           <div className="editor-header__actions">
             {liveUrl ? (
@@ -2076,6 +2100,7 @@ export function Editor({
         <DeleteDialog
           object={deleteTarget}
           model={workingModel}
+          navigation={navEntries}
           onClose={() => setDeleteTarget(null)}
           onConfirm={() => confirmDelete(deleteTarget)}
         />

@@ -1,8 +1,21 @@
-import { referrersTo, type ContentModel, type ContentObject } from '@timber/content';
+import {
+  navigationReferrers,
+  referrersTo,
+  type ContentModel,
+  type ContentObject,
+  type NavEntry,
+} from '@timber/content';
 
 interface DeleteDialogProps {
   object: ContentObject;
   model: ContentModel;
+  /**
+   * The site menu as authored (SPEC §13). `referrersTo` only sweeps schema `reference`
+   * fields, so without this a page linked from the navigation could be deleted with the
+   * dialog cheerfully reporting that nothing references it — and the menu item would
+   * then vanish silently at build time.
+   */
+  navigation?: NavEntry[];
   onClose: () => void;
   onConfirm: () => void;
 }
@@ -11,10 +24,19 @@ interface DeleteDialogProps {
  * Guarded-delete confirmation (SPEC §5: "guarded by a warning that lists what
  * references the object"). Deleting is always allowed after confirmation — any
  * resulting dangling references then surface in validation and the pre-publish
- * validity gate blocks going public (resolve-first, not silent breakage).
+ * validity gate blocks going public (resolve-first, not silent breakage). A dangling
+ * *navigation* entry is advisory rather than blocking (SPEC §13), so it's called out
+ * separately: the site still builds, it just loses that menu item.
  */
-export function DeleteDialog({ object, model, onClose, onConfirm }: DeleteDialogProps): React.JSX.Element {
+export function DeleteDialog({
+  object,
+  model,
+  navigation = [],
+  onClose,
+  onConfirm,
+}: DeleteDialogProps): React.JSX.Element {
   const referrers = object.id ? referrersTo(model, object.id) : [];
+  const navReferrers = object.id ? navigationReferrers(navigation, object.id) : [];
   const name = String(object.data.title ?? object.slug);
 
   return (
@@ -46,9 +68,27 @@ export function DeleteDialog({ object, model, onClose, onConfirm }: DeleteDialog
               ))}
             </ul>
           </div>
-        ) : (
+        ) : null}
+
+        {navReferrers.length > 0 ? (
+          <div className="delete__referrers">
+            <p>
+              ⚠ This page is in the site menu as{' '}
+              {navReferrers.map((e, i) => (
+                <span key={`${e.ref}-${i}`}>
+                  {i > 0 ? ', ' : ''}
+                  <strong>“{e.label || '(untitled)'}”</strong>
+                </span>
+              ))}
+              . Deleting it leaves that entry pointing at nothing, so it will disappear from the
+              menu — edit the navigation to remove or repoint it.
+            </p>
+          </div>
+        ) : null}
+
+        {referrers.length === 0 && navReferrers.length === 0 ? (
           <p className="publish__summary">Nothing references this object.</p>
-        )}
+        ) : null}
 
         <div className="modal__actions">
           <button type="button" onClick={onClose}>

@@ -53,8 +53,17 @@ export {
 } from './pagination.js';
 export type { PaginateSpec, Paginator, PaginatorPageLink } from './pagination.js';
 export { themeStyle } from './theme.js';
-export { loadNavigation } from './navigation.js';
-export type { NavItem } from './navigation.js';
+export {
+  NAV_PATH,
+  NAV_PATHS,
+  navigationSource,
+  parseNavigation,
+  serializeNavigation,
+  loadNavigation,
+  validateNavigation,
+  navigationReferrers,
+} from './navigation.js';
+export type { NavItem, NavEntry, NavProblem } from './navigation.js';
 export {
   THEMES_DIR,
   LEGACY_THEME,

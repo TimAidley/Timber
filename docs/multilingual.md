@@ -149,7 +149,8 @@ And `hreflang` alternates in `<head>`:
 
 These are deliberately deferred; plan around them for now:
 
-- **Per-language navigation.** `config/navigation.yml` is shared across languages. A
+- **Per-language navigation.** `config/navigation.yml` is shared across languages, and the
+  menu editor (advanced → the nav file → **Menu**) edits that one shared file. A
   language-specific menu (each language pointing at its own pages) isn't wired yet.
 - **Cross-language references.** A reference field points at one specific object (one
   language's variant), not "the same-language sibling."

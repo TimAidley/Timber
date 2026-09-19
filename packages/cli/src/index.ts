@@ -4,6 +4,9 @@ import { renderPage } from '@timber/generator';
 import {
   assembleContent,
   loadSchemas,
+  navigationSource,
+  parseNavigation,
+  validateNavigation,
   Validator,
   type ContentModel,
 } from '@timber/content';
@@ -32,6 +35,8 @@ render   — reads <contentDir>/index.md and <templateFile>, renders the page
            through the shared generator, and writes the HTML to <outFile>.
 validate — loads a content repo's schemas + objects, reports invalid objects,
            dangling references, and duplicate ids, and exits non-zero if any.
+           Also warns about navigation entries that won't render (SPEC §13) —
+           advisory only, so they don't affect the exit code.
 fmt      — rewrites every content object into the exact form the editor writes,
            so a hand-authored or imported file doesn't show up as modified the
            moment the editor loads it. --check reports what would change and
@@ -103,8 +108,20 @@ async function validateCommand(repoDir: string): Promise<number> {
     }
   }
 
+  // Navigation (SPEC §13) — advisory, so counted and reported separately: a menu entry
+  // that won't render is a missing link, not a broken site, and must not fail a build
+  // that's otherwise fine. The author still wants to hear about it before a visitor does.
+  const navSource = navigationSource(snapshot);
+  const navProblems = navSource
+    ? validateNavigation(parseNavigation(navSource.raw), model)
+    : [];
+  for (const problem of navProblems) {
+    out.write(`⚠ [navigation] ${problem.message}\n`);
+  }
+
   out.write(
-    `\n${model.objects.length} object(s), ${schemas.size} type(s), ${problems} problem(s)\n`,
+    `\n${model.objects.length} object(s), ${schemas.size} type(s), ${problems} problem(s)` +
+      `${navProblems.length > 0 ? `, ${navProblems.length} navigation warning(s)` : ''}\n`,
   );
   return problems === 0 ? 0 : 1;
 }

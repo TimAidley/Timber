@@ -1181,6 +1181,44 @@ button.langmenu__row {
   gap: 0.4rem;
 }
 
+/* The read-only object id + copy button (SPEC §5): the handle you paste into
+   config/navigation.yml. Quiet by default — it's reference material, not an action. */
+.object-id {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.3rem;
+  flex-wrap: wrap;
+}
+
+.object-id__label {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.object-id__value {
+  user-select: all;
+}
+
+.object-id__copy {
+  padding: 0.1rem 0.45rem;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.7rem;
+  transition: border-color var(--ease), color var(--ease);
+}
+
+.object-id__copy:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .editor-header__rename,
 .editor-header__delete,
 .editor-header__discard {
@@ -3042,6 +3080,165 @@ button.langmenu__row {
   margin: 0.4rem 0 0;
   font-size: 0.8rem;
   opacity: 0.85;
+}
+
+/* -----------------------------------------------------------------------------
+   Site menu editor (the structured face of config/navigation.yml, SPEC §13)
+   ----------------------------------------------------------------------------- */
+.nav-editor {
+  padding: 0.8rem 0;
+}
+
+.nav-editor__empty {
+  margin: 1rem 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.nav-editor__list {
+  list-style: none;
+  margin: 1rem 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.nav-editor__row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.6rem;
+  padding: 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.nav-editor__fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: flex-start;
+}
+
+.nav-editor__label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  min-width: 10rem;
+}
+
+.nav-editor__target {
+  display: flex;
+  gap: 0.4rem;
+  align-items: flex-start;
+  flex: 1 1 16rem;
+  /* The picker's dropdown must escape the row, not be clipped by it. */
+  padding-top: 1.05rem;
+}
+
+.nav-editor__target .reference-field {
+  flex: 1;
+}
+
+.nav-editor__kind {
+  display: flex;
+  flex: none;
+}
+
+.nav-editor__kind-btn {
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.75rem;
+}
+
+.nav-editor__kind-btn:first-child {
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+}
+
+.nav-editor__kind-btn:last-child {
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  border-left: none;
+}
+
+.nav-editor__kind-btn.is-active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.nav-editor__url {
+  flex: 1;
+  min-width: 0;
+}
+
+.nav-editor__actions {
+  display: flex;
+  gap: 0.2rem;
+  align-items: flex-start;
+  padding-top: 1.05rem;
+}
+
+.nav-editor__actions button {
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.nav-editor__actions button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.nav-editor__actions button:not(:disabled):hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.nav-editor__remove:not(:disabled):hover {
+  border-color: var(--danger) !important;
+  color: var(--danger) !important;
+}
+
+/* Advisory, not blocking (SPEC §13) — a broken menu item still saves and still builds. */
+.nav-editor__problems {
+  grid-column: 1 / -1;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.78rem;
+  color: var(--warning);
+}
+
+.nav-editor__add {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.nav-editor__add button {
+  padding: 0.4rem 0.8rem;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.nav-editor__add button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 /* Inline "revert to published?" confirmation on the advanced Diff tab. */
