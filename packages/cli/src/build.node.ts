@@ -37,6 +37,8 @@ export interface BuildResult {
   drafts: number;
   assets: number;
   redirects: number;
+  /** Non-fatal problems the build worked around (e.g. a redirect stub it had to drop). */
+  warnings: string[];
 }
 
 /** Thrown when the site can't be built — a broken site must never deploy (SPEC §12). */
@@ -192,7 +194,18 @@ export async function buildSite(repoDir: string, outDir: string): Promise<BuildR
   let drafts = 0;
   let assets = 0;
   let redirects = 0;
+  const warnings: string[] = [];
   const sitemapUrls: string[] = [];
+
+  // Every URL a real page will occupy, so a redirect stub can never overwrite one
+  // (SPEC §5): an alias is only a memory of an old address, and if a live page has since
+  // taken that address the page wins. The validator already reports such an alias on
+  // the object that carries it; this is the build's own guarantee, independent of order.
+  const pageUrls = new Set<string>();
+  for (const object of model.objects) {
+    const schema = schemas.get(object.type);
+    if (schema && schema.page !== false && isPublic(object)) pageUrls.add(effectiveUrl(object, schema));
+  }
 
   // Site assets → <out>/assets/**. The active theme's own assets (`themes/<name>/assets/**`)
   // publish under `/assets` alongside the site's own uploads (`assets/**`), which override on
@@ -321,6 +334,12 @@ export async function buildSite(repoDir: string, outDir: string): Promise<BuildR
     for (const oldUrl of aliasUrls(object, schema)) {
       const stubDir = urlToDir(oldUrl);
       if (!stubDir) continue; // never overwrite the site root
+      if (pageUrls.has(oldUrl)) {
+        warnings.push(
+          `${object.path}: alias ${oldUrl} is a live page's URL — redirect stub not written; remove the alias`,
+        );
+        continue;
+      }
       await mkdir(join(outDir, stubDir), { recursive: true });
       await writeFile(join(outDir, stubDir, 'index.html'), redirectStubHtml(url), 'utf8');
       redirects += 1;
@@ -339,5 +358,5 @@ export async function buildSite(repoDir: string, outDir: string): Promise<BuildR
   await writeFile(join(outDir, 'sitemap.xml'), buildSitemap(sitemapUrls), 'utf8');
   await writeFile(join(outDir, 'robots.txt'), buildRobots(site), 'utf8');
 
-  return { pages, drafts, assets, redirects };
+  return { pages, drafts, assets, redirects, warnings };
 }

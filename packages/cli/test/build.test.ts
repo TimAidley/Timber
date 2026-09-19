@@ -82,6 +82,31 @@ describe('buildSite', () => {
     expect(await exists(join(out, 'events/fete/index.html'))).toBe(true);
   });
 
+  it('refuses to let a redirect stub fight a live page at the same URL (SPEC §5)', async () => {
+    // fete's alias `summer-fayre` is fine until someone creates a page *at* that slug —
+    // then the alias is stale, and the gate names it rather than letting build order
+    // decide which of the page or the stub survives at events/summer-fayre/index.html.
+    const repo = await mkdtemp(join(tmpdir(), 'timber-shadow-'));
+    await cp(siteFixture, repo, { recursive: true });
+    await mkdir(join(repo, 'content/events/summer-fayre'), { recursive: true });
+    await writeFile(
+      join(repo, 'content/events/summer-fayre/index.md'),
+      '---\ntitle: Summer Fayre\nstartDate: 2026-08-16\npublic: true\n---\n\nNew page.\n',
+    );
+    await expect(buildSite(repo, out)).rejects.toMatchObject({
+      problems: [
+        expect.stringContaining(
+          'invalid public object content/events/fete/index.md: aliases: alias "summer-fayre" points at /events/summer-fayre/, where the page "Summer Fayre" (content/events/summer-fayre/index.md) now lives — remove the alias',
+        ),
+      ],
+    });
+  });
+
+  it('reports no warnings for a clean site', async () => {
+    const result = await buildSite(siteFixture, out);
+    expect(result.warnings).toEqual([]);
+  });
+
   it('falls back to templates/default.liquid when no <type>.liquid exists', async () => {
     await buildSite(siteFixture, out);
     const note = await readFile(join(out, 'notes/note1/index.html'), 'utf8');

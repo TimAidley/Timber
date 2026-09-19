@@ -3,6 +3,7 @@ import addFormats from 'ajv-formats';
 import { fieldToJsonSchema } from './fields.js';
 import { validateFigureBlocks } from './figures.js';
 import { validatePaginate } from './pagination.js';
+import { shadowedAliases } from './redirects.js';
 import { parseVideoUrl } from './video.js';
 import type {
   ContentModel,
@@ -109,6 +110,19 @@ export class Validator {
     //    key, so nothing constrains it above — but a malformed block would emit a listing
     //    page with nothing on it, so it blocks publish like any other error.
     errors.push(...validatePaginate(object, this.schemas));
+
+    // 5. Stale redirect aliases (SPEC §5). An alias whose old URL is now a live page's
+    //    address can't redirect anywhere — the page and the stub would fight over one
+    //    `index.html` — so it's reported here, on the object that carries it, with the
+    //    one-line fix. Blocks publish like any other error, since a stub the build has to
+    //    drop is a promise the site no longer keeps.
+    for (const shadow of shadowedAliases(object, schema, model)) {
+      const title = String(shadow.by.data.title ?? shadow.by.slug);
+      errors.push({
+        field: 'aliases',
+        message: `alias "${shadow.alias}" points at ${shadow.url}, where the page "${title}" (${shadow.by.path}) now lives — remove the alias`,
+      });
+    }
 
     return { valid: errors.length === 0, errors };
   }

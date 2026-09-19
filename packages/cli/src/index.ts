@@ -138,7 +138,8 @@ async function fmtCommand(repoDir: string, check: boolean): Promise<number> {
 /** Build the whole site to <outDir>; returns an exit code (non-zero on build failure). */
 async function buildCommand(repoDir: string, outDir: string): Promise<number> {
   try {
-    const { pages, drafts, assets, redirects } = await buildSite(repoDir, outDir);
+    const { pages, drafts, assets, redirects, warnings } = await buildSite(repoDir, outDir);
+    for (const warning of warnings) process.stderr.write(`⚠ ${warning}\n`);
     process.stdout.write(
       `Built ${pages} page(s), ${assets} asset(s), ${redirects} redirect(s), skipped ${drafts} draft(s) → ${outDir}\n`,
     );
