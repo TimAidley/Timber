@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import type { AdvancedFile } from './loadAdvancedFiles.js';
 import { ChangeBadge } from '../components/ChangeBadges.js';
 import type { ChangeState } from '../state/changes.js';
-import { advancedFileName, groupAdvancedFiles } from './advancedList.js';
+import { advancedFileName, groupAdvancedFiles } from './advancedGroups.js';
 
 interface AdvancedListProps {
   files: AdvancedFile[];

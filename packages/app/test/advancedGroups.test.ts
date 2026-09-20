@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { advancedFileName, groupAdvancedFiles } from '../src/advanced/advancedList.js';
+import { advancedFileName, groupAdvancedFiles } from '../src/advanced/advancedGroups.js';
 import type { AdvancedFile } from '../src/advanced/loadAdvancedFiles.js';
 
 function file(path: string, kind: AdvancedFile['kind']): AdvancedFile {
