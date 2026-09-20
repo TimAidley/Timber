@@ -4,7 +4,7 @@ import { fieldToJsonSchema } from './fields.js';
 import { validateFigureBlocks } from './figures.js';
 import { validatePaginate } from './pagination.js';
 import { shadowedAliases } from './redirects.js';
-import { embedUrlProblem } from './embed.js';
+import { embedUrlProblem } from '@timber/generator';
 import type {
   ContentModel,
   ContentObject,

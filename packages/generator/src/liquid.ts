@@ -2,20 +2,11 @@ import { Liquid } from 'liquidjs';
 import { registerComparisonFilters } from './filters.js';
 import { registerContentFilters } from './contentFilters.js';
 import { registerUrlFilters } from './urlFilters.js';
-import { SafeHtml } from './safeHtml.js';
+import { registerEmbedTag } from './embedTag.js';
+import { SafeHtml, escapeHtml } from './safeHtml.js';
 import type { TemplateMap } from './types.js';
 
 export { SafeHtml };
-
-// LiquidJS's built-in `escape` filter map — matched exactly so escaped output is
-// byte-identical to what `outputEscape: 'escape'` would produce.
-const ESCAPE_MAP: Record<string, string> = {
-  '&': '&amp;',
-  '<': '&lt;',
-  '>': '&gt;',
-  '"': '&#34;',
-  "'": '&#39;',
-};
 
 /**
  * The default output escaper: HTML-escape every `{{ output }}` — so untrusted
@@ -28,7 +19,7 @@ const ESCAPE_MAP: Record<string, string> = {
 function outputEscape(value: unknown): string {
   if (value instanceof SafeHtml) return value.value;
   const str = value == null ? '' : String(value);
-  return str.replace(/[&<>"']/g, (m) => ESCAPE_MAP[m]!);
+  return escapeHtml(str);
 }
 
 /**
@@ -68,6 +59,8 @@ export function createEngine(
   // URL filters: `relative_url` / `absolute_url` (prefix `site.basePath` / `site.baseUrl`).
   // A cleaner link idiom for Timber's own themes, and the highest-frequency Jekyll filters.
   registerUrlFilters(engine);
+  // The `{% embed %}` tag (SPEC §7): a theme places an embed, the generator builds it.
+  registerEmbedTag(engine);
   // Extension seam: an optional hook to register extra filters/tags on the engine — the
   // clean plug-in point a compatibility layer (e.g. @timber/jekyll-compat) uses to add its
   // ecosystem filters/tags without the core depending on it. Applied last so an extension

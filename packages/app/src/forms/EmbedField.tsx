@@ -1,4 +1,4 @@
-import { embedUrlProblem, parseEmbedUrl } from '@timber/content';
+import { embedUrlProblem, parseEmbedUrl } from '@timber/generator';
 
 interface EmbedFieldProps {
   fieldKey: string;
@@ -8,7 +8,7 @@ interface EmbedFieldProps {
 
 /**
  * The `embed` field widget (SPEC §7): an embed is stored as **just a URL**, resolved
- * to an iframe `src` by `parseEmbedUrl` from `@timber/content` — the same resolution
+ * to an iframe `src` by `parseEmbedUrl` from `@timber/generator` — the same resolution
  * the content model validates with, so the inline message here and the publish gate
  * agree. Shows what the URL resolved to (a provider's video id, or a page that embeds
  * as itself) and a facade thumbnail where the provider exposes one. Raw embed HTML is

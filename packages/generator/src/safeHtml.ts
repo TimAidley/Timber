@@ -18,3 +18,23 @@ export class SafeHtml {
     return this.value;
   }
 }
+
+// LiquidJS's built-in `escape` filter map — matched exactly so escaped output is
+// byte-identical to what `outputEscape: 'escape'` would produce.
+const ESCAPE_MAP: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&#34;',
+  "'": '&#39;',
+};
+
+/**
+ * HTML-escape a string for either text or a double/single-quoted attribute value.
+ * The one escaper in the generator: the Liquid output escaper calls it, and so does
+ * anything assembling raw markup by hand (see `embedMarkup.ts`), so there is a single
+ * place where the rules live rather than a second copy to drift.
+ */
+export function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (m) => ESCAPE_MAP[m]!);
+}
