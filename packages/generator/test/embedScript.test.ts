@@ -74,10 +74,12 @@ describe.skipIf(!hasDom)('the injected click-to-load script', () => {
     const frame = document.querySelector('iframe.embed__frame') as HTMLIFrameElement;
     expect(frame).not.toBeNull();
     expect(frame.getAttribute('src')).toBe(GAME);
-    expect(frame.getAttribute('title')).toBe('Play Red Baron');
+    expect(frame.getAttribute('title')).toBe('Red Baron');
     expect(frame.getAttribute('allowfullscreen')).not.toBeNull();
-    // The facade is gone, not merely covered.
-    expect(document.querySelector('.embed__launch')).toBeNull();
+    // The facade is kept but taken out of the flow, so closing puts back the very same
+    // poster rather than fetching it again.
+    const facade = document.querySelector('.embed__launch') as HTMLElement;
+    expect(facade.style.display).toBe('none');
   });
 
   it('works when the click lands on the play button rather than the poster', () => {
@@ -128,9 +130,14 @@ describe.skipIf(!hasDom)('resizing on activation', () => {
 
     click(document.querySelector('.embed__poster')!);
 
-    expect(box.style.getPropertyValue('--embed-ratio')).toBe('4 / 3');
+    // On its own property, which `.embed--playing` prefers — so closing is dropping the
+    // class, with nothing to put back.
+    expect(box.style.getPropertyValue('--embed-frame-ratio')).toBe('4 / 3');
+    expect(box.style.getPropertyValue('--embed-ratio')).toBe('16 / 9');
     // No frame width was given, so the poster's stands.
+    expect(box.style.getPropertyValue('--embed-frame-width')).toBe('');
     expect(box.style.getPropertyValue('--embed-width')).toBe('100%');
+    expect(box.classList.contains('embed--playing')).toBe(true);
   });
 });
 
@@ -164,7 +171,7 @@ describe.skipIf(!hasDom)('a poster-shaped embed', () => {
     click(document.querySelector('.embed__poster')!);
 
     const box = document.querySelector('.embed') as HTMLElement;
-    expect(box.style.getPropertyValue('--embed-ratio')).toBe('800/600');
+    expect(box.style.getPropertyValue('--embed-frame-ratio')).toBe('800/600');
     expect(document.querySelector('iframe.embed__frame')).not.toBeNull();
   });
 
@@ -174,8 +181,8 @@ describe.skipIf(!hasDom)('a poster-shaped embed', () => {
     click(document.querySelector('.embed__poster')!);
 
     const box = document.querySelector('.embed') as HTMLElement;
-    expect(box.style.getPropertyValue('--embed-ratio')).not.toBe('auto');
-    expect(box.style.getPropertyValue('--embed-ratio')).toBeTruthy();
+    expect(box.style.getPropertyValue('--embed-frame-ratio')).toBeTruthy();
+    expect(box.style.getPropertyValue('--embed-frame-ratio')).not.toBe('auto');
   });
 });
 
@@ -188,5 +195,83 @@ describe.skipIf(!hasDom)('a newtab embed', () => {
     expect(click(document.querySelector('.embed__poster')!)).toBe(false);
 
     expect(document.querySelector('iframe')).toBeNull();
+  });
+});
+
+describe.skipIf(!hasDom)('closing a loaded embed', () => {
+  beforeEach(async () => {
+    const html = await renderPage({
+      markdown: `---\ntitle: Red Baron\ngame: ${GAME}\n---\n`,
+      template:
+        `<html><head></head><body><main>` +
+        `{% embed url: page.game, poster: 'game.webp', label: page.title, ratio: '16 / 9' %}` +
+        `</main></body></html>`,
+    });
+    document.body.innerHTML = /<main>([\s\S]*?)<\/main>/.exec(html)![1]!;
+    new Function(scriptOf(html))();
+    click(document.querySelector('.embed__poster')!);
+  });
+
+  const closeButton = (): HTMLElement =>
+    document.querySelector('.embed__close') as HTMLElement;
+
+  it('offers a way back, beside the embed rather than over it', () => {
+    const bar = document.querySelector('.embed__bar')!;
+    const box = document.querySelector('.embed')!;
+    // Outside the box — `.embed` clips its contents, and a control over an iframe is
+    // one the page can only half see.
+    expect(box.contains(bar)).toBe(false);
+    expect(box.nextElementSibling).toBe(bar);
+    expect(closeButton().getAttribute('aria-label')).toBe('Close Red Baron');
+  });
+
+  it('unloads the third party, which is the point of closing it', () => {
+    click(closeButton());
+    expect(document.querySelector('iframe')).toBeNull();
+  });
+
+  it('puts the poster back, and takes the bar away with the frame', () => {
+    click(closeButton());
+
+    const facade = document.querySelector('.embed__launch') as HTMLElement;
+    expect(facade.style.display).toBe('');
+    expect(document.querySelector('.embed__bar')).toBeNull();
+    expect(document.querySelector('.embed')!.classList.contains('embed--playing')).toBe(
+      false,
+    );
+  });
+
+  it('leaves focus somewhere useful — on the control that reopens it', () => {
+    click(closeButton());
+    expect(document.activeElement).toBe(document.querySelector('.embed__launch'));
+  });
+
+  it('can be opened again afterwards', () => {
+    click(closeButton());
+    click(document.querySelector('.embed__poster')!);
+
+    expect(document.querySelector('iframe.embed__frame')).not.toBeNull();
+    expect(document.querySelectorAll('.embed__bar')).toHaveLength(1);
+  });
+
+  it('is a button, so a keyboard reaches it', () => {
+    expect(closeButton().tagName).toBe('BUTTON');
+    expect(closeButton().getAttribute('type')).toBe('button');
+  });
+});
+
+describe.skipIf(!hasDom)('a newtab embed', () => {
+  it('never gets a close control, having nothing to close', async () => {
+    const html = await renderPage({
+      markdown: `---\ntitle: t\ngame: ${GAME}\n---\n`,
+      template:
+        `<html><head></head><body>` +
+        `{% embed url: page.game, poster: 'game.webp', mode: 'newtab' %}` +
+        `</body></html>`,
+    });
+    document.body.innerHTML = bodyOf(html);
+
+    click(document.querySelector('.embed__poster')!);
+    expect(document.querySelector('.embed__bar')).toBeNull();
   });
 });

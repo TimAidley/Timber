@@ -35,7 +35,25 @@ const EMBED_CSS =
   `.embed__launch:hover .embed__play-icon,.embed__launch:focus-visible .embed__play-icon` +
   `{opacity:1;transform:scale(1.08)}` +
   `.embed__frame{width:100%;height:100%;border:0;display:block}` +
-  `@media (prefers-reduced-motion:reduce){.embed__play-icon{transition:none}` +
+  // While the iframe is up, the frame's own shape wins where one was given — so closing
+  // is dropping this class, with nothing to restore.
+  `.embed--playing{aspect-ratio:var(--embed-frame-ratio,var(--embed-ratio,16/9));` +
+  `max-width:var(--embed-frame-width,var(--embed-width,none))}` +
+  // The way back to the poster sits just under the embed, aligned to its right edge,
+  // rather than floating over the corner: an iframe swallows the page's mouse events,
+  // so a control overlaying it is a control whose hover state the page can only half
+  // see — and it would cover the thing someone just asked to look at. Out here it is
+  // always visible while playing, and needs no hover to find.
+  `.embed__bar{display:flex;justify-content:flex-end;width:100%;margin-inline:auto;` +
+  `padding-block-start:.4rem}` +
+  `.embed__close{display:inline-flex;align-items:center;justify-content:center;padding:0;` +
+  `border:0;cursor:pointer;background:var(--embed-close-bg,transparent);` +
+  `width:var(--embed-close-size,1.75rem);height:var(--embed-close-size,1.75rem);` +
+  `border-radius:50%;color:var(--embed-close-color,currentColor);opacity:.55;` +
+  `transition:opacity .2s ease}` +
+  `.embed__close:hover,.embed__close:focus-visible{opacity:1}` +
+  `.embed__close svg{width:55%;height:55%;fill:currentColor;display:block}` +
+  `@media (prefers-reduced-motion:reduce){.embed__play-icon,.embed__close{transition:none}` +
   `.embed__launch:hover .embed__play-icon{transform:none}}` +
   `}`;
 
@@ -50,39 +68,90 @@ const EMBED_CSS =
  */
 const EMBED_JS =
   `(function(){` +
+  // Font Awesome Free's `xmark` (CC BY 4.0), like the play icon. A constant here, not
+  // author content, which is why it can be set as innerHTML; everything that came from
+  // the page is set through the DOM instead.
+  `var ICON='<svg viewBox="0 0 352 512" aria-hidden="true" focusable="false">` +
+  `<path d="M242.7 256l100.1-100.1c12.3-12.3 12.3-32.2 0-44.5l-22.2-22.2c-12.3-12.3-32.2-12.3-44.5 0` +
+  `L176 189.3 75.9 89.2c-12.3-12.3-32.2-12.3-44.5 0L9.2 111.4c-12.3 12.3-12.3 32.2 0 44.5L109.3 256` +
+  ` 9.2 356.1c-12.3 12.3-12.3 32.2 0 44.5l22.2 22.2c12.3 12.3 32.2 12.3 44.5 0L176 322.7l100.1 100.1` +
+  `c12.3 12.3 32.2 12.3 44.5 0l22.2-22.2c12.3-12.3 12.3-32.2 0-44.5L242.7 256z"/></svg>';` +
+  // The bar is a sibling of the box, not a child: it has to sit outside the frame, and
+  // `.embed` clips its contents. It mirrors the box's own max-width so its right edge
+  // lines up with the embed's, whatever width the embed was given.
+  `function closeBar(box,label){` +
+  `var bar=document.createElement('div');` +
+  `bar.className='embed__bar';` +
+  `var width=window.getComputedStyle?window.getComputedStyle(box).maxWidth:'';` +
+  `if(width)bar.style.maxWidth=width;` +
+  `var b=document.createElement('button');` +
+  `b.type='button';` +
+  `b.className='embed__close';` +
+  `b.setAttribute('aria-label',label?'Close '+label:'Close');` +
+  `b.innerHTML=ICON;` +
+  `bar.appendChild(b);` +
+  `return bar;}` +
   `document.addEventListener('click',function(e){` +
   `if(e.defaultPrevented||e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;` +
   `var t=e.target;` +
-  `var launch=t&&t.closest?t.closest('.embed--inline .embed__launch'):null;` +
+  `if(!t||!t.closest)return;` +
+  // Closing first: the button sits inside the box, so the launch lookup below would
+  // never match it, but the order says which gesture wins if that ever changes.
+  `var closer=t.closest('.embed__bar .embed__close');` +
+  `if(closer){` +
+  // The bar is inserted directly after its box and removed with it, so the box is
+  // always the element before it.
+  `var bar=closer.closest('.embed__bar');` +
+  `var open=bar.previousElementSibling;` +
+  `if(!open||!open.classList.contains('embed'))return;` +
+  `var frame=open.querySelector('.embed__frame');` +
+  `var facade=open.querySelector('.embed__launch');` +
+  `e.preventDefault();` +
+  // Removing the iframe is the point of the button: it unloads the third party, which
+  // is what stops a game or a video still running behind the poster.
+  `if(frame)open.removeChild(frame);` +
+  `bar.parentNode.removeChild(bar);` +
+  `open.classList.remove('embed--playing');` +
+  `if(facade){facade.style.display='';facade.focus();}` +
+  `return;}` +
+  `var launch=t.closest('.embed--inline .embed__launch');` +
   `if(!launch)return;` +
   `var box=launch.closest('.embed');` +
   `var src=box&&box.getAttribute('data-embed-src');` +
   `if(!src)return;` +
   `e.preventDefault();` +
+  `var label=box.getAttribute('data-embed-title')||'';` +
   `var frame=document.createElement('iframe');` +
   `frame.className='embed__frame';` +
   `frame.src=src;` +
-  `frame.title=box.getAttribute('data-embed-title')||'';` +
+  `frame.title=label||'Embedded content';` +
   `frame.setAttribute('allow','autoplay; fullscreen; gamepad; encrypted-media; picture-in-picture');` +
   `frame.setAttribute('allowfullscreen','');` +
   // The poster and the iframe share one box, so a different shape for the loaded embed
-  // is that box being re-sized as they swap. Absent attributes leave the poster's.
+  // is that box being re-sized as they swap. These go on their OWN properties, which
+  // `.embed--playing` prefers, so closing is just dropping the class — nothing has to
+  // remember what the poster's values were.
   `var r=box.getAttribute('data-embed-frame-ratio');` +
   // An iframe has no intrinsic size, so a poster-shaped box has to be given a real
-  // ratio before the poster it was measuring leaves the page. Measuring the poster
-  // itself — rather than falling back to 16/9 — is what stops the page jumping when
-  // someone clicks play.
+  // ratio before the poster it was measuring is taken out of the flow. Measuring the
+  // poster itself — rather than falling back to 16/9 — is what stops the page jumping
+  // when someone clicks play. Measured while it is still laid out.
   `if(!r&&box.style.getPropertyValue('--embed-ratio').trim()==='auto'){` +
   `var p=launch.querySelector('.embed__poster');` +
   `if(p&&p.naturalWidth&&p.naturalHeight)r=p.naturalWidth+'/'+p.naturalHeight;` +
   `else if(launch.offsetWidth&&launch.offsetHeight)r=launch.offsetWidth+'/'+launch.offsetHeight;` +
   `else r='16/9';}` +
-  `if(r)box.style.setProperty('--embed-ratio',r);` +
+  `if(r)box.style.setProperty('--embed-frame-ratio',r);` +
   `var w=box.getAttribute('data-embed-frame-width');` +
-  `if(w)box.style.setProperty('--embed-width',w);` +
-  `box.replaceChild(frame,launch);` +
+  `if(w)box.style.setProperty('--embed-frame-width',w);` +
+  `box.classList.add('embed--playing');` +
+  // Hidden rather than removed, so closing puts back the very same poster — already
+  // decoded by the browser — instead of building a new one and fetching it again.
+  `launch.style.display='none';` +
+  `box.appendChild(frame);` +
+  `if(box.parentNode)box.parentNode.insertBefore(closeBar(box,label),box.nextSibling);` +
   // A game or a video wants the keys the page would otherwise take, and the click that
-  // swapped the frame in landed on an element that no longer exists.
+  // swapped the frame in landed on an element that is no longer showing.
   `frame.focus();` +
   `},false);` +
   `})();`;

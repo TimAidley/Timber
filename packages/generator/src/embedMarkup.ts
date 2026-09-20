@@ -173,7 +173,9 @@ export function embedTree(spec: EmbedSpec): EmbedElement | undefined {
       class: `embed embed--${mode}`,
       style: `--embed-ratio:${ratio}` + (width ? `;--embed-width:${width}` : ''),
       'data-embed-src': inline ? activationSrc(ref.src, ref.provider) : undefined,
-      'data-embed-title': inline ? name : undefined,
+      // The plain label, not the link's "Play …": this names the iframe and the close
+      // button, where the gesture would read oddly ("Close Play Red Baron").
+      'data-embed-title': inline ? spec.label : undefined,
       // Nothing when the frame matches the poster. With a poster-shaped box that
       // includes leaving it *unset*: the script measures the poster it is replacing, so
       // the swap keeps the shape the page was already laid out for.
