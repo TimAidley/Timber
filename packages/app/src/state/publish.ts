@@ -5,7 +5,12 @@ import {
   Validator,
   type RepoSnapshot,
 } from '@timber/content';
-import type { ChangedPath, CommitResult, PublishSquashInput } from '@timber/host';
+import type {
+  ChangedPath,
+  CommitResult,
+  PublishSquashInput,
+  RefComparison,
+} from '@timber/host';
 
 /**
  * The subset of the host port the publisher needs (a {@link HostProvider} satisfies it
@@ -17,8 +22,12 @@ import type { ChangedPath, CommitResult, PublishSquashInput } from '@timber/host
 export interface PublishClient {
   getBranchSha(branch: string): Promise<string | undefined>;
   compareChangedPaths(base: string, head: string): Promise<ChangedPath[]>;
+  /** How WIP stands relative to the default branch — the ancestry the strategy turns on. */
+  compareRefs(base: string, head: string): Promise<RefComparison>;
   loadSnapshot(ref: string): Promise<RepoSnapshot>;
   publishSquash(input: PublishSquashInput): Promise<CommitResult>;
+  /** Force-move a branch to a SHA — used to catch a behind WIP up to the default branch. */
+  resetBranch(branch: string, toSha: string): Promise<void>;
 }
 
 export interface PublishContext {
@@ -32,7 +41,13 @@ export interface PublishContext {
 export type PublishBlock =
   | { kind: 'nothing' }
   | { kind: 'invalid'; objects: string[] }
-  | { kind: 'conflict'; paths: string[] };
+  | { kind: 'conflict'; paths: string[] }
+  /**
+   * WIP holds nothing the default branch doesn't — every difference between them is the
+   * default branch being *newer* (a direct push, another clone, a co-author). Publishing
+   * would write WIP's older tree over it. Nothing to publish; WIP wants catching up.
+   */
+  | { kind: 'behind'; behindBy: number };
 
 export type PublishPlan =
   | {
@@ -49,7 +64,12 @@ export type PublishPlan =
 /** A human default commit message for the publish. */
 export function describePublish(changed: ChangedPath[]): string {
   return changed.length === 1
-    ? `Update ${changed[0]!.path.replace(/\/index\.md$/, '').split('/').pop() ?? changed[0]!.path}`
+    ? `Update ${
+        changed[0]!.path
+          .replace(/\/index\.md$/, '')
+          .split('/')
+          .pop() ?? changed[0]!.path
+      }`
     : `Update site: ${changed.length} changes`;
 }
 
@@ -59,7 +79,10 @@ export function describePublish(changed: ChangedPath[]): string {
  * strategy: clean squash if main hasn't moved; rebase if main moved but the changed
  * files don't overlap; block if the same file diverged on both sides.
  */
-export async function planPublish(client: PublishClient, ctx: PublishContext): Promise<PublishPlan> {
+export async function planPublish(
+  client: PublishClient,
+  ctx: PublishContext,
+): Promise<PublishPlan> {
   const wipTip = await client.getBranchSha(ctx.wipBranch);
   if (!wipTip) return { ok: false, block: { kind: 'nothing' } };
 
@@ -77,18 +100,53 @@ export async function planPublish(client: PublishClient, ctx: PublishContext): P
   const invalid = model.objects
     .filter((o) => o.public && !canPublish(validator.validateObject(o, model)))
     .map((o) => o.path);
-  if (invalid.length > 0) return { ok: false, block: { kind: 'invalid', objects: invalid } };
+  if (invalid.length > 0)
+    return { ok: false, block: { kind: 'invalid', objects: invalid } };
 
-  // Strategy / conflict detection.
-  if (currentMain === ctx.baseSha) {
-    return { ok: true, strategy: 'clean', changed, currentMain, wipTip, wipChanged: changed };
+  // Strategy / conflict detection, decided on ANCESTRY — does WIP actually contain the
+  // default branch? — not on whether main moved since this session loaded.
+  //
+  // Those two questions come apart exactly when the default branch gains a commit from
+  // outside this editor, and getting them confused is a data-loss bug, not a nicety:
+  // `clean` hands WIP's tree to the squash wholesale, so publishing a WIP that is behind
+  // rewrites main back to WIP's older content. The old test (`currentMain ===
+  // ctx.baseSha`) is true for *every fresh session* — `baseSha` is read at load — so a
+  // reload made it more likely to fire, not less. It reverted a pushed fix five times.
+  const rel = await client.compareRefs(ctx.defaultBranch, ctx.wipBranch);
+
+  if (rel.status === 'behind' || rel.status === 'identical') {
+    // Nothing of WIP's own: every difference is main being ahead. Publishing could only
+    // undo it. The caller catches WIP up instead — see {@link catchUpWip}.
+    return { ok: false, block: { kind: 'behind', behindBy: rel.behindBy } };
   }
 
-  const mainChanged = await client.compareChangedPaths(ctx.baseSha, ctx.defaultBranch);
-  const wipChanged = await client.compareChangedPaths(ctx.baseSha, ctx.wipBranch);
+  if (rel.status === 'ahead') {
+    // WIP contains main's tip, so its tree already includes everything on main: the
+    // squash can take it wholesale. This is the only case where that is sound.
+    return {
+      ok: true,
+      strategy: 'clean',
+      changed,
+      currentMain,
+      wipTip,
+      wipChanged: changed,
+    };
+  }
+
+  // Diverged: both moved since they parted. Overlap is a real conflict; otherwise WIP's
+  // own changes overlay main's current tree, which keeps main-only files intact.
+  //
+  // Measured from the **merge base** where the host reports one. `ctx.baseSha` is only
+  // the default branch as this session loaded it, which is not the fork point once main
+  // has moved — using it would count main's newer files as WIP "changes" and overlay the
+  // older versions back over them, the same revert by another route.
+  const forkPoint = rel.mergeBaseSha ?? ctx.baseSha;
+  const mainChanged = await client.compareChangedPaths(forkPoint, ctx.defaultBranch);
+  const wipChanged = await client.compareChangedPaths(forkPoint, ctx.wipBranch);
   const mainPaths = new Set(mainChanged.map((c) => c.path));
   const overlap = wipChanged.filter((c) => mainPaths.has(c.path)).map((c) => c.path);
-  if (overlap.length > 0) return { ok: false, block: { kind: 'conflict', paths: overlap } };
+  if (overlap.length > 0)
+    return { ok: false, block: { kind: 'conflict', paths: overlap } };
 
   return { ok: true, strategy: 'rebase', changed, currentMain, wipTip, wipChanged };
 }
@@ -132,4 +190,25 @@ export async function runPublish(
     changes: plan.wipChanged,
   });
   return { ok: true, sha };
+}
+
+/**
+ * Catch a behind WIP branch up to the default branch (the `behind` block above).
+ *
+ * WIP holding nothing of its own means there is nothing to merge and nothing to lose —
+ * the only difference is commits the default branch gained elsewhere — so moving WIP onto
+ * it is the whole repair. The editor then reloads from a WIP that genuinely contains
+ * main, and the next publish is a sound `clean` squash rather than a revert.
+ *
+ * Deliberately narrow: the caller may only reach here on a `behind` block, never on
+ * `diverged`, where WIP *does* hold work and a force-move would destroy it.
+ */
+export async function catchUpWip(
+  client: PublishClient,
+  ctx: PublishContext,
+): Promise<string> {
+  const currentMain = await client.getBranchSha(ctx.defaultBranch);
+  if (!currentMain) throw new Error(`Default branch "${ctx.defaultBranch}" not found`);
+  await client.resetBranch(ctx.wipBranch, currentMain);
+  return currentMain;
 }

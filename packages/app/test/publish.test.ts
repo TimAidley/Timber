@@ -1,10 +1,26 @@
 import { describe, expect, it } from 'vitest';
-import type { ChangedPath, PublishSquashInput, RepoSnapshot } from '@timber/host';
-import { planPublish, runPublish, type PublishClient, type PublishContext } from '../src/state/publish.js';
+import type {
+  ChangedPath,
+  PublishSquashInput,
+  RefComparison,
+  RepoSnapshot,
+} from '@timber/host';
+import {
+  catchUpWip,
+  planPublish,
+  runPublish,
+  type PublishClient,
+  type PublishContext,
+} from '../src/state/publish.js';
 
-const CTX: PublishContext = { wipBranch: 'octocat_wip', defaultBranch: 'main', baseSha: 'BASE' };
+const CTX: PublishContext = {
+  wipBranch: 'octocat_wip',
+  defaultBranch: 'main',
+  baseSha: 'BASE',
+};
 
-const SCHEMA = 'kind: collection\nhasBody: true\nfields:\n  title:\n    type: text\n    required: true\n';
+const SCHEMA =
+  'kind: collection\nhasBody: true\nfields:\n  title:\n    type: text\n    required: true\n';
 const validSnapshot: RepoSnapshot = new Map([
   ['config/schemas/pages.yml', SCHEMA],
   ['content/pages/hello/index.md', '---\ntitle: Hello\npublic: true\n---\n\nbody\n'],
@@ -19,6 +35,8 @@ interface FakeConfig {
   branches: Record<string, string | undefined>;
   compares: Record<string, ChangedPath[]>;
   snapshot: RepoSnapshot;
+  /** How WIP stands relative to main; defaults to `ahead` (WIP contains main). */
+  refRelation?: RefComparison;
 }
 
 // A fake host port for the publisher. Since publish became an intent-level port op, the
@@ -26,7 +44,10 @@ interface FakeConfig {
 // the fake just records the PublishSquashInput so we can assert runPublish hands the plan
 // to publishSquash correctly.
 class FakeClient implements PublishClient {
-  readonly calls = { publishSquash: [] as PublishSquashInput[] };
+  readonly calls = {
+    publishSquash: [] as PublishSquashInput[],
+    resetBranch: [] as { branch: string; toSha: string }[],
+  };
   constructor(private readonly cfg: FakeConfig) {}
   async getBranchSha(b: string) {
     return this.cfg.branches[b];
@@ -40,6 +61,13 @@ class FakeClient implements PublishClient {
   setBranch(branch: string, sha: string) {
     this.cfg.branches[branch] = sha;
   }
+  async compareRefs(_base: string, _head: string): Promise<RefComparison> {
+    return this.cfg.refRelation ?? { status: 'ahead', aheadBy: 1, behindBy: 0 };
+  }
+  async resetBranch(branch: string, toSha: string) {
+    this.calls.resetBranch.push({ branch, toSha });
+    this.cfg.branches[branch] = toSha;
+  }
   async publishSquash(input: PublishSquashInput) {
     this.calls.publishSquash.push(input);
     return { sha: 'NEWMAIN' };
@@ -48,7 +76,11 @@ class FakeClient implements PublishClient {
 
 describe('planPublish', () => {
   it('blocks with "nothing" when the WIP branch does not exist', async () => {
-    const c = new FakeClient({ branches: { main: 'MAIN' }, compares: {}, snapshot: validSnapshot });
+    const c = new FakeClient({
+      branches: { main: 'MAIN' },
+      compares: {},
+      snapshot: validSnapshot,
+    });
     const plan = await planPublish(c, CTX);
     expect(plan).toEqual({ ok: false, block: { kind: 'nothing' } });
   });
@@ -65,7 +97,11 @@ describe('planPublish', () => {
   it('blocks publishing an invalid public object (validity gate)', async () => {
     const c = new FakeClient({
       branches: { main: 'MAIN', octocat_wip: 'WIP' },
-      compares: { 'main...octocat_wip': [{ path: 'content/pages/hello/index.md', status: 'modified' }] },
+      compares: {
+        'main...octocat_wip': [
+          { path: 'content/pages/hello/index.md', status: 'modified' },
+        ],
+      },
       snapshot: invalidSnapshot,
     });
     const plan = await planPublish(c, CTX);
@@ -78,7 +114,11 @@ describe('planPublish', () => {
   it('plans a clean squash when main has not moved', async () => {
     const c = new FakeClient({
       branches: { main: 'BASE', octocat_wip: 'WIP' }, // main tip === baseSha
-      compares: { 'main...octocat_wip': [{ path: 'content/pages/hello/index.md', status: 'modified' }] },
+      compares: {
+        'main...octocat_wip': [
+          { path: 'content/pages/hello/index.md', status: 'modified' },
+        ],
+      },
       snapshot: validSnapshot,
     });
     const plan = await planPublish(c, CTX);
@@ -89,11 +129,17 @@ describe('planPublish', () => {
     const c = new FakeClient({
       branches: { main: 'MAIN', octocat_wip: 'WIP' }, // MAIN !== BASE
       compares: {
-        'main...octocat_wip': [{ path: 'content/pages/hello/index.md', status: 'modified' }],
+        'main...octocat_wip': [
+          { path: 'content/pages/hello/index.md', status: 'modified' },
+        ],
         'BASE...main': [{ path: 'content/pages/other/index.md', status: 'modified' }],
-        'BASE...octocat_wip': [{ path: 'content/pages/hello/index.md', status: 'modified' }],
+        'BASE...octocat_wip': [
+          { path: 'content/pages/hello/index.md', status: 'modified' },
+        ],
       },
       snapshot: validSnapshot,
+      // main moved AND WIP has its own commits: diverged, forked at BASE.
+      refRelation: { status: 'diverged', aheadBy: 1, behindBy: 1, mergeBaseSha: 'BASE' },
     });
     const plan = await planPublish(c, CTX);
     expect(plan.ok && plan.strategy).toBe('rebase');
@@ -103,11 +149,17 @@ describe('planPublish', () => {
     const c = new FakeClient({
       branches: { main: 'MAIN', octocat_wip: 'WIP' },
       compares: {
-        'main...octocat_wip': [{ path: 'content/pages/hello/index.md', status: 'modified' }],
+        'main...octocat_wip': [
+          { path: 'content/pages/hello/index.md', status: 'modified' },
+        ],
         'BASE...main': [{ path: 'content/pages/hello/index.md', status: 'modified' }],
-        'BASE...octocat_wip': [{ path: 'content/pages/hello/index.md', status: 'modified' }],
+        'BASE...octocat_wip': [
+          { path: 'content/pages/hello/index.md', status: 'modified' },
+        ],
       },
       snapshot: validSnapshot,
+      // main moved AND WIP has its own commits: diverged, forked at BASE.
+      refRelation: { status: 'diverged', aheadBy: 1, behindBy: 1, mergeBaseSha: 'BASE' },
     });
     const plan = await planPublish(c, CTX);
     expect(plan).toEqual({
@@ -121,7 +173,11 @@ describe('runPublish', () => {
   it('clean squash: hands publishSquash a clean plan (WIP tip onto unmoved main)', async () => {
     const c = new FakeClient({
       branches: { main: 'BASE', octocat_wip: 'WIP' },
-      compares: { 'main...octocat_wip': [{ path: 'content/pages/hello/index.md', status: 'modified' }] },
+      compares: {
+        'main...octocat_wip': [
+          { path: 'content/pages/hello/index.md', status: 'modified' },
+        ],
+      },
       snapshot: validSnapshot,
     });
     const plan = await planPublish(c, CTX);
@@ -145,7 +201,9 @@ describe('runPublish', () => {
     const c = new FakeClient({
       branches: { main: 'MAIN', octocat_wip: 'WIP' },
       compares: {
-        'main...octocat_wip': [{ path: 'content/pages/hello/index.md', status: 'modified' }],
+        'main...octocat_wip': [
+          { path: 'content/pages/hello/index.md', status: 'modified' },
+        ],
         'BASE...main': [{ path: 'content/pages/other/index.md', status: 'modified' }],
         'BASE...octocat_wip': [
           { path: 'content/pages/hello/index.md', status: 'modified' },
@@ -153,6 +211,8 @@ describe('runPublish', () => {
         ],
       },
       snapshot: validSnapshot,
+      // main moved AND WIP has its own commits: diverged, forked at BASE.
+      refRelation: { status: 'diverged', aheadBy: 1, behindBy: 1, mergeBaseSha: 'BASE' },
     });
     const plan = await planPublish(c, CTX);
     if (!plan.ok) throw new Error('expected a runnable plan');
@@ -178,7 +238,11 @@ describe('runPublish', () => {
   it('refuses a stale plan when the WIP branch moved since planning', async () => {
     const c = new FakeClient({
       branches: { main: 'BASE', octocat_wip: 'WIP' },
-      compares: { 'main...octocat_wip': [{ path: 'content/pages/hello/index.md', status: 'modified' }] },
+      compares: {
+        'main...octocat_wip': [
+          { path: 'content/pages/hello/index.md', status: 'modified' },
+        ],
+      },
       snapshot: validSnapshot,
     });
     const plan = await planPublish(c, CTX);
@@ -193,7 +257,133 @@ describe('runPublish', () => {
     // Re-planning against the moved branch publishes the *current* tip.
     const fresh = await planPublish(c, CTX);
     if (!fresh.ok) throw new Error('expected a runnable plan');
-    expect(await runPublish(c, CTX, fresh, 'Publish')).toEqual({ ok: true, sha: 'NEWMAIN' });
+    expect(await runPublish(c, CTX, fresh, 'Publish')).toEqual({
+      ok: true,
+      sha: 'NEWMAIN',
+    });
     expect(c.calls.publishSquash[0]!.wipTip).toBe('WIP2');
+  });
+});
+
+/**
+ * The ancestry gate. `clean` hands WIP's tree to the squash wholesale, so choosing it
+ * when WIP does not contain the default branch rewrites main back to WIP's older
+ * content. The old test asked "has main moved since this session loaded?" — true for
+ * every fresh session, since `baseSha` is read at load — and silently reverted a pushed
+ * fix five times on a live site.
+ */
+describe('planPublish — WIP must actually contain the default branch', () => {
+  const behind: RefComparison = { status: 'behind', aheadBy: 0, behindBy: 1 };
+
+  /** The live case: main gained a commit from a direct push; WIP has nothing of its own. */
+  function behindClient(): FakeClient {
+    return new FakeClient({
+      // baseSha === currentMain, exactly what a fresh session sees. The old rule called
+      // this "clean" and published WIP's stale tree over main.
+      branches: { main: 'BASE', octocat_wip: 'OLDER' },
+      compares: {
+        'main...octocat_wip': [
+          { path: 'themes/anatole/templates/projects.liquid', status: 'modified' },
+          {
+            path: 'themes/anatole/assets/_sass/partials/components/_figure.scss',
+            status: 'modified',
+          },
+        ],
+      },
+      snapshot: validSnapshot,
+      refRelation: behind,
+    });
+  }
+
+  it('refuses to publish a WIP branch that is merely behind', async () => {
+    const plan = await planPublish(behindClient(), CTX);
+    expect(plan).toEqual({ ok: false, block: { kind: 'behind', behindBy: 1 } });
+  });
+
+  it('refuses when the two refs are identical, whatever the file diff claims', async () => {
+    const c = new FakeClient({
+      branches: { main: 'BASE', octocat_wip: 'BASE' },
+      // A path diff with no commit difference means a stale read, not work to publish.
+      compares: {
+        'main...octocat_wip': [
+          { path: 'content/pages/hello/index.md', status: 'modified' },
+        ],
+      },
+      snapshot: validSnapshot,
+      refRelation: { status: 'identical', aheadBy: 0, behindBy: 0 },
+    });
+
+    const plan = await planPublish(c, CTX);
+
+    expect(plan).toEqual({ ok: false, block: { kind: 'behind', behindBy: 0 } });
+  });
+
+  it('still takes the clean path when WIP genuinely contains main', async () => {
+    const c = new FakeClient({
+      branches: { main: 'BASE', octocat_wip: 'WIP' },
+      compares: {
+        'main...octocat_wip': [
+          { path: 'content/pages/hello/index.md', status: 'modified' },
+        ],
+      },
+      snapshot: validSnapshot,
+      refRelation: { status: 'ahead', aheadBy: 2, behindBy: 0 },
+    });
+    const plan = await planPublish(c, CTX);
+    expect(plan.ok && plan.strategy).toBe('clean');
+  });
+
+  it('measures a diverged rebase from the merge base, not the session base', async () => {
+    // `baseSha` (BASE) is stale: main has moved to FORK and beyond. Measuring WIP's
+    // "changes" from BASE would count main's newer file as something WIP changed, and
+    // overlay the old version back over it — the same revert by another route.
+    const c = new FakeClient({
+      branches: { main: 'MAIN', octocat_wip: 'WIP' },
+      compares: {
+        'main...octocat_wip': [
+          { path: 'content/pages/hello/index.md', status: 'modified' },
+        ],
+        'FORK...main': [
+          { path: 'themes/anatole/templates/projects.liquid', status: 'modified' },
+        ],
+        'FORK...octocat_wip': [
+          { path: 'content/pages/hello/index.md', status: 'modified' },
+        ],
+        // What the stale base would have said: WIP "changed" the template too.
+        'BASE...main': [
+          { path: 'themes/anatole/templates/projects.liquid', status: 'modified' },
+        ],
+        'BASE...octocat_wip': [
+          { path: 'content/pages/hello/index.md', status: 'modified' },
+          { path: 'themes/anatole/templates/projects.liquid', status: 'modified' },
+        ],
+      },
+      snapshot: validSnapshot,
+      refRelation: { status: 'diverged', aheadBy: 1, behindBy: 1, mergeBaseSha: 'FORK' },
+    });
+
+    const plan = await planPublish(c, CTX);
+
+    // From the merge base there's no overlap, so it rebases and keeps main's template.
+    // From the stale base it would have been called a conflict and blocked.
+    expect(plan.ok && plan.strategy).toBe('rebase');
+    expect(plan.ok && plan.wipChanged.map((w) => w.path)).toEqual([
+      'content/pages/hello/index.md',
+    ]);
+  });
+});
+
+describe('catchUpWip', () => {
+  it('moves the behind WIP branch onto the default branch tip', async () => {
+    const c = new FakeClient({
+      branches: { main: 'NEWMAIN', octocat_wip: 'OLDER' },
+      compares: {},
+      snapshot: validSnapshot,
+    });
+
+    const sha = await catchUpWip(c, CTX);
+
+    expect(sha).toBe('NEWMAIN');
+    expect(c.calls.resetBranch).toEqual([{ branch: 'octocat_wip', toSha: 'NEWMAIN' }]);
   });
 });

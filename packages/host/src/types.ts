@@ -101,6 +101,14 @@ export interface RefComparison {
   aheadBy: number;
   /** Commits `base` has that `head` doesn't. */
   behindBy: number;
+  /**
+   * The commit the two refs parted from, where the host reports one. This is the only
+   * sound base for "what did each side change": the publisher measures WIP's own changes
+   * from here, so a default branch that moved on isn't mistaken for WIP having reverted
+   * it. Optional — an adapter that can't supply it leaves the publisher on its
+   * session-load fallback.
+   */
+  mergeBaseSha?: string;
 }
 
 /**

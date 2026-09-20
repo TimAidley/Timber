@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   planPublish,
+  catchUpWip,
   runPublish,
   describePublish,
   type PublishClient,
@@ -27,7 +28,12 @@ interface PublishDialogProps {
  * nothing to publish, a public object is invalid (SPEC §5 validity gate), or the same
  * file diverged on main since you started (detect-don't-resolve).
  */
-export function PublishDialog({ client, ctx, onClose, onPublished }: PublishDialogProps): React.JSX.Element {
+export function PublishDialog({
+  client,
+  ctx,
+  onClose,
+  onPublished,
+}: PublishDialogProps): React.JSX.Element {
   const [plan, setPlan] = useState<PublishPlan | null>(null);
   const [message, setMessage] = useState('');
   const [publishing, setPublishing] = useState(false);
@@ -57,8 +63,19 @@ export function PublishDialog({ client, ctx, onClose, onPublished }: PublishDial
     if (publishedSha) return;
     let cancelled = false;
     planPublish(client, ctx)
-      .then((p) => {
+      .then(async (p) => {
         if (cancelled) return;
+        // A WIP branch that is merely BEHIND holds nothing of its own, so there is
+        // nothing to merge and nothing to lose — catching it up is the whole repair, and
+        // making the author do it by hand serves no one. Done here rather than in
+        // `planPublish`, which stays read-only. `diverged` is never auto-healed: WIP has
+        // real work there and a force-move would destroy it.
+        if (!p.ok && p.block.kind === 'behind') {
+          await catchUpWip(client, ctx).catch((e: unknown) => {
+            diagnostics.error('publish', 'could not catch the working branch up', e);
+          });
+          if (cancelled) return;
+        }
         setPlan(p);
         if (p.ok && !messageEdited.current) setMessage(describePublish(p.changed));
       })
@@ -93,7 +110,11 @@ export function PublishDialog({ client, ctx, onClose, onPublished }: PublishDial
       setPublishedSha(sha);
       onPublished(sha);
     } catch (e) {
-      const info = diagnostics.error('publish', 'squash-merge to the default branch failed', e);
+      const info = diagnostics.error(
+        'publish',
+        'squash-merge to the default branch failed',
+        e,
+      );
       setError(`${summarizeHostError(info)} — ${info.hint}`);
     } finally {
       setPublishing(false);
@@ -113,7 +134,8 @@ export function PublishDialog({ client, ctx, onClose, onPublished }: PublishDial
         {publishedSha ? (
           <div className="publish__done">
             <p>
-              ✓ Published. <code>{ctx.defaultBranch}</code> is now at <code>{publishedSha.slice(0, 7)}</code>.
+              ✓ Published. <code>{ctx.defaultBranch}</code> is now at{' '}
+              <code>{publishedSha.slice(0, 7)}</code>.
             </p>
             <button type="button" onClick={onClose}>
               Done
@@ -140,7 +162,8 @@ export function PublishDialog({ client, ctx, onClose, onPublished }: PublishDial
             <ul className="publish__diff">
               {plan.changed.map((c) => {
                 const open = openDiffs.has(c.path);
-                const isText = !/\.(png|jpe?g|gif|webp|svg|avif|ico|woff2?|ttf|otf)$/i.test(c.path);
+                const isText =
+                  !/\.(png|jpe?g|gif|webp|svg|avif|ico|woff2?|ttf|otf)$/i.test(c.path);
                 return (
                   <li key={c.path} className="publish__diff-item">
                     <button
@@ -150,7 +173,9 @@ export function PublishDialog({ client, ctx, onClose, onPublished }: PublishDial
                       onClick={() => toggleDiff(c.path)}
                       title={isText ? (open ? 'Hide diff' : 'Show diff') : 'Binary asset'}
                     >
-                      <span className={`publish__status publish__status--${c.status}`}>{c.status}</span>
+                      <span className={`publish__status publish__status--${c.status}`}>
+                        {c.status}
+                      </span>
                       <span className="publish__diff-path">{c.path}</span>
                       {isText ? (
                         <span className="publish__diff-chevron" aria-hidden="true">
@@ -186,7 +211,12 @@ export function PublishDialog({ client, ctx, onClose, onPublished }: PublishDial
               <button type="button" onClick={onClose}>
                 Cancel
               </button>
-              <button type="button" className="is-primary" disabled={publishing || !message.trim()} onClick={doPublish}>
+              <button
+                type="button"
+                className="is-primary"
+                disabled={publishing || !message.trim()}
+                onClick={doPublish}
+              >
                 {publishing ? 'Publishing…' : 'Publish'}
               </button>
             </div>
@@ -197,25 +227,46 @@ export function PublishDialog({ client, ctx, onClose, onPublished }: PublishDial
   );
 }
 
-function Block({ block, onClose }: { block: Extract<PublishPlan, { ok: false }>['block']; onClose: () => void }): React.JSX.Element {
+function Block({
+  block,
+  onClose,
+}: {
+  block: Extract<PublishPlan, { ok: false }>['block'];
+  onClose: () => void;
+}): React.JSX.Element {
   return (
     <div className="publish__block">
       {block.kind === 'nothing' ? (
         <p>Nothing to publish — the WIP branch matches the live site.</p>
       ) : block.kind === 'invalid' ? (
         <>
-          <p>Can’t publish: these public items don’t validate yet. Fix or unpublish them first.</p>
+          <p>
+            Can’t publish: these public items don’t validate yet. Fix or unpublish them
+            first.
+          </p>
           <ul>
             {block.objects.map((p) => (
               <li key={p}>{p}</li>
             ))}
           </ul>
         </>
+      ) : block.kind === 'behind' ? (
+        <>
+          {/* Your working branch holds nothing the live site doesn't — the live site is
+              simply ahead, from a push made outside the editor. There is nothing to
+              publish, and publishing would have undone those commits. */}
+          <p>
+            Nothing to publish: the live site is {block.behindBy}{' '}
+            {block.behindBy === 1 ? 'commit' : 'commits'} ahead of your working branch,
+            and your branch has no changes of its own. Your branch has been brought up to
+            date — reload to work from it.
+          </p>
+        </>
       ) : (
         <>
           <p>
-            The live site moved on since you started, and the same file changed on both sides. Reload to get
-            the latest before publishing.
+            The live site moved on since you started, and the same file changed on both
+            sides. Reload to get the latest before publishing.
           </p>
           <ul>
             {block.paths.map((p) => (

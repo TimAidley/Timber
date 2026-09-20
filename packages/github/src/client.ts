@@ -178,7 +178,8 @@ export class RepoClient implements HostProvider {
     this.owner = options.owner;
     this.repo = options.repo;
     this.deployWorkflow = options.deployWorkflow ?? DEFAULT_DEPLOY_WORKFLOW;
-    this.sleep = options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+    this.sleep =
+      options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
     // Reads must not come from the browser's HTTP cache — a cached branch tip makes
     // every commit target a stale parent for a full minute (see `noStore.ts`).
     this.octokit = new Octokit({ request: { fetch: noStoreFetch(options.fetchImpl) } });
@@ -492,7 +493,11 @@ export class RepoClient implements HostProvider {
         // the browser's HTTP cache, now bypassed in `noStore.ts`; this remains as the
         // backstop for the host's own read-after-write lag.)
         let latest = await this.getBranchSha(branch);
-        for (let wait = 1; (!latest || latest === tipSha) && wait <= STALE_READ_WAITS; wait += 1) {
+        for (
+          let wait = 1;
+          (!latest || latest === tipSha) && wait <= STALE_READ_WAITS;
+          wait += 1
+        ) {
           await this.sleep(refReadBackoffMs(wait));
           latest = await this.getBranchSha(branch);
         }
@@ -707,7 +712,12 @@ export class RepoClient implements HostProvider {
       repo: this.repo,
       basehead: `${base}...${head}`,
     });
-    return { status: data.status, aheadBy: data.ahead_by, behindBy: data.behind_by };
+    return {
+      status: data.status,
+      aheadBy: data.ahead_by,
+      behindBy: data.behind_by,
+      ...(data.merge_base_commit ? { mergeBaseSha: data.merge_base_commit.sha } : {}),
+    };
   }
 
   /**
