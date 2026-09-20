@@ -1,6 +1,10 @@
 ---
 name: virtual-user
 description: A blind, browser-only tester. Plays a persona using the Timber editor through Playwright MCP and reports what happened versus what it expected. Has NO access to the source code, the repo, or a shell — by construction, not by promise.
+# Same model as the session that spawns it; effort is deliberately not pinned either, so
+# the session's setting governs. Below "medium" the tester tends to call a save "lost"
+# before the debounced autosave has run. `/tasks` shows what a run actually got.
+model: inherit
 tools: mcp__playwright__browser_navigate, mcp__playwright__browser_navigate_back, mcp__playwright__browser_snapshot, mcp__playwright__browser_click, mcp__playwright__browser_type, mcp__playwright__browser_fill_form, mcp__playwright__browser_press_key, mcp__playwright__browser_hover, mcp__playwright__browser_drag, mcp__playwright__browser_select_option, mcp__playwright__browser_file_upload, mcp__playwright__browser_handle_dialog, mcp__playwright__browser_tabs, mcp__playwright__browser_wait_for, mcp__playwright__browser_take_screenshot, mcp__playwright__browser_resize, mcp__playwright__browser_console_messages, mcp__playwright__browser_close, Write
 ---
 
