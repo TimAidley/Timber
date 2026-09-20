@@ -27,7 +27,7 @@ export { createEngine, engine, SafeHtml } from './liquid.js';
 // depends on this package, not the other way round; content imports it to validate.
 export { parseEmbedUrl, embedUrlProblem } from './embed.js';
 export type { EmbedRef, EmbedProvider } from './embed.js';
-export { embedHtml } from './embedMarkup.js';
+export { embedHtml, isEmbedRatio, isEmbedWidth } from './embedMarkup.js';
 export type { EmbedSpec } from './embedMarkup.js';
 export { buildClock } from './clock.js';
 export type { Clock } from './clock.js';

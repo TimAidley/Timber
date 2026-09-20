@@ -183,8 +183,19 @@ that site's player automatically; any other URL is embedded as itself.
 Nothing is loaded until a visitor clicks: what the page shows first is the `poster` image
 with a play button over it (a YouTube or Vimeo link brings its own poster, so you only
 need one for your own pages). Add `mode="newtab"` if you would rather the click open the
-URL in a new tab than load it in place, and `ratio` if the thing you are embedding is not
-16:9. `label` names the play button for anyone using a screen reader.
+URL in a new tab than load it in place. `label` names the play button for anyone using a
+screen reader.
+
+`ratio` and `width` set the shape of the poster — an aspect ratio like `16 / 9` or `4 / 3`,
+and a width like `640px` or `80%`. If the thing you are embedding wants a different shape
+from the image standing in for it, `frameRatio` and `frameWidth` apply once it loads:
+
+```markdown
+::embed{url="https://example.com/game/" poster="wide-banner.webp" ratio="21 / 9" frameRatio="4 / 3" frameWidth="640px"}
+```
+
+That shows a wide banner, and reshapes to a 640px 4:3 box when someone clicks play. Leave
+the `frame*` ones out and the embed keeps the poster's shape.
 
 The editor shows the directive as the text you typed; the Preview pane shows the real
 thing. A URL that could not be embedded will fail validation and say why.

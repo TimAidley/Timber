@@ -1,4 +1,4 @@
-import { embedUrlProblem } from '@timber/generator';
+import { embedUrlProblem, isEmbedRatio, isEmbedWidth } from '@timber/generator';
 import type { FieldError } from './types.js';
 
 /**
@@ -16,7 +16,17 @@ const CODE_FENCE = /^(?:```|~~~)/;
 const ATTR = /(\w[\w-]*)="([^"]*)"/g;
 
 const MODES = new Set(['inline', 'newtab']);
-const RATIO = /^\d+(\.\d+)?(\s*\/\s*\d+(\.\d+)?)?$/;
+
+/**
+ * The sizing attributes: the generator's own rule for what each accepts, and an example
+ * to put in the message — "unusable" on its own leaves you guessing at the vocabulary.
+ */
+const SIZING: ReadonlyArray<[string, (value: string) => boolean, string]> = [
+  ['ratio', isEmbedRatio, '16 / 9'],
+  ['frameRatio', isEmbedRatio, '16 / 9'],
+  ['width', isEmbedWidth, '640px'],
+  ['frameWidth', isEmbedWidth, '640px'],
+];
 
 export function validateEmbedBlocks(body: string): FieldError[] {
   const errors: FieldError[] = [];
@@ -50,9 +60,13 @@ export function validateEmbedBlocks(body: string): FieldError[] {
       errors.push({ message: `embed has an unknown mode "${mode}"` });
     }
 
-    const ratio = attributes.get('ratio');
-    if (ratio !== undefined && !RATIO.test(ratio.trim())) {
-      errors.push({ message: `embed has an unusable ratio "${ratio}"` });
+    for (const [name, accepts, example] of SIZING) {
+      const value = attributes.get(name);
+      if (value !== undefined && !accepts(value)) {
+        errors.push({
+          message: `embed has an unusable ${name} "${value}" — expected something like "${example}"`,
+        });
+      }
     }
   }
 

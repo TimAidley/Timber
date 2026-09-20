@@ -86,9 +86,14 @@ const sanitizeSchema: SanitizeSchema = {
     ]),
     div: extend(defaultSchema.attributes?.div as AttributeRule[], [
       ['className', /^embed(--(inline|newtab))?$/],
-      ['style', /^--embed-ratio:[\d.\s/]+$/],
+      [
+        'style',
+        /^--embed-ratio:[\d.\s/]+(;--embed-width:[\d.]+(px|rem|em|ch|%|vw|vh))?$/,
+      ],
       ['data-embed-src', /^https:\/\//],
       'data-embed-title',
+      ['data-embed-frame-ratio', /^[\d.\s/]+$/],
+      ['data-embed-frame-width', /^[\d.]+(px|rem|em|ch|%|vw|vh)$/],
     ]),
     a: extend(defaultSchema.attributes?.a as AttributeRule[], [
       ['className', /^embed__launch$/],

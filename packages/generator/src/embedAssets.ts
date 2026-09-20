@@ -19,7 +19,8 @@
  */
 const EMBED_CSS =
   `@layer timber.embed{` +
-  `.embed{position:relative;display:block;width:100%;aspect-ratio:var(--embed-ratio,16/9);` +
+  `.embed{position:relative;display:block;width:100%;max-width:var(--embed-width,none);` +
+  `margin-inline:auto;aspect-ratio:var(--embed-ratio,16/9);` +
   `overflow:hidden;background:var(--embed-backdrop,#000)}` +
   `.embed__launch{display:block;width:100%;height:100%;position:relative;` +
   `color:inherit;text-decoration:none}` +
@@ -61,6 +62,12 @@ const EMBED_JS =
   `frame.title=box.getAttribute('data-embed-title')||'';` +
   `frame.setAttribute('allow','autoplay; fullscreen; gamepad; encrypted-media; picture-in-picture');` +
   `frame.setAttribute('allowfullscreen','');` +
+  // The poster and the iframe share one box, so a different shape for the loaded embed
+  // is that box being re-sized as they swap. Absent attributes leave the poster's.
+  `var r=box.getAttribute('data-embed-frame-ratio');` +
+  `if(r)box.style.setProperty('--embed-ratio',r);` +
+  `var w=box.getAttribute('data-embed-frame-width');` +
+  `if(w)box.style.setProperty('--embed-width',w);` +
   `box.replaceChild(frame,launch);` +
   // A game or a video wants the keys the page would otherwise take, and the click that
   // swapped the frame in landed on an element that no longer exists.

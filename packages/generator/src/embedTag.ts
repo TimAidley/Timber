@@ -11,7 +11,7 @@ import { embedHtml, type EmbedSpec } from './embedMarkup.js';
  * (`embedMarkup.ts`), where the injected script and styling can match them, instead of
  * in every theme that wants a video or a game on a page.
  *
- * Named arguments rather than a filter chain, because an embed takes five and four are
+ * Named arguments rather than a filter chain, because an embed takes eight and seven are
  * optional. LiquidJS parses them against the render context before `render` is called,
  * so `url: page.game` arrives as the resolved value.
  *
@@ -37,6 +37,9 @@ export function registerEmbedTag(engine: Liquid): void {
       const poster = stringArg(args, 'poster');
       const label = stringArg(args, 'label');
       const ratio = stringArg(args, 'ratio');
+      const width = stringArg(args, 'width');
+      const frameRatio = stringArg(args, 'frameRatio');
+      const frameWidth = stringArg(args, 'frameWidth');
       const mode = stringArg(args, 'mode');
 
       const spec: EmbedSpec = {
@@ -44,6 +47,9 @@ export function registerEmbedTag(engine: Liquid): void {
         ...(poster !== undefined ? { poster } : {}),
         ...(label !== undefined ? { label } : {}),
         ...(ratio !== undefined ? { ratio } : {}),
+        ...(width !== undefined ? { width } : {}),
+        ...(frameRatio !== undefined ? { frameRatio } : {}),
+        ...(frameWidth !== undefined ? { frameWidth } : {}),
         ...(mode === 'newtab' || mode === 'inline' ? { mode } : {}),
       };
       return embedHtml(spec);

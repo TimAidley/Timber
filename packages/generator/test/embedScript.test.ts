@@ -110,6 +110,30 @@ describe.skipIf(!hasDom)('the injected click-to-load script', () => {
   });
 });
 
+describe.skipIf(!hasDom)('resizing on activation', () => {
+  it('re-shapes the box to the frame values, and leaves the ones not given', async () => {
+    const html = await renderPage({
+      markdown: `---\ntitle: t\ngame: ${GAME}\n---\n`,
+      template:
+        `<html><head></head><body>` +
+        `{% embed url: page.game, poster: 'game.webp', ratio: '16 / 9', width: '100%',` +
+        ` frameRatio: '4 / 3' %}` +
+        `</body></html>`,
+    });
+    document.body.innerHTML = bodyOf(html);
+    new Function(scriptOf(html))();
+
+    const box = document.querySelector('.embed') as HTMLElement;
+    expect(box.style.getPropertyValue('--embed-ratio')).toBe('16 / 9');
+
+    click(document.querySelector('.embed__poster')!);
+
+    expect(box.style.getPropertyValue('--embed-ratio')).toBe('4 / 3');
+    // No frame width was given, so the poster's stands.
+    expect(box.style.getPropertyValue('--embed-width')).toBe('100%');
+  });
+});
+
 describe.skipIf(!hasDom)('a newtab embed', () => {
   it('is left alone by the script — it is already a working link', async () => {
     const inline = await renderedPage('inline');

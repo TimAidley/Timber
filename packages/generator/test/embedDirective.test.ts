@@ -42,6 +42,15 @@ describe('the ::embed body directive', () => {
     expect(html).not.toContain('data-embed-src');
   });
 
+  it('takes the sizing attributes, and keeps them through sanitisation', async () => {
+    const html = await renderMarkdown(
+      `::embed{url="${GAME}" ratio="16 / 9" width="640px" frameRatio="4 / 3" frameWidth="100%"}\n`,
+    );
+    expect(html).toContain('style="--embed-ratio:16 / 9;--embed-width:640px"');
+    expect(html).toContain('data-embed-frame-ratio="4 / 3"');
+    expect(html).toContain('data-embed-frame-width="100%"');
+  });
+
   it('keeps every part of the facade through sanitisation', async () => {
     const html = await renderMarkdown(`${DIRECTIVE}\n`);
     for (const fragment of [

@@ -104,6 +104,18 @@ describe('embedHtml — untrusted values', () => {
     expect(embedHtml({ url: GAME, ratio: '1.5' })).toContain('style="--embed-ratio:1.5"');
   });
 
+  it('takes a max width as a CSS length', () => {
+    expect(embedHtml({ url: GAME, width: '640px' })).toContain(
+      'style="--embed-ratio:16 / 9;--embed-width:640px"',
+    );
+  });
+
+  it('refuses a width that is not a plain length', () => {
+    const html = embedHtml({ url: GAME, width: 'calc(100% - 2rem)' });
+    expect(html).toContain('style="--embed-ratio:16 / 9"');
+    expect(html).not.toContain('calc');
+  });
+
   it('falls back to the default rather than letting a ratio add declarations of its own', () => {
     // Escaping alone would keep this inside the attribute but still add a rule.
     const html = embedHtml({ url: GAME, ratio: '1;background:url(http://evil/)' });
@@ -194,5 +206,39 @@ describe('injected styling and script', () => {
     );
     expect(html).toContain('@layer timber.embed');
     expect(html).toContain('<script>');
+  });
+});
+
+describe('embedHtml — the loaded iframe can differ from the poster', () => {
+  it('carries a frame ratio for the script to apply on activation', () => {
+    const html = embedHtml({ url: GAME, ratio: '16 / 9', frameRatio: '4 / 3' });
+    expect(html).toContain('style="--embed-ratio:16 / 9"');
+    expect(html).toContain('data-embed-frame-ratio="4 / 3"');
+  });
+
+  it('carries a frame width too', () => {
+    const html = embedHtml({ url: GAME, width: '100%', frameWidth: '640px' });
+    expect(html).toContain('data-embed-frame-width="640px"');
+  });
+
+  it('carries nothing when the frame matches the poster, the common case', () => {
+    const html = embedHtml({
+      url: GAME,
+      ratio: '4 / 3',
+      frameRatio: '4 / 3',
+      width: '640px',
+    });
+    expect(html).not.toContain('data-embed-frame-ratio');
+    expect(html).not.toContain('data-embed-frame-width');
+  });
+
+  it('carries nothing in newtab mode, where nothing is ever swapped in', () => {
+    const html = embedHtml({ url: GAME, mode: 'newtab', frameRatio: '4 / 3' });
+    expect(html).not.toContain('data-embed-frame');
+  });
+
+  it('ignores a frame value of the wrong shape', () => {
+    const html = embedHtml({ url: GAME, frameRatio: '4;color:red', frameWidth: 'wide' });
+    expect(html).not.toContain('data-embed-frame');
   });
 });

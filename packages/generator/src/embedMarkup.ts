@@ -27,18 +27,37 @@ export interface EmbedSpec {
   label?: string;
   /** `inline` swaps in the iframe on click; `newtab` opens the URL in a new tab. */
   mode?: 'inline' | 'newtab';
-  /** CSS `aspect-ratio` for the frame. Defaults to 16 / 9. */
+  /** CSS `aspect-ratio` for the poster. Defaults to 16 / 9. */
   ratio?: string;
+  /** Maximum width for the poster, as a CSS length. Defaults to the column width. */
+  width?: string;
+  /** `aspect-ratio` once the iframe is loaded. Defaults to {@link EmbedSpec.ratio}. */
+  frameRatio?: string;
+  /** Maximum width once the iframe is loaded. Defaults to {@link EmbedSpec.width}. */
+  frameWidth?: string;
 }
 
 /**
- * A CSS `aspect-ratio` value, kept to digits and a slash. The ratio reaches the page
- * through a `style` attribute, where escaping alone would still let a value like
- * `1;background:url(…)` add declarations of its own, so the shape is checked rather
- * than merely escaped.
+ * A CSS `aspect-ratio` value, kept to digits and a slash, and a CSS length, kept to a
+ * number and a unit. Both reach the page through a `style` attribute, where escaping
+ * alone would still let a value like `1;background:url(…)` add declarations of its own,
+ * so the shape is checked rather than merely escaped. The two predicates are exported
+ * because the content package validates these same attributes on a body block, and one
+ * rule beats two copies that can disagree about what will actually render.
  */
 const RATIO = /^\d+(\.\d+)?(\s*\/\s*\d+(\.\d+)?)?$/;
+const LENGTH = /^\d+(\.\d+)?(px|rem|em|ch|%|vw|vh)$/;
 const DEFAULT_RATIO = '16 / 9';
+
+/** Whether a value is usable as an embed's `ratio` / `frameRatio`. */
+export function isEmbedRatio(value: string): boolean {
+  return RATIO.test(value.trim());
+}
+
+/** Whether a value is usable as an embed's `width` / `frameWidth`. */
+export function isEmbedWidth(value: string): boolean {
+  return LENGTH.test(value.trim());
+}
 
 /** Font Awesome Free's `play` (CC BY 4.0) — the same source as the default theme's icons. */
 const PLAY_PATH =
@@ -94,8 +113,19 @@ export function embedTree(spec: EmbedSpec): EmbedElement | undefined {
   if (!ref) return undefined;
 
   const mode = spec.mode === 'newtab' ? 'newtab' : 'inline';
-  const ratio =
-    spec.ratio && RATIO.test(spec.ratio.trim()) ? spec.ratio.trim() : DEFAULT_RATIO;
+  // A value of the wrong shape falls back rather than failing the build: the validator
+  // already reports it, and a page that lays out oddly beats a page that won't publish.
+  const pick = (
+    value: string | undefined,
+    ok: (v: string) => boolean,
+  ): string | undefined => (value && ok(value) ? value.trim() : undefined);
+  const ratio = pick(spec.ratio, isEmbedRatio) ?? DEFAULT_RATIO;
+  const width = pick(spec.width, isEmbedWidth);
+  // The poster and the iframe share one box, so "different settings for the two" is that
+  // box being re-sized as the script swaps them. Only a *difference* is carried, so the
+  // common case — one shape for both — emits nothing that would have to be undone.
+  const frameRatio = pick(spec.frameRatio, isEmbedRatio);
+  const frameWidth = pick(spec.frameWidth, isEmbedWidth);
   const poster = spec.poster ?? ref.poster;
   // The anchor carries the accessible name, so the poster is decorative — a described
   // image inside a described link is announced twice.
@@ -128,14 +158,18 @@ export function embedTree(spec: EmbedSpec): EmbedElement | undefined {
     ]),
   );
 
+  const inline = mode === 'inline';
   return el(
     'div',
     {
       class: `embed embed--${mode}`,
-      style: `--embed-ratio:${ratio}`,
-      'data-embed-src':
-        mode === 'inline' ? activationSrc(ref.src, ref.provider) : undefined,
-      'data-embed-title': mode === 'inline' ? name : undefined,
+      style: `--embed-ratio:${ratio}` + (width ? `;--embed-width:${width}` : ''),
+      'data-embed-src': inline ? activationSrc(ref.src, ref.provider) : undefined,
+      'data-embed-title': inline ? name : undefined,
+      'data-embed-frame-ratio':
+        inline && frameRatio && frameRatio !== ratio ? frameRatio : undefined,
+      'data-embed-frame-width':
+        inline && frameWidth && frameWidth !== width ? frameWidth : undefined,
     },
     [
       el(

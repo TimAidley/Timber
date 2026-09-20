@@ -39,11 +39,31 @@ describe('validateEmbedBlocks', () => {
     ]);
   });
 
-  it('reports a ratio the renderer would silently drop', () => {
+  it('reports a ratio the renderer would silently drop, and says what one looks like', () => {
     expect(messages(`::embed{url="${GAME}" ratio="1;background:red"}\n`)).toEqual([
-      'embed has an unusable ratio "1;background:red"',
+      'embed has an unusable ratio "1;background:red" — expected something like "16 / 9"',
     ]);
     expect(validateEmbedBlocks(`::embed{url="${GAME}" ratio="4 / 3"}\n`)).toEqual([]);
+  });
+
+  it('reports each sizing attribute by its own name', () => {
+    expect(messages(`::embed{url="${GAME}" width="wide"}\n`)[0]).toMatch(
+      /unusable width "wide" — expected something like "640px"/,
+    );
+    expect(messages(`::embed{url="${GAME}" frameRatio="nope"}\n`)[0]).toMatch(
+      /unusable frameRatio/,
+    );
+    expect(messages(`::embed{url="${GAME}" frameWidth="calc(100%)"}\n`)[0]).toMatch(
+      /unusable frameWidth/,
+    );
+  });
+
+  it('passes the sizing attributes when they are well formed', () => {
+    expect(
+      validateEmbedBlocks(
+        `::embed{url="${GAME}" ratio="16 / 9" width="640px" frameRatio="4 / 3" frameWidth="100%"}\n`,
+      ),
+    ).toEqual([]);
   });
 
   it('ignores a block documented inside a code fence', () => {
