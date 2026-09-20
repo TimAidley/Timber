@@ -70,6 +70,8 @@ async function control(req: IncomingMessage, res: ServerResponse): Promise<boole
             'make the pasted token invalid from now on (every request 401s)',
           '/__control/restore-token': 'make the token valid again',
           '/__control/deploy-fail-next': 'the next deploy run concludes with failure',
+          '/__control/shutdown':
+            'stop this environment (a new launcher calls it for you)',
         },
       });
       return true;
@@ -77,13 +79,11 @@ async function control(req: IncomingMessage, res: ServerResponse): Promise<boole
       const branches = repo.listBranches().map((b) => ({
         ...b,
         files: repo.listFiles(b.name),
-        log: repo
-          .log(b.name)
-          .map((c) => ({
-            sha: c.sha.slice(0, 7),
-            message: c.message,
-            author: c.author.name,
-          })),
+        log: repo.log(b.name).map((c) => ({
+          sha: c.sha.slice(0, 7),
+          message: c.message,
+          author: c.author.name,
+        })),
       }));
       json(res, 200, {
         defaultBranch: repo.defaultBranch,
@@ -146,6 +146,10 @@ async function control(req: IncomingMessage, res: ServerResponse): Promise<boole
       repo.actions.failNextRun();
       json(res, 200, { nextDeploy: 'failure' });
       return true;
+    case 'shutdown':
+      json(res, 200, { stopping: true });
+      setTimeout(() => void shutdown(), 50);
+      return true;
     default:
       json(res, 404, {
         message: `unknown control action "${action}"; GET /__control lists them`,
@@ -154,12 +158,59 @@ async function control(req: IncomingMessage, res: ServerResponse): Promise<boole
   }
 }
 
-const api = await serveFakeGitHub(fake, { port: API_PORT, onRequest: control });
-const editor = await startEditorServer({
-  port: EDITOR_PORT,
-  browser: false,
-  config: { owner: OWNER, repo: REPO, apiBaseUrl: api.url },
-});
+async function orExplainPortInUse<T>(port: number, start: () => Promise<T>): Promise<T> {
+  try {
+    return await start();
+  } catch (err) {
+    if (err instanceof Error && /EADDRINUSE|already in use/i.test(err.message)) {
+      console.error(
+        `\nPort ${port} is already in use — most likely a previous \`pnpm virtual-user\` is still ` +
+          `running (its repo state is stale). Stop it (kill the node process listening on ${port}) ` +
+          `and start again for a fresh seed.\n`,
+      );
+      process.exit(1);
+    }
+    throw err;
+  }
+}
+
+/**
+ * Killing the `pnpm` wrapper that started a previous launcher (e.g. stopping a background
+ * task) can leave its node child alive with both ports bound and a stale repo. Rather than
+ * make the user hunt for it, ask it to stop over its own control API and wait for the port.
+ */
+async function stopPreviousInstance(): Promise<void> {
+  const controlUrl = `http://127.0.0.1:${API_PORT}/__control/shutdown`;
+  try {
+    const res = await fetch(controlUrl, { signal: AbortSignal.timeout(1000) });
+    if (!res.ok) return;
+  } catch {
+    return; // nothing listening — the normal case
+  }
+  console.log('Stopped a previous virtual-user environment that was still running.');
+  for (let i = 0; i < 30; i += 1) {
+    await new Promise((r) => setTimeout(r, 100));
+    try {
+      await fetch(`http://127.0.0.1:${API_PORT}/__control`, {
+        signal: AbortSignal.timeout(300),
+      });
+    } catch {
+      return; // port released
+    }
+  }
+}
+
+await stopPreviousInstance();
+const api = await orExplainPortInUse(API_PORT, () =>
+  serveFakeGitHub(fake, { port: API_PORT, onRequest: control }),
+);
+const editor = await orExplainPortInUse(EDITOR_PORT, () =>
+  startEditorServer({
+    port: EDITOR_PORT,
+    browser: false,
+    config: { owner: OWNER, repo: REPO, apiBaseUrl: api.url },
+  }),
+);
 
 console.log(`
 Timber virtual-user environment
@@ -170,10 +221,10 @@ Timber virtual-user environment
 Press Ctrl-C to stop.
 `);
 
-const shutdown = async () => {
+async function shutdown(): Promise<void> {
   await editor.close();
   await api.close();
   process.exit(0);
-};
+}
 process.on('SIGINT', () => void shutdown());
 process.on('SIGTERM', () => void shutdown());

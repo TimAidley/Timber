@@ -24,4 +24,6 @@ website**, and make sure it has really stuck.
 
 ## Environment
 
+_The "View live" / "View site" links open a placeholder page in this environment — the built site is not served. Judge whether something is live by what the editor reports and by reloading it, not by following those links._
+
 Nothing unusual happens during this scenario.

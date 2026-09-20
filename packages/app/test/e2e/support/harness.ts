@@ -47,7 +47,13 @@ export async function startEditorServer(
   const server: ViteDevServer = await createServer({
     configFile: join(APP_ROOT, 'vite.config.ts'),
     root: APP_ROOT,
-    server: { port: options.port ?? 0, strictPort: options.port !== undefined },
+    // Bind the loopback ADDRESS, not the name: on Windows `localhost` resolves to ::1, so a
+    // Vite bound to it refuses `http://127.0.0.1:…` — the form every doc here uses.
+    server: {
+      host: '127.0.0.1',
+      port: options.port ?? 0,
+      strictPort: options.port !== undefined,
+    },
     logLevel: 'warn',
     plugins: [
       {

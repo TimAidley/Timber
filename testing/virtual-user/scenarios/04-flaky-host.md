@@ -15,6 +15,8 @@ editor must agree that nothing is left unpublished.
 
 ## Environment — follow these steps at the moments given
 
+_The "View live" / "View site" links open a placeholder page in this environment — the built site is not served. Judge whether something is live by what the editor reports and by reloading it, not by following those links._
+
 1. Sign in and make the first edit (About). Wait until the editor says it is saved.
 2. Before the second edit, open a **second tab** and visit:
    `http://127.0.0.1:5198/__control/fail-next?method=PATCH&path=refs&status=500&times=2`

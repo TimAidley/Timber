@@ -13,6 +13,8 @@ get it live. While you are working, an edit you made earlier on your phone arriv
 
 ## Environment — follow these steps at the moments given
 
+_The "View live" / "View site" links open a placeholder page in this environment — the built site is not served. Judge whether something is live by what the editor reports and by reloading it, not by following those links._
+
 1. Sign in and open the Welcome page. Change its description as above, and wait until the
    editor indicates the change has been saved.
 2. Now simulate the phone's earlier edit arriving. Open a **second tab** and visit this URL

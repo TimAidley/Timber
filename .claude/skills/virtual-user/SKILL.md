@@ -21,6 +21,9 @@ is implemented; do not "help" it mid-run. If it gets stuck, that is a finding.
 
 - Playwright MCP configured (the repo's `.mcp.json` does this: `npx @playwright/mcp@latest
 --isolated`). Check the `mcp__playwright__*` tools are available before starting.
+- Playwright MCP has a browser. On a fresh machine it doesn't: the first navigation fails
+  with an "install" hint. Run `npx playwright install chromium` (or use the MCP's own
+  `browser_install` tool) once, before spawning the tester.
 - `pnpm -r build` has been run (the app resolves the workspace packages' `dist/`).
 
 ## Procedure
@@ -31,9 +34,10 @@ is implemented; do not "help" it mid-run. If it gets stuck, that is a finding.
    pnpm virtual-user
    ```
 
-   It prints the editor URL (default `http://127.0.0.1:5199/`), the fake GitHub URL
+   It prints the editor URL (`http://127.0.0.1:5199/`), the fake GitHub URL
    (`http://127.0.0.1:5198`), the sign-in token, and the control API. The fake repo is
-   seeded fresh from `site-template/` on every start — restart it between scenarios.
+   seeded fresh from `site-template/` on every start — restart it between scenarios (it
+   stops any previous instance itself).
 
 2. **Pick a scenario** from `testing/virtual-user/scenarios/`, or write one in the same
    shape (persona · goal · what the environment will do · what to check). Scenarios name
@@ -52,6 +56,11 @@ is implemented; do not "help" it mid-run. If it gets stuck, that is a finding.
    token, and the report path `testing/virtual-user/findings/<YYYY-MM-DD>-<scenario>.md`.
    Nothing about the code. Run it in the foreground if you have nothing else to do; it
    typically takes a few minutes.
+   - The report path must not already exist: the tester has no `Read` tool, so it cannot
+     overwrite a file. Re-running a scenario the same day → add a `-2`, `-3` suffix.
+   - Tell the tester in one line that in this environment the "View live" / "View site"
+     links open a placeholder page (the site isn't served), so it judges a publish by what
+     the editor reports and by reloading, not by following those links.
 
 5. **Get ground truth** before reading the report's conclusions:
    `curl -s http://127.0.0.1:5198/__control/state` — branches, files and commit log per
@@ -68,8 +77,11 @@ is implemented; do not "help" it mid-run. If it gets stuck, that is a finding.
      Append a `## Triage` section to the report with a verdict per finding.
 
 7. **Report to the user**: the confirmed bugs (with repro test paths), the rest in a line
-   each, and a link to the report file. Stop the environment (`Ctrl-C` / kill the
-   background task).
+   each, and a link to the report file. Stop the environment with
+   `curl -s http://127.0.0.1:5198/__control/shutdown` — stopping the background task alone
+   can leave the node process (and its stale repo) alive behind the `pnpm` wrapper. A new
+   `pnpm virtual-user` also calls this itself, so a leftover instance never blocks a fresh
+   seed.
 
 ## Judgement notes
 
