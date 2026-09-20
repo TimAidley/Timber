@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { join, posix } from 'node:path';
-import { JSDOM } from 'jsdom';
+import { JSDOM, VirtualConsole } from 'jsdom';
 import postcss from 'postcss';
 
 /**
@@ -148,6 +148,28 @@ function reachability(
   return 'scoped-out';
 }
 
+/**
+ * Parse a page without jsdom narrating what it couldn't understand.
+ *
+ * jsdom parses every `<style>` it meets as it builds the document, and its CSS parser
+ * predates cascade layers — so a page carrying the embed stylesheet (SPEC §7 → Embeds,
+ * which wraps its baseline in `@layer` precisely so a theme can override it) made every
+ * build print "Could not parse CSS stylesheet", twice, with the whole sheet after it.
+ * Nothing was wrong: the page ships that CSS to browsers, which do understand `@layer`.
+ *
+ * Silence is also what this check already promises for CSS it can't read — "unparseable
+ * CSS yields silence rather than a guess" — it just had no way to keep that promise for
+ * a sheet jsdom chokes on while parsing the document itself. A sheet that fails to parse
+ * contributes no selectors, so the rules in it are treated as absent, which is the
+ * conservative direction: this check only ever warns about figure classes, and an
+ * unparsed sheet can only make it warn less.
+ */
+function parsePage(html: string): Document {
+  const virtualConsole = new VirtualConsole();
+  virtualConsole.on('jsdomError', () => {});
+  return new JSDOM(html, { virtualConsole }).window.document;
+}
+
 /** A figure class this page asks for that the theme's CSS doesn't deliver. */
 export interface FigureCssFinding {
   className: string;
@@ -162,7 +184,7 @@ export function findUnstyledFigureClasses(html: string, css: string): FigureCssF
   const selectors = selectorsIn(css);
   if (selectors === null) return [];
 
-  const { document } = new JSDOM(html).window;
+  const document = parsePage(html);
   // `scoped-out` wins over `absent` for the same class: if any figure on the page has
   // styling written for it that fails to land, that's the finding worth reporting.
   const worst = new Map<string, Exclude<Reachability, 'reached'>>();
@@ -190,7 +212,7 @@ async function cssForPage(
   page: RenderedPage,
   cache: Map<string, string | null>,
 ): Promise<string | null> {
-  const { document } = new JSDOM(page.html).window;
+  const document = parsePage(page.html);
   const parts: string[] = [];
 
   for (const link of document.querySelectorAll('link[rel~="stylesheet"][href]')) {

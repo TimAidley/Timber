@@ -171,3 +171,43 @@ describe('findUnstyledFigureClasses — why a class is unstyled', () => {
     ]);
   });
 });
+
+describe('findUnstyledFigureClasses — a stylesheet jsdom cannot parse', () => {
+  /** What the generator injects for an embed: a baseline wrapped in a cascade layer. */
+  const LAYERED = '@layer timber.embed{.embed{aspect-ratio:16/9}}';
+
+  it('says nothing about a page carrying one, and does not print to the console', () => {
+    // jsdom's CSS parser predates `@layer` and narrates what it can't read. The check
+    // already promises silence for CSS it can't parse; this keeps that promise for a
+    // sheet jsdom chokes on while parsing the document itself.
+    const errors: unknown[] = [];
+    const original = console.error;
+    console.error = (...args: unknown[]): void => {
+      errors.push(args);
+    };
+    try {
+      const html = `<!doctype html><html><head><style>${LAYERED}</style>
+        <link rel="stylesheet" href="/assets/theme.css"></head>
+        <body><main><div class="post__content">
+          <figure class="fig fig--wrap-right fig--sm"><img src="a.webp" alt="A"></figure>
+        </div></main></body></html>`;
+      expect(
+        unstyled(html, `.post__content .fig--wrap-right{float:right}${FIG_CSS}`),
+      ).toEqual([]);
+    } finally {
+      console.error = original;
+    }
+    expect(errors).toEqual([]);
+  });
+
+  it('still reports a genuinely unstyled class on such a page', () => {
+    // The layered sheet contributes no selectors, which can only make this warn *less* —
+    // never invent a warning.
+    const html = `<!doctype html><html><head><style>${LAYERED}</style>
+      <link rel="stylesheet" href="/assets/theme.css"></head>
+      <body><main><div class="post__content">
+        <figure class="fig fig--wrap-left"><img src="a.webp" alt="A"></figure>
+      </div></main></body></html>`;
+    expect(unstyled(html, FIG_CSS)).toEqual(['fig--wrap-left']);
+  });
+});
