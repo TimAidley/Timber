@@ -20,6 +20,7 @@ uncomment the `window.__TIMBER_CONFIG__` block and fill it in. Vite serves it at
 `/config.js`.
 
 **Option 2 — build env:** `cp packages/app/.env.example packages/app/.env` and set:
+
 ```ini
 VITE_TIMBER_OWNER=<owner>
 VITE_TIMBER_REPO=<content-repo>
@@ -30,6 +31,7 @@ VITE_TIMBER_REPO=<content-repo>
 ```
 
 Then start Vite:
+
 ```sh
 pnpm --filter @timber/app dev          # serves at http://localhost:5173/
 ```
@@ -51,7 +53,7 @@ The token is kept in `localStorage`.
 The header names the cause (**"Save failed — signed out (401)"**) and its **Details**
 button opens the diagnostics panel: the recent failures with status, request id and the
 host's own message, plus **Copy** for a bug report. The same log is reachable from the
-console — `__timber.dump()` — which is the quickest way to see *why* a commit is being
+console — `__timber.dump()` — which is the quickest way to see _why_ a commit is being
 retried without reproducing it with DevTools already open.
 
 Two things it will tell you that are easy to misread otherwise: a **401** means the
@@ -104,4 +106,18 @@ edit it here, never there. See `ARCHITECTURE.md`.)
 ## Repo layout & how the pieces fit
 
 See **`ARCHITECTURE.md`** for the package map and dependency graph, and **`SPEC.md`** for
-the authoritative design. Tests: `pnpm -r --filter './packages/*' exec vitest run`.
+the authoritative design.
+
+## Tests
+
+| Command             | What runs                                                                                                                                                              | Needs                           |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| `pnpm test`         | Every unit suite (Node + jsdom), no network, no browser                                                                                                                | —                               |
+| `pnpm test:browser` | The app's `*.browser.test.ts` specs _inside_ headless Chromium (canvas/WebP paths jsdom can't do)                                                                      | Chromium                        |
+| `pnpm test:e2e`     | The **real editor** in headless Chromium against **`@timber/fake-github`** — sign in, load, autosave, publish, deploy status, with `api.github.com` answered in-memory | `pnpm -r build` first, Chromium |
+| `pnpm test:live`    | `RepoClient` against the real GitHub API and a sandbox repo                                                                                                            | `TIMBER_SANDBOX_*` env          |
+
+The e2e harness (`packages/app/test/e2e/support/harness.ts`) is also the starting point for
+driving the editor by hand or by an agent: it gives you a seeded fake repo, a browser
+context routed to it, and a signed-in page. `packages/fake-github/README.md` covers
+staging failures (`failNext`) and foreign pushes (`repo.writeFiles`).

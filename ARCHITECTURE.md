@@ -1,35 +1,36 @@
 # Architecture — how the pieces fit
 
 A map of the moving parts and their dependencies. This is the **"what talks to what"**;
-for the *why* behind decisions see **`SPEC.md`** (authoritative), and for *how to stand up
-a site* see **`INSTALL.md`**.
+for the _why_ behind decisions see **`SPEC.md`** (authoritative), and for _how to stand up
+a site_ see **`INSTALL.md`**.
 
 ---
 
 ## Repositories
 
-| Repo | What it is | Edited? |
-|---|---|---|
-| **`TimAidley/Timber`** (this monorepo) | The app + generator source, all docs, and `site-template/` | Yes — the source of everything |
-| **`TimAidley/Timber-site-template`** | The "Use this template" scaffold. **Generated** from `Timber/site-template/` by `sync-template.yml` | **No** — generated; edit `site-template/` instead |
-| A user's **site repo** | Created from the template: content + config + theme + two workflows. **No app source.** | By the site owner (via the editor or git) |
+| Repo                                   | What it is                                                                                          | Edited?                                           |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| **`TimAidley/Timber`** (this monorepo) | The app + generator source, all docs, and `site-template/`                                          | Yes — the source of everything                    |
+| **`TimAidley/Timber-site-template`**   | The "Use this template" scaffold. **Generated** from `Timber/site-template/` by `sync-template.yml` | **No** — generated; edit `site-template/` instead |
+| A user's **site repo**                 | Created from the template: content + config + theme + two workflows. **No app source.**             | By the site owner (via the editor or git)         |
 
 ## Packages (in the Timber monorepo)
 
-| Package | What it is | Runs in |
-|---|---|---|
-| `@timber/generator` | remark/rehype → LiquidJS render core (one page) | browser **and** Node (isomorphic) |
-| `@timber/content` | Content model: schemas, id→object index, reference resolution, validation, SEO, navigation, redirects, video allowlist, visibility | browser and Node |
-| `@timber/jekyll-compat` | **Theme-import core + Jekyll engine** (SPEC §2 → Tier A): the shared, engine-pluggable `planThemeImport` (theme files → repo write-set) + the `ThemeEngine` seam + `setFrontMatterScalar`, plus the Jekyll engine (`importJekyllTheme` transform, `registerJekyllCompat` ecosystem filters/tags). Reads `page.*` | browser and Node |
-| `@timber/eleventy-compat` | **Eleventy engine + the runtime dispatch** (SPEC §2 → Tier A): the `importEleventyTemplate` transform, `eleventyEngine` (collects `_includes/**` at any input-dir prefix, parses `_data/*.json` globals), `registerEleventyCompat` (`url`/`slugify`/…), `detectEngine`, and `themeRuntime`/`parseThemeManifest` (the one place that maps a theme's `theme.json` → render mode for *both* engines, so it depends on jekyll-compat). Only **Liquid**-authored Eleventy themes | browser and Node |
-| `@timber/sass` | **Isomorphic SCSS compiler** (SPEC §6): `compileScss` — dart-sass driven by an **in-memory importer** over the repo snapshot, so the browser preview and the Node build compile stylesheets identically (preview ≡ build). dart-sass is pure JS; lazy-loaded in the browser | browser and Node |
-| `@timber/cli` | `timber build . _site` — builds the whole static site | Node (CI) |
-| `@timber/app` | The browser editor SPA (React): auth, editor, preview, media pipeline | browser |
-| `@timber/host` | The **host-provider port**: host-neutral types + the `HostProvider` interface (`HostRepo` + `HostIdentity` + optional `DeployBackend`) the editor depends on, so a git host is a swappable adapter. Also `describeHostError()` — the one place that turns *any* adapter's throw into a cause the UI can act on (SPEC §11) | browser and Node |
-| `@timber/github` | **A `HostProvider` adapter** — `RepoClient` (Octokit): load/commit via the Git Data API, read/dispatch workflow runs | browser |
-| `@timber/gitea` | **A second `HostProvider` adapter** — `GiteaClient` for Gitea/Forgejo (Codeberg), over the Gitea REST API via `fetch` (no SDK). Proves the port is host-neutral | browser |
-| `@timber/gitlab` | **A third `HostProvider` adapter** — `GitLabClient` over the GitLab REST API v4 via `fetch`, with a real pipelines-based `DeployBackend` | browser |
-| `@timber/oauth-broker` | Cloudflare Worker: OAuth token exchange (holds the secret) **+** device-flow relay (secret-less) | edge |
+| Package                   | What it is                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Runs in                           |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `@timber/generator`       | remark/rehype → LiquidJS render core (one page)                                                                                                                                                                                                                                                                                                                                                                                                                             | browser **and** Node (isomorphic) |
+| `@timber/content`         | Content model: schemas, id→object index, reference resolution, validation, SEO, navigation, redirects, video allowlist, visibility                                                                                                                                                                                                                                                                                                                                          | browser and Node                  |
+| `@timber/jekyll-compat`   | **Theme-import core + Jekyll engine** (SPEC §2 → Tier A): the shared, engine-pluggable `planThemeImport` (theme files → repo write-set) + the `ThemeEngine` seam + `setFrontMatterScalar`, plus the Jekyll engine (`importJekyllTheme` transform, `registerJekyllCompat` ecosystem filters/tags). Reads `page.*`                                                                                                                                                            | browser and Node                  |
+| `@timber/eleventy-compat` | **Eleventy engine + the runtime dispatch** (SPEC §2 → Tier A): the `importEleventyTemplate` transform, `eleventyEngine` (collects `_includes/**` at any input-dir prefix, parses `_data/*.json` globals), `registerEleventyCompat` (`url`/`slugify`/…), `detectEngine`, and `themeRuntime`/`parseThemeManifest` (the one place that maps a theme's `theme.json` → render mode for _both_ engines, so it depends on jekyll-compat). Only **Liquid**-authored Eleventy themes | browser and Node                  |
+| `@timber/sass`            | **Isomorphic SCSS compiler** (SPEC §6): `compileScss` — dart-sass driven by an **in-memory importer** over the repo snapshot, so the browser preview and the Node build compile stylesheets identically (preview ≡ build). dart-sass is pure JS; lazy-loaded in the browser                                                                                                                                                                                                 | browser and Node                  |
+| `@timber/cli`             | `timber build . _site` — builds the whole static site                                                                                                                                                                                                                                                                                                                                                                                                                       | Node (CI)                         |
+| `@timber/app`             | The browser editor SPA (React): auth, editor, preview, media pipeline                                                                                                                                                                                                                                                                                                                                                                                                       | browser                           |
+| `@timber/host`            | The **host-provider port**: host-neutral types + the `HostProvider` interface (`HostRepo` + `HostIdentity` + optional `DeployBackend`) the editor depends on, so a git host is a swappable adapter. Also `describeHostError()` — the one place that turns _any_ adapter's throw into a cause the UI can act on (SPEC §11)                                                                                                                                                   | browser and Node                  |
+| `@timber/github`          | **A `HostProvider` adapter** — `RepoClient` (Octokit): load/commit via the Git Data API, read/dispatch workflow runs                                                                                                                                                                                                                                                                                                                                                        | browser                           |
+| `@timber/gitea`           | **A second `HostProvider` adapter** — `GiteaClient` for Gitea/Forgejo (Codeberg), over the Gitea REST API via `fetch` (no SDK). Proves the port is host-neutral                                                                                                                                                                                                                                                                                                             | browser                           |
+| `@timber/gitlab`          | **A third `HostProvider` adapter** — `GitLabClient` over the GitLab REST API v4 via `fetch`, with a real pipelines-based `DeployBackend`                                                                                                                                                                                                                                                                                                                                    | browser                           |
+| `@timber/oauth-broker`    | Cloudflare Worker: OAuth token exchange (holds the secret) **+** device-flow relay (secret-less)                                                                                                                                                                                                                                                                                                                                                                            | edge                              |
+| `@timber/fake-github`     | **Test double for GitHub** (dev-only, never shipped): an in-memory git (real object hashing, fast-forward-only refs, merge-base compare) plus a simulated Actions deploy, behind a `fetch` that speaks the REST subset `RepoClient` uses. Hand it to the client as `fetchImpl`, or route a real browser's `api.github.com` through it (`./playwright`) — the basis of `pnpm test:e2e` and of virtual-user runs                                                              | Node (tests); browser-safe core   |
 
 **Core principle:** the generator is **one codebase with two entry points** — the browser
 preview and the Node CLI build — version-pinned together, so **preview ≡ production**.
@@ -66,7 +67,7 @@ preview and the Node CLI build — version-pinned together, so **preview ≡ pro
 ```
 
 So a live site leans on four things: **its own repo**, the **public `TimAidley/Timber`
-repo** (checked out at build time — *not* forked), a **Cloudflare broker**, and a **GitHub
+repo** (checked out at build time — _not_ forked), a **Cloudflare broker**, and a **GitHub
 App**. The `TIMBER_REF` in both workflows pins which Timber version is used (`main` today;
 set it to a release tag for stability).
 
@@ -87,30 +88,30 @@ and it holds: each `implements HostProvider` with a completely different HTTP mo
 adapter has required a change to `@timber/host`. Where the hosts diverge, the **adapter**
 absorbs it and the port stays clean — a map of where the abstraction earns its keep:
 
-| Concern | GitHub | Gitea | GitLab | Port stays neutral because… |
-|---|---|---|---|---|
-| Commit | blob→tree→commit overlay | one **ChangeFiles** call | Commits API `actions[]` | `commitFiles` takes a write-set; the adapter classifies create-vs-update against the branch tree |
-| Move | reuse blob sha server-side | read + re-upload | **native server-side `move`** | `MoveEntry.sha` is an **opaque content handle**, not "a GitHub blob sha" |
-| Publish | compose a squashed tree | **replay** the change-set | **replay** the change-set | `publishSquash` carries the plan; Gitea/GitLab ignore `wipTip`/`strategy` |
-| Changed paths | `compare` file list | **tree-diff** by path+sha | `compare` file list (**rename-aware**) | callers only need added/modified/removed(/renamed) |
-| Reset WIP | force-update ref | force-update ref | **delete + recreate** (no force-update) | `resetBranch` is intent, not a ref-update primitive |
-| Deploy | GitHub Actions | **none** (Codeberg Pages is branch-based) | **CI/CD pipelines** | `DeployBackend` is optional; GitLab implements it, Codeberg omits it |
-| Deploy **progress** | Actions **steps** within jobs | — | pipeline **jobs** (coarser label) | progress is measured in *elapsed time vs a typical run*, never counted steps — so a coarser host label costs the label, not the bar |
-| Addressing | `owner`/`repo` | `owner`/`repo` | URL-encoded **project path** (nested groups) | the port has no `owner`/`repo`; it's adapter construction config |
+| Concern             | GitHub                        | Gitea                                     | GitLab                                       | Port stays neutral because…                                                                                                         |
+| ------------------- | ----------------------------- | ----------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Commit              | blob→tree→commit overlay      | one **ChangeFiles** call                  | Commits API `actions[]`                      | `commitFiles` takes a write-set; the adapter classifies create-vs-update against the branch tree                                    |
+| Move                | reuse blob sha server-side    | read + re-upload                          | **native server-side `move`**                | `MoveEntry.sha` is an **opaque content handle**, not "a GitHub blob sha"                                                            |
+| Publish             | compose a squashed tree       | **replay** the change-set                 | **replay** the change-set                    | `publishSquash` carries the plan; Gitea/GitLab ignore `wipTip`/`strategy`                                                           |
+| Changed paths       | `compare` file list           | **tree-diff** by path+sha                 | `compare` file list (**rename-aware**)       | callers only need added/modified/removed(/renamed)                                                                                  |
+| Reset WIP           | force-update ref              | force-update ref                          | **delete + recreate** (no force-update)      | `resetBranch` is intent, not a ref-update primitive                                                                                 |
+| Deploy              | GitHub Actions                | **none** (Codeberg Pages is branch-based) | **CI/CD pipelines**                          | `DeployBackend` is optional; GitLab implements it, Codeberg omits it                                                                |
+| Deploy **progress** | Actions **steps** within jobs | —                                         | pipeline **jobs** (coarser label)            | progress is measured in _elapsed time vs a typical run_, never counted steps — so a coarser host label costs the label, not the bar |
+| Addressing          | `owner`/`repo`                | `owner`/`repo`                            | URL-encoded **project path** (nested groups) | the port has no `owner`/`repo`; it's adapter construction config                                                                    |
 
 The port is split by capability so a host provides what it can:
 
-| Capability | Interface | Notes |
-|---|---|---|
-| Read/write git content + **publish** | `HostRepo` | Always required. Publish is the intent-level `publishSquash()` — the app computes the *plan* (validity gate, clean-vs-rebase, conflict detection, all host-neutral); the adapter owns the host-specific mechanics of building the squashed commit (GitHub's blob→tree→commit model stays inside `@timber/github`). Also exposes repo **visibility** via `getVisibility()` → `public` / `private` / `unknown` (the last for a host that can't report it — both shipped adapters do). |
-| Who is signed in | `HostIdentity` | `getAuthenticatedLogin()` drives the per-user `<login>_wip` branch (SPEC §11). |
-| Trigger/observe a build | `DeployBackend` (**optional**) | `getLatestDeploy()` / `triggerDeploy()`. A host with **no CI** omits it, and the editor degrades — no publish-status morph, no out-of-date banner. GitHub maps it onto the `deploy.yml` workflow; **GitLab** onto CI/CD **pipelines** (a real second implementation); Codeberg omits it (branch-based Pages, no run to observe). |
-| Report **build progress** | `getTypicalDeployDurationMs()` / `getDeployProgress()` on `DeployBackend` (**optional within an optional capability**) | Feeds the banner's progress bar + ETA and the Publish button's fill (SPEC §12). Adapters return only facts (a typical duration, what's executing now); the *presentation* — fill, wording, cap, overrun, queued — is the app's (`state/deploy.ts`), so it can't drift per host. Implement neither and the editor shows the previous plain `Building…`; a failing call degrades the same way and never breaks the status leg beside it. |
+| Capability                           | Interface                                                                                                              | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Read/write git content + **publish** | `HostRepo`                                                                                                             | Always required. Publish is the intent-level `publishSquash()` — the app computes the _plan_ (validity gate, clean-vs-rebase, conflict detection, all host-neutral); the adapter owns the host-specific mechanics of building the squashed commit (GitHub's blob→tree→commit model stays inside `@timber/github`). Also exposes repo **visibility** via `getVisibility()` → `public` / `private` / `unknown` (the last for a host that can't report it — both shipped adapters do). |
+| Who is signed in                     | `HostIdentity`                                                                                                         | `getAuthenticatedLogin()` drives the per-user `<login>_wip` branch (SPEC §11).                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Trigger/observe a build              | `DeployBackend` (**optional**)                                                                                         | `getLatestDeploy()` / `triggerDeploy()`. A host with **no CI** omits it, and the editor degrades — no publish-status morph, no out-of-date banner. GitHub maps it onto the `deploy.yml` workflow; **GitLab** onto CI/CD **pipelines** (a real second implementation); Codeberg omits it (branch-based Pages, no run to observe).                                                                                                                                                    |
+| Report **build progress**            | `getTypicalDeployDurationMs()` / `getDeployProgress()` on `DeployBackend` (**optional within an optional capability**) | Feeds the banner's progress bar + ETA and the Publish button's fill (SPEC §12). Adapters return only facts (a typical duration, what's executing now); the _presentation_ — fill, wording, cap, overrun, queued — is the app's (`state/deploy.ts`), so it can't drift per host. Implement neither and the editor shows the previous plain `Building…`; a failing call degrades the same way and never breaks the status leg beside it.                                              |
 
-**Concurrency on the WIP branch is handled in two places, on purpose.** The *ref race* is
+**Concurrency on the WIP branch is handled in two places, on purpose.** The _ref race_ is
 the adapter's problem — `commitFiles` re-reads the moved tip, rebuilds its overlay and
 waits out a lagging ref read (`packages/github/src/client.ts`), so concurrent writes to
-different files never reach the UI at all. The *content* hazard is the app's problem —
+different files never reach the UI at all. The _content_ hazard is the app's problem —
 two tabs editing the same file overwrite each other with no error — so the editor keeps a
 per-tab record of the commits it landed (`state/ownWrites.ts`, a `Proxy` over the port so
 every write path is covered) and watches the tip for anyone else's
@@ -118,17 +119,17 @@ every write path is covered) and watches the tip for anyone else's
 **event source**: `OwnWrites.subscribe` fires on every recorded commit, and the editor's
 saved-state refresh (the `main…wip` compare behind the "Saved" badges and the Publish
 gate) listens to it — so the counts follow every commit, whichever feature landed it.
-*Adding a new commit path → nothing to do; it's recorded automatically and the change
+_Adding a new commit path → nothing to do; it's recorded automatically and the change
 counts refresh automatically. Changing what counts as a clash → also update
-`components/ForeignChanges.tsx` and SPEC §11.*
+`components/ForeignChanges.tsx` and SPEC §11._
 
-**Failures are normalised in the port, not in the UI.** Each adapter throws its own shape — Octokit's `RequestError`, the Gitea/GitLab `fetch` errors, a bare `TypeError` offline — so `describeHostError()` (`@timber/host`) maps all of them onto one small vocabulary (*auth · permission · not-found · rate-limit · conflict · too-large · invalid · network · server*) plus a reason, a hint, and **whether a retry could work**. The editor's diagnostics log (`packages/app/src/state/diagnostics.ts` — a bounded, redacted, in-memory ring buffer) and the header's save-status both read that verdict, so **adding a fourth adapter needs no UI change**: give the thrown error a `status` (and, if you can, an Octokit-shaped `response.headers` + body `message`) and every failure surface reports it correctly. *Change the vocabulary → also update the badge in `components/ChangeBadges.tsx` and SPEC §11.*
+**Failures are normalised in the port, not in the UI.** Each adapter throws its own shape — Octokit's `RequestError`, the Gitea/GitLab `fetch` errors, a bare `TypeError` offline — so `describeHostError()` (`@timber/host`) maps all of them onto one small vocabulary (_auth · permission · not-found · rate-limit · conflict · too-large · invalid · network · server_) plus a reason, a hint, and **whether a retry could work**. The editor's diagnostics log (`packages/app/src/state/diagnostics.ts` — a bounded, redacted, in-memory ring buffer) and the header's save-status both read that verdict, so **adding a fourth adapter needs no UI change**: give the thrown error a `status` (and, if you can, an Octokit-shaped `response.headers` + body `message`) and every failure surface reports it correctly. _Change the vocabulary → also update the badge in `components/ChangeBadges.tsx` and SPEC §11._
 
 **Page hosting is host-neutral in the generator.** It turned out nothing GitHub-specific
 had to move: the **base path** is derived from the site's configured `baseUrl`
 (`@timber/content` `seo.ts`) — `you.github.io/<repo>`, `you.codeberg.page/<repo>`, a custom
 domain, all just work — and the **meta-refresh redirect stubs** (`redirects.ts`) work on any
-static host. Only the *deploy mechanism* is per-host, and it lives entirely in the
+static host. Only the _deploy mechanism_ is per-host, and it lives entirely in the
 site-template, not the app or generator: `.github/workflows/deploy.yml` uploads a Pages
 artifact (GitHub), `.forgejo/workflows/deploy.yml` force-pushes to the `pages` branch that
 **Codeberg** Pages serves, and `.gitlab-ci.yml`'s `pages` job publishes a `public/` artifact
@@ -154,15 +155,15 @@ mode as a **secret-less relay** (Gitea allows public PKCE clients; the relay exi
 because the instance sends no CORS). The rest of this section describes the **GitHub**
 flow (the default); the three interchangeable modes are:
 
-| Mode | Server needed | Client secret | UX | Selected when |
-|---|---|---|---|---|
-| **PAT** | none | none | paste a fine-grained token | no client id / broker configured |
-| **OAuth redirect** | broker (holds secret) | yes | "Sign in with GitHub" → redirect | client id + broker set, `flow` ≠ device |
-| **Device flow** | broker as **secret-less relay** | none | show a code → approve on github.com | client id + broker set, `flow: device` |
+| Mode               | Server needed                   | Client secret | UX                                  | Selected when                           |
+| ------------------ | ------------------------------- | ------------- | ----------------------------------- | --------------------------------------- |
+| **PAT**            | none                            | none          | paste a fine-grained token          | no client id / broker configured        |
+| **OAuth redirect** | broker (holds secret)           | yes           | "Sign in with GitHub" → redirect    | client id + broker set, `flow` ≠ device |
+| **Device flow**    | broker as **secret-less relay** | none          | show a code → approve on github.com | client id + broker set, `flow: device`  |
 
 Why the broker exists at all: GitHub's token endpoint needs the client secret **and**
-sends no CORS, so a static SPA can't finish OAuth alone. The GitHub *API* (`api.github.com`)
-*does* send CORS, which is why the PAT path needs no server. Device flow removes the
+sends no CORS, so a static SPA can't finish OAuth alone. The GitHub _API_ (`api.github.com`)
+_does_ send CORS, which is why the PAT path needs no server. Device flow removes the
 secret but still needs the relay (GitHub's device endpoints also lack CORS).
 
 There's a second seam, `canAccessAdvanced()` (`host/access.ts`, returns `true`), gating
@@ -187,6 +188,7 @@ The editor bundle uses a **relative base** (`./`), so the same build works at an
 ## The workflows
 
 **In a site repo** (shipped from `site-template/.github/workflows/`):
+
 - **`deploy.yml`** — on push to `main`, `workflow_dispatch`, and a daily `schedule`:
   checkout content + Timber (pinned), build the site (CLI) and the editor (app), deploy to
   Pages. Reads `GH_OAUTH_CLIENT_ID` + `TIMBER_OAUTH_FLOW` variables and `.timber-broker-url`.
@@ -195,6 +197,7 @@ The editor bundle uses a **relative base** (`./`), so the same build works at an
   trigger a deploy.
 
 **In the Timber repo:**
+
 - **`sync-template.yml`** — on push to `main` touching `site-template/**`: `rsync --delete`
   `site-template/` into `Timber-site-template` and push (no-op when unchanged). Needs the
   `TEMPLATE_SYNC_TOKEN` secret.
@@ -204,14 +207,14 @@ The editor bundle uses a **relative base** (`./`), so the same build works at an
 
 **Site repo** (Settings → Secrets and variables → Actions):
 
-| Kind | Name | For |
-|---|---|---|
-| Variable | `GH_OAUTH_CLIENT_ID` | the App's client id (public) |
-| Variable | `TIMBER_OAUTH_FLOW` | `device` to use device flow; unset = redirect |
-| Variable | `TIMBER_EDITOR_PATH` | editor URL segment; unset = `edit` (→ `/<repo>/edit/`) |
-| Secret | `GH_OAUTH_CLIENT_SECRET` | redirect flow only — **omit for device flow** |
-| Secret | `CLOUDFLARE_API_TOKEN` | Workers Scripts: Edit |
-| Secret | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account id |
+| Kind     | Name                     | For                                                    |
+| -------- | ------------------------ | ------------------------------------------------------ |
+| Variable | `GH_OAUTH_CLIENT_ID`     | the App's client id (public)                           |
+| Variable | `TIMBER_OAUTH_FLOW`      | `device` to use device flow; unset = redirect          |
+| Variable | `TIMBER_EDITOR_PATH`     | editor URL segment; unset = `edit` (→ `/<repo>/edit/`) |
+| Secret   | `GH_OAUTH_CLIENT_SECRET` | redirect flow only — **omit for device flow**          |
+| Secret   | `CLOUDFLARE_API_TOKEN`   | Workers Scripts: Edit                                  |
+| Secret   | `CLOUDFLARE_ACCOUNT_ID`  | Cloudflare account id                                  |
 
 **Broker** (Cloudflare Worker env, set by `setup-broker.yml`): `OAUTH_CLIENT_ID`,
 `OAUTH_CLIENT_SECRET` (redirect only), `ALLOWED_ORIGINS` (comma-separated; legacy
@@ -245,13 +248,13 @@ Cross-cutting things and every file they touch:
   `site-template/.github/workflows/deploy.yml` (build var) + `public/config.js` template +
   the docs.
 - **Editor build provenance** (the out-of-date banner, SPEC §12) is baked as **build
-  vars** (`VITE_TIMBER_UPSTREAM_REPO` / `_UPSTREAM_REF` / `_BUILD_SHA`), *not* runtime
+  vars** (`VITE_TIMBER_UPSTREAM_REPO` / `_UPSTREAM_REF` / `_BUILD_SHA`), _not_ runtime
   config — it describes the build, so it can't come from a site's `config.js`. Touch
   points: `packages/app/vite.config.ts` (the `timber-build-provenance` plugin stamps
   them from git HEAD + repo/ref defaults, so the banner works without a workflow change)
-  + `host/buildInfo.ts` (resolve) + `state/upstreamVersion.ts` +
-  `components/UpdateBanner.tsx` + `site-template/.github/workflows/deploy.yml` (optional
-  explicit overrides) + `packages/app/.env.example`.
+  - `host/buildInfo.ts` (resolve) + `state/upstreamVersion.ts` +
+    `components/UpdateBanner.tsx` + `site-template/.github/workflows/deploy.yml` (optional
+    explicit overrides) + `packages/app/.env.example`.
 - **The change lifecycle (editing → saved → published, SPEC §8/§11) is fed by two
   invariants — keep both total.** (1) The autosaver's dirty union
   (`state/autosave.ts` `notifyDirtyPaths`) spans EVERY dirty collection — objects, raw
@@ -267,14 +270,14 @@ Cross-cutting things and every file they touch:
   `content/...` regex, that drift is how deleted translations went missing.
 - **The two-axis status model** (storage: On this device ⇄ Backed up; publication:
   Draft/Public — SPEC §5/§8/§11) → `packages/content/src/visibility.ts` (publication flag)
-  + `packages/app/src/state/changes.ts` (per-object state) + the autosave WIP-commit filter
-  (device-only objects excluded) + `packages/app/src/components/ChangeBadges.tsx` and the new
-  location-readout component + the host seam's **`HostRepo.getVisibility()`**
-  (`public`/`private`/`unknown`; both adapters report it) for the privacy label + the
-  New-object dialog's create-time storage choice. The readout's website stop keys off the
-  optional `DeployBackend` capability (absent host — e.g. Gitea/Codeberg — ⇒ no stop).
-  Storage level is **device-local metadata**
-  (IndexedDB), publication is **front matter** — keep the two in their separate homes.
+  - `packages/app/src/state/changes.ts` (per-object state) + the autosave WIP-commit filter
+    (device-only objects excluded) + `packages/app/src/components/ChangeBadges.tsx` and the new
+    location-readout component + the host seam's **`HostRepo.getVisibility()`**
+    (`public`/`private`/`unknown`; both adapters report it) for the privacy label + the
+    New-object dialog's create-time storage choice. The readout's website stop keys off the
+    optional `DeployBackend` capability (absent host — e.g. Gitea/Codeberg — ⇒ no stop).
+    Storage level is **device-local metadata**
+    (IndexedDB), publication is **front matter** — keep the two in their separate homes.
 - **Pagination** (SPEC §13 → Pagination) → the logic is one pure module, `@timber/content`
   `pagination.ts` (`parsePaginate`/`validatePaginate`, `pageUrl`, `paginateEntries`,
   `paginateObject`, `paginatedSeo`) + its `PageSeoOptions` hook in `seo.ts` (`url` /
@@ -284,7 +287,7 @@ Cross-cutting things and every file they touch:
   `{}`, so `{% if paginator %}` is false on ordinary pages). **Both callers loop over the
   pages and must stay in lockstep** — `packages/cli/src/build.node.ts` (writes N
   `index.html`) and `packages/app/src/preview/renderSitePage.ts` (renders page 1 from the
-  *live* front matter) — plus the default theme
+  _live_ front matter) — plus the default theme
   (`site-template/themes/default/templates/default.liquid` listing +
   `pagination.liquid` pager + `.listing`/`.pagination` in `theme.css`) and
   `docs/pagination.md`. Change the URL shape or the paginator's keys → update the theme,
@@ -397,7 +400,7 @@ Cross-cutting things and every file they touch:
   only; the mirror regenerates the template repo. Never edit `Timber-site-template` directly.
 - **Setup instructions** → **`INSTALL.md`** only (canonical); the template's README is a stub.
 - **Auth flow / mode** → `host/{auth,oauth,deviceFlow,token}.ts` + the sign-in components
-  + `docs/auth-github-app.md`.
+  - `docs/auth-github-app.md`.
 - **The Timber wordmark → keep the two font copies in lockstep.** The brand wordmark renders in two
   documents from two copies of the **subsetted Fraunces face** (`fraunces-timber.woff2`, OFL-1.1):
   the **editor chrome** (`@timber/app` — `components/Wordmark.tsx` + `.wordmark` rules and `@font-face`

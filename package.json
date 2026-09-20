@@ -20,6 +20,7 @@
     "test:watch": "vitest",
     "test:live": "vitest run --project live",
     "test:browser": "vitest run --config packages/app/vitest.browser.config.ts",
+    "test:e2e": "vitest run --config packages/app/vitest.e2e.config.ts",
     "lint": "eslint .",
     "format": "prettier --write ."
   },

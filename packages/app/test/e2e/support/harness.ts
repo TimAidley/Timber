@@ -1,0 +1,137 @@
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { FakeGitHub, type FakeRepo } from '@timber/fake-github';
+import { seedRepoFromDir } from '@timber/fake-github/node';
+import { routeFakeGitHub } from '@timber/fake-github/playwright';
+import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
+import { createServer, type ViteDevServer } from 'vite';
+
+const here = dirname(fileURLToPath(import.meta.url));
+const APP_ROOT = join(here, '..', '..', '..');
+export const SITE_TEMPLATE = join(APP_ROOT, '..', '..', 'site-template');
+
+export const OWNER = 'acme';
+export const REPO = 'village-hall';
+export const LOGIN = 'alice';
+export const TOKEN = 'ghp_fake_token';
+export const WIP_BRANCH = `${LOGIN}_wip`;
+
+/**
+ * The editor served by Vite plus a headless browser — started once per test file, shared
+ * across its tests. The fake GitHub is per-test (see {@link openEditor}) so tests never
+ * share repo state.
+ */
+export interface EditorServer {
+  url: string;
+  browser: Browser;
+  close(): Promise<void>;
+}
+
+export async function startEditorServer(): Promise<EditorServer> {
+  const server: ViteDevServer = await createServer({
+    configFile: join(APP_ROOT, 'vite.config.ts'),
+    root: APP_ROOT,
+    server: { port: 0 },
+    logLevel: 'warn',
+  });
+  await server.listen();
+  const url = server.resolvedUrls?.local[0];
+  if (!url) throw new Error('Vite did not report a local URL');
+  const browser = await chromium.launch();
+  return {
+    url,
+    browser,
+    async close() {
+      await browser.close();
+      await server.close();
+    },
+  };
+}
+
+export interface EditorSession {
+  fake: FakeGitHub;
+  repo: FakeRepo;
+  context: BrowserContext;
+  page: Page;
+  /** Console errors + uncaught page errors seen so far — a test can assert there were none. */
+  browserErrors: string[];
+  close(): Promise<void>;
+}
+
+export interface OpenEditorOptions {
+  /** Deploy-run pacing for the fake Actions. Default: completes on the next poll. */
+  actions?: { queuedMs: number; runMs: number };
+  /** Skip the sign-in gate (a session that starts already connected). Default: sign in via the UI. */
+  signIn?: boolean;
+}
+
+/**
+ * A fresh fake repo seeded from `site-template/`, a fresh browser context whose
+ * `api.github.com` traffic is routed to it, and a page that has pasted the fake PAT and
+ * reached the loaded editor. The site's `config.js` is also intercepted so the editor
+ * targets the fake repo whatever the checkout's own config says.
+ */
+export async function openEditor(
+  server: EditorServer,
+  options: OpenEditorOptions = {},
+): Promise<EditorSession> {
+  const fake = new FakeGitHub();
+  fake.addUser(LOGIN, TOKEN);
+  const repo = fake.addRepo({
+    owner: OWNER,
+    repo: REPO,
+    ...(options.actions ? { actions: options.actions } : {}),
+  });
+  await seedRepoFromDir(repo, SITE_TEMPLATE, {
+    message: 'Seed site from Timber site-template',
+  });
+
+  const context = await server.browser.newContext();
+  await routeFakeGitHub(context, fake);
+  await context.route('**/config.js', (route) =>
+    route.fulfill({
+      contentType: 'application/javascript',
+      body: `window.__TIMBER_CONFIG__ = ${JSON.stringify({ owner: OWNER, repo: REPO })};`,
+    }),
+  );
+
+  const page = await context.newPage();
+  const browserErrors: string[] = [];
+  page.on('pageerror', (err) => browserErrors.push(`pageerror: ${err.message}`));
+  page.on('console', (msg) => {
+    // The fake answers a missing WIP branch with a 404 by design; the browser logs every
+    // non-2xx fetch as an error, which isn't the app's doing.
+    if (msg.type() === 'error' && !/404|Failed to load resource/.test(msg.text())) {
+      browserErrors.push(`console: ${msg.text()}`);
+    }
+  });
+
+  await page.goto(server.url);
+  if (options.signIn !== false) {
+    await page.getByLabel('GitHub personal access token').fill(TOKEN);
+    await page.getByRole('button', { name: 'Connect' }).click();
+    await page.getByRole('button', { name: /^Publish/ }).waitFor();
+  }
+
+  return {
+    fake,
+    repo,
+    context,
+    page,
+    browserErrors,
+    close: () => context.close(),
+  };
+}
+
+/** Poll until `predicate` holds (autosave is debounced; a commit takes a moment to land). */
+export async function waitUntil(
+  predicate: () => boolean,
+  timeoutMs = 20_000,
+  label = 'condition',
+): Promise<void> {
+  const start = Date.now();
+  while (!predicate()) {
+    if (Date.now() - start > timeoutMs) throw new Error(`Timed out waiting for ${label}`);
+    await new Promise((r) => setTimeout(r, 100));
+  }
+}
