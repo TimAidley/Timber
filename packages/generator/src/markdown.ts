@@ -5,7 +5,10 @@ import remarkFrontmatter from 'remark-frontmatter';
 import remarkDirective from 'remark-directive';
 import remarkBreaks from 'remark-breaks';
 import remarkRehype from 'remark-rehype';
-import rehypeSanitize, { defaultSchema, type Options as SanitizeSchema } from 'rehype-sanitize';
+import rehypeSanitize, {
+  defaultSchema,
+  type Options as SanitizeSchema,
+} from 'rehype-sanitize';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeStringify from 'rehype-stringify';
 import { remarkFigure } from './figureDirective.js';
@@ -22,15 +25,79 @@ import { remarkFigure } from './figureDirective.js';
 // hints on <img> — everything else stays locked to the safe default schema.
 // The `:timber-logo` shortcode (SPEC §7 → Brand wordmark) renders to nested <span>s;
 // permit only its `wordmark`/`wordmark__tim` classes (<span> is already an allowed tag).
+// The `::embed` directive (SPEC §7 → Embeds) renders the facade the `{% embed %}` tag
+// also emits: a <div> holding a link over a poster and the play icon. Every addition is
+// pinned to a value pattern rather than merely to a tag, because this markup is built by
+// `embedMarkup.ts` and nothing else may wear its shape: the `style` attribute only ever
+// carries `--embed-ratio`, and `data-embed-src` — the URL the click-to-load script loads
+// into an iframe — only ever an https URL. <svg>/<path> are allowed as tags with a fixed
+// attribute set (no href, no event handlers), which is what keeps the icon from being a
+// hole; an author cannot reach any of this, since raw HTML in a body never becomes an
+// element (remark-rehype runs without `allowDangerousHtml`).
+/**
+ * One entry in a sanitize schema's per-tag attribute list: a bare property name (any
+ * value allowed) or the name followed by the values it may take.
+ */
+type AttributeRule = string | [string, ...Array<string | number | boolean | RegExp>];
+
+/**
+ * Extend a tag's allowed attributes, **merging** into any existing rule for the same
+ * property instead of appending a second one — hast-util-sanitize reads the first rule
+ * it finds for a property and ignores the rest, so an appended rule for a property the
+ * default schema already constrains is silently dead. (`a` already carries a `className`
+ * rule for footnote backrefs, which is exactly how this was found: the class on the
+ * facade's link came out empty.)
+ */
+function extend(base: AttributeRule[] = [], additions: AttributeRule[]): AttributeRule[] {
+  const out = [...base];
+  for (const addition of additions) {
+    const name = Array.isArray(addition) ? addition[0] : addition;
+    const at = out.findIndex((rule) => (Array.isArray(rule) ? rule[0] : rule) === name);
+    if (at === -1) {
+      out.push(addition);
+    } else if (!Array.isArray(out[at]) || !Array.isArray(addition)) {
+      // Either side allowing any value makes the merged rule unconstrained.
+      out[at] = name;
+    } else {
+      out[at] = [name, ...out[at].slice(1), ...addition.slice(1)];
+    }
+  }
+  return out;
+}
+
 const sanitizeSchema: SanitizeSchema = {
   ...defaultSchema,
-  tagNames: [...(defaultSchema.tagNames ?? []), 'figure', 'figcaption'],
+  tagNames: [...(defaultSchema.tagNames ?? []), 'figure', 'figcaption', 'svg', 'path'],
   attributes: {
     ...defaultSchema.attributes,
-    code: [...(defaultSchema.attributes?.code ?? []), ['className', /^language-./]],
-    figure: [...(defaultSchema.attributes?.figure ?? []), ['className', /^fig(--[a-z-]+)?$/]],
-    img: [...(defaultSchema.attributes?.img ?? []), 'loading', 'decoding'],
-    span: [...(defaultSchema.attributes?.span ?? []), ['className', /^wordmark(__tim)?$/]],
+    code: extend(defaultSchema.attributes?.code as AttributeRule[], [
+      ['className', /^language-./],
+    ]),
+    figure: extend(defaultSchema.attributes?.figure as AttributeRule[], [
+      ['className', /^fig(--[a-z-]+)?$/],
+    ]),
+    img: extend(defaultSchema.attributes?.img as AttributeRule[], [
+      'loading',
+      'decoding',
+      ['className', /^embed__poster$/],
+    ]),
+    span: extend(defaultSchema.attributes?.span as AttributeRule[], [
+      ['className', /^(wordmark(__tim)?|embed__play)$/],
+    ]),
+    div: extend(defaultSchema.attributes?.div as AttributeRule[], [
+      ['className', /^embed(--(inline|newtab))?$/],
+      ['style', /^--embed-ratio:[\d.\s/]+$/],
+      ['data-embed-src', /^https:\/\//],
+      'data-embed-title',
+    ]),
+    a: extend(defaultSchema.attributes?.a as AttributeRule[], [
+      ['className', /^embed__launch$/],
+      'target',
+      'rel',
+      'aria-label',
+    ]),
+    svg: [['className', /^embed__play-icon$/], 'viewBox', 'aria-hidden', 'focusable'],
+    path: ['d'],
   },
 };
 

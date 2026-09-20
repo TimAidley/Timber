@@ -1,6 +1,7 @@
 import Ajv, { type ValidateFunction } from 'ajv';
 import addFormats from 'ajv-formats';
 import { fieldToJsonSchema } from './fields.js';
+import { validateEmbedBlocks } from './embeds.js';
 import { validateFigureBlocks } from './figures.js';
 import { validatePaginate } from './pagination.js';
 import { shadowedAliases } from './redirects.js';
@@ -105,9 +106,11 @@ export class Validator {
     }
 
     // 3. Body-level checks: embedded image figures (SPEC §7 — alt mandatory, bounded
-    //    layout/size). Same tolerant rule as the rest: this blocks *publish*, not save.
+    //    layout/size) and `::embed` blocks (a URL that resolves, bounded mode/ratio).
+    //    Same tolerant rule as the rest: these block *publish*, not save.
     if (object.body) {
       errors.push(...validateFigureBlocks(object.body));
+      errors.push(...validateEmbedBlocks(object.body));
     }
 
     // 4. Paginated listings (SPEC §13). `paginate` is an undeclared, tolerated front-matter

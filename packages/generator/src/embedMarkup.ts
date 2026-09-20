@@ -41,13 +41,33 @@ const RATIO = /^\d+(\.\d+)?(\s*\/\s*\d+(\.\d+)?)?$/;
 const DEFAULT_RATIO = '16 / 9';
 
 /** Font Awesome Free's `play` (CC BY 4.0) — the same source as the default theme's icons. */
-const PLAY_ICON =
-  '<svg class="embed__play-icon" viewBox="0 0 384 512" aria-hidden="true" focusable="false">' +
-  '<path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.3-23-41L73 39z"/>' +
-  '</svg>';
+const PLAY_PATH =
+  'M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9' +
+  'L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.3-23-41L73 39z';
 
-function attr(name: string, value: string | undefined): string {
-  return value === undefined ? '' : ` ${name}="${escapeHtml(value)}"`;
+/**
+ * One element of the facade, as a shape both output routes can build from: the
+ * `{% embed %}` tag serialises it to HTML, and the `:::embed` directive maps it into
+ * the Markdown pipeline's node tree. Describing the markup once is the point — two
+ * emitters would be two things to keep in step with the injected script and styling.
+ */
+export interface EmbedElement {
+  tag: string;
+  /** Attributes in source order; `class` is the literal attribute, not `className`. */
+  props: Record<string, string>;
+  children: EmbedElement[];
+}
+
+function el(
+  tag: string,
+  props: Record<string, string | undefined>,
+  children: EmbedElement[] = [],
+): EmbedElement {
+  const kept: Record<string, string> = {};
+  for (const [name, value] of Object.entries(props)) {
+    if (value !== undefined) kept[name] = value;
+  }
+  return { tag, props: kept, children };
 }
 
 /**
@@ -64,13 +84,14 @@ function activationSrc(src: string, provider: string): string {
 }
 
 /**
- * Build the facade for one embed. Returns `''` when the URL can't be embedded —
- * `embedUrlProblem` says why, and the validator has already reported it against the
- * field, so the page is an unpublishable draft rather than one silently missing markup.
+ * Build the facade for one embed, as an element tree. Returns `undefined` when the URL
+ * can't be embedded — `embedUrlProblem` says why, and the validator has already reported
+ * it, against the field or the body block it was written in, so the page is an
+ * unpublishable draft rather than one silently missing markup.
  */
-export function embedHtml(spec: EmbedSpec): string {
+export function embedTree(spec: EmbedSpec): EmbedElement | undefined {
   const ref = parseEmbedUrl(spec.url);
-  if (!ref) return '';
+  if (!ref) return undefined;
 
   const mode = spec.mode === 'newtab' ? 'newtab' : 'inline';
   const ratio =
@@ -80,23 +101,77 @@ export function embedHtml(spec: EmbedSpec): string {
   // image inside a described link is announced twice.
   const name = spec.label ? `Play ${spec.label}` : 'Play';
 
-  const inner = poster
-    ? `<img class="embed__poster" src="${escapeHtml(poster)}" alt="" loading="lazy" decoding="async" />`
-    : '';
-
-  return (
-    `<div class="embed embed--${mode}" style="--embed-ratio:${ratio}"` +
-    (mode === 'inline'
-      ? attr('data-embed-src', activationSrc(ref.src, ref.provider))
-      : '') +
-    (mode === 'inline' ? attr('data-embed-title', name) : '') +
-    '>' +
-    `<a class="embed__launch" href="${escapeHtml(spec.url)}" target="_blank" rel="noopener"` +
-    attr('aria-label', name) +
-    '>' +
-    inner +
-    `<span class="embed__play">${PLAY_ICON}</span>` +
-    '</a>' +
-    '</div>'
+  const inner: EmbedElement[] = [];
+  if (poster) {
+    inner.push(
+      el('img', {
+        class: 'embed__poster',
+        src: poster,
+        alt: '',
+        loading: 'lazy',
+        decoding: 'async',
+      }),
+    );
+  }
+  inner.push(
+    el('span', { class: 'embed__play' }, [
+      el(
+        'svg',
+        {
+          class: 'embed__play-icon',
+          viewBox: '0 0 384 512',
+          'aria-hidden': 'true',
+          focusable: 'false',
+        },
+        [el('path', { d: PLAY_PATH })],
+      ),
+    ]),
   );
+
+  return el(
+    'div',
+    {
+      class: `embed embed--${mode}`,
+      style: `--embed-ratio:${ratio}`,
+      'data-embed-src':
+        mode === 'inline' ? activationSrc(ref.src, ref.provider) : undefined,
+      'data-embed-title': mode === 'inline' ? name : undefined,
+    },
+    [
+      el(
+        'a',
+        {
+          class: 'embed__launch',
+          href: spec.url,
+          target: '_blank',
+          rel: 'noopener',
+          'aria-label': name,
+        },
+        inner,
+      ),
+    ],
+  );
+}
+
+/** Elements the facade uses that carry no children and close themselves. */
+const SELF_CLOSING = new Set(['img', 'path']);
+
+function serialize(node: EmbedElement): string {
+  const attrs = Object.entries(node.props)
+    .map(([name, value]) => ` ${name}="${escapeHtml(value)}"`)
+    .join('');
+  if (SELF_CLOSING.has(node.tag) && node.children.length === 0) {
+    return `<${node.tag}${attrs} />`;
+  }
+  return `<${node.tag}${attrs}>${node.children.map(serialize).join('')}</${node.tag}>`;
+}
+
+/**
+ * The facade as an HTML string, for the `{% embed %}` tag — which writes it straight to
+ * the output stream, so every value it carries is escaped here. Empty when the URL can't
+ * be embedded; see {@link embedTree}.
+ */
+export function embedHtml(spec: EmbedSpec): string {
+  const tree = embedTree(spec);
+  return tree ? serialize(tree) : '';
 }

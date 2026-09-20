@@ -1,4 +1,5 @@
 import { SKIP, visit } from 'unist-util-visit';
+import { embedTree, type EmbedElement, type EmbedSpec } from './embedMarkup.js';
 
 /**
  * Render support for the `:::figure` image directive (SPEC §7). The editor owns the
@@ -19,6 +20,18 @@ const DEFAULT_SIZE = 'md';
  * styled by the theme's `.wordmark` rules + the vendored Fraunces face.
  */
 const WORDMARK = 'timber-logo';
+
+/**
+ * The `:::embed` directive (SPEC §7 → Embeds) — the body counterpart of the
+ * `{% embed %}` tag, for a game or a video that belongs *in* an article rather than
+ * at a slot the theme chose:
+ *
+ *     ::embed{url="https://tim.aidley.com/redbaron/" poster="game.webp" label="Red Baron"}
+ *
+ * Both routes go through `embedTree`, so a body embed and a template one are the same
+ * component — which is what lets one injected script and one stylesheet serve both.
+ */
+const EMBED = 'embed';
 
 /** Minimal mdast shape this transform reads/writes (avoids a hard `@types/mdast` dep). */
 interface MdNode {
@@ -79,7 +92,11 @@ function transformFigure(node: MdNode): void {
     children.push(image);
   }
   if (caption.length) {
-    children.push({ type: 'paragraph', data: { hName: 'figcaption' }, children: caption });
+    children.push({
+      type: 'paragraph',
+      data: { hName: 'figcaption' },
+      children: caption,
+    });
   }
 
   node.children = children;
@@ -109,6 +126,48 @@ function transformWordmark(node: MdNode): void {
 }
 
 /**
+ * Map the facade's element tree into mdast, the way `transformWordmark` does: nodes of
+ * a type remark-rehype doesn't know, carrying `hName`/`hProperties`, which it turns into
+ * exactly those elements. `class` becomes `className` here — the one place the two
+ * spellings meet — and the sanitiser's schema (`markdown.ts`) is what decides that these
+ * particular elements and attributes survive.
+ */
+function toMdast(node: EmbedElement): MdNode {
+  const { class: className, ...rest } = node.props;
+  return {
+    type: 'embedElement',
+    data: {
+      hName: node.tag,
+      hProperties: {
+        ...(className !== undefined ? { className: className.split(' ') } : {}),
+        ...rest,
+      },
+    },
+    children: node.children.map(toMdast),
+  };
+}
+
+/**
+ * Rewrite an `embed` directive into the facade, reporting whether it could. A URL that
+ * can't be embedded leaves the node alone, so it neutralises to the source the author
+ * typed like any other directive this transform doesn't take — the same "shown as
+ * written" outcome, and the validator (`validateEmbedBlocks`) names the problem. Any
+ * body typed inside the container form is discarded, as it is for the wordmark: an
+ * embed is its attributes.
+ */
+function transformEmbed(node: MdNode): boolean {
+  const attributes = node.attributes ?? {};
+  if (!attributes.url) return false;
+  const tree = embedTree(attributes as unknown as EmbedSpec);
+  if (!tree) return false;
+
+  const mapped = toMdast(tree);
+  node.children = mapped.children ?? [];
+  node.data = mapped.data ?? {};
+  return true;
+}
+
+/**
  * The remark transform. `figure` directives become `<figure>`; every OTHER directive
  * (stray `:x` / `::x` / `:::y`) is neutralised back to the plain text it was typed as,
  * mirroring the editor's sanitiser so hand-edited colon-bearing content renders as
@@ -117,28 +176,48 @@ function transformWordmark(node: MdNode): void {
 export function remarkFigure() {
   return (tree: unknown, file: { toString(): string }): void => {
     const source = file.toString();
-    visit(tree as never, (raw: unknown, index: number | undefined, rawParent: unknown) => {
-      const node = raw as MdNode;
-      const type = node.type;
-      if (type !== 'textDirective' && type !== 'leafDirective' && type !== 'containerDirective') {
-        return;
-      }
-      if (type === 'containerDirective' && node.name === FIGURE) {
-        transformFigure(node);
-        return;
-      }
-      if ((type === 'textDirective' || type === 'leafDirective') && node.name === WORDMARK) {
-        transformWordmark(node);
-        return;
-      }
-      const parent = rawParent as MdNode | undefined;
-      if (!parent?.children || index == null) return;
-      const text = rawSource(node, source);
-      parent.children[index] =
-        type === 'textDirective'
-          ? { type: 'text', value: text }
-          : { type: 'paragraph', children: [{ type: 'text', value: text }] };
-      return [SKIP, index];
-    });
+    visit(
+      tree as never,
+      (raw: unknown, index: number | undefined, rawParent: unknown) => {
+        const node = raw as MdNode;
+        const type = node.type;
+        if (
+          type !== 'textDirective' &&
+          type !== 'leafDirective' &&
+          type !== 'containerDirective'
+        ) {
+          return;
+        }
+        if (type === 'containerDirective' && node.name === FIGURE) {
+          transformFigure(node);
+          return;
+        }
+        if (
+          (type === 'textDirective' || type === 'leafDirective') &&
+          node.name === WORDMARK
+        ) {
+          transformWordmark(node);
+          return;
+        }
+        // Both block forms, because `::embed{…}` and `:::embed{…}` are equally natural to
+        // type and the difference (a closing fence) buys an embed nothing. An embed that
+        // can't be resolved falls through to the neutralising branch below.
+        if (
+          (type === 'leafDirective' || type === 'containerDirective') &&
+          node.name === EMBED &&
+          transformEmbed(node)
+        ) {
+          return SKIP;
+        }
+        const parent = rawParent as MdNode | undefined;
+        if (!parent?.children || index == null) return;
+        const text = rawSource(node, source);
+        parent.children[index] =
+          type === 'textDirective'
+            ? { type: 'text', value: text }
+            : { type: 'paragraph', children: [{ type: 'text', value: text }] };
+        return [SKIP, index];
+      },
+    );
   };
 }

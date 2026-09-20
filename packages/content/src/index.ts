@@ -31,6 +31,7 @@ export type { ShadowedAlias } from './redirects.js';
 export { isPublic, canPublish, resolvePublic, withPublic } from './visibility.js';
 export { FIELD_KINDS, isFieldKind, fieldToJsonSchema } from './fields.js';
 export { validateFigureBlocks } from './figures.js';
+export { validateEmbedBlocks } from './embeds.js';
 export {
   siteContext,
   pageSeo,

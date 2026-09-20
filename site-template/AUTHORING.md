@@ -166,6 +166,29 @@ An optional caption.
 `layout` is one of `full-width`, `wrap-left`, `wrap-right`, `center`; `size` is `sm`, `md`
 or `lg`. **Alt text is mandatory** — an image without it will fail validation.
 
+## Videos and other embeds in the body
+
+The `embed` directive puts a video, a playable game, a map — anything that lives in an
+iframe — into the body of a post:
+
+```markdown
+::embed{url="https://www.youtube.com/watch?v=dQw4w9WgXcQ" label="The video"}
+
+::embed{url="https://example.com/game/" poster="game.webp" label="My game" ratio="4 / 3"}
+```
+
+Only `url` is required, and it must be `https`. A YouTube or Vimeo link is turned into
+that site's player automatically; any other URL is embedded as itself.
+
+Nothing is loaded until a visitor clicks: what the page shows first is the `poster` image
+with a play button over it (a YouTube or Vimeo link brings its own poster, so you only
+need one for your own pages). Add `mode="newtab"` if you would rather the click open the
+URL in a new tab than load it in place, and `ratio` if the thing you are embedding is not
+16:9. `label` names the play button for anyone using a screen reader.
+
+The editor shows the directive as the text you typed; the Preview pane shows the real
+thing. A URL that could not be embedded will fail validation and say why.
+
 ## Before you commit
 
 ```sh
