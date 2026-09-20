@@ -107,7 +107,21 @@ export class LocalDraftStore {
         }
       }
     };
-    const db = await promisify(request);
+    // Not `promisify`: a version bump can't proceed while another tab still holds the
+    // old version open, and in that case `open` neither succeeds nor errors — it fires
+    // `blocked` and waits indefinitely. Unhandled, that hangs the caller forever: drafts
+    // silently stop persisting, and the advanced panel (which awaits this before loading
+    // anything) never opens at all. Reject with something the author can act on.
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error ?? new Error('IndexedDB open failed'));
+      request.onblocked = () =>
+        reject(
+          new Error(
+            'another Timber tab is open on an older version — close it and reload this page',
+          ),
+        );
+    });
     return new LocalDraftStore(db);
   }
 

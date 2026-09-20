@@ -71,3 +71,34 @@ describe('LocalDraftStore — v4 upgrade evicts stale drafts', () => {
     ]);
   });
 });
+
+/**
+ * A version bump only completes once every other connection to the old version closes.
+ * Until then `open` fires `blocked` and sits there — it neither succeeds nor errors — so
+ * an unhandled `blocked` hangs the caller forever rather than failing.
+ */
+describe('LocalDraftStore — a blocked upgrade fails instead of hanging', () => {
+  it('rejects while another connection holds the old version open', async () => {
+    // A live v3 connection, as a second editor tab running the previous build would have.
+    const holder = await new Promise<IDBDatabase>((resolve, reject) => {
+      const req = indexedDB.open('timber-drafts-blocked', 3);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        db.createObjectStore('drafts', { keyPath: 'key' });
+        db.createObjectStore('storage', { keyPath: 'key' });
+        db.createObjectStore('assets', { keyPath: 'key' });
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+
+    const upgrade = new Promise<string>((resolve, reject) => {
+      const req = indexedDB.open('timber-drafts-blocked', 4);
+      req.onsuccess = () => reject(new Error('should not have opened'));
+      req.onblocked = () => resolve('blocked');
+    });
+
+    await expect(upgrade).resolves.toBe('blocked');
+    holder.close();
+  });
+});
