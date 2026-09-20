@@ -54,6 +54,7 @@ describe('the ::embed body directive', () => {
   it('keeps every part of the facade through sanitisation', async () => {
     const html = await renderMarkdown(`${DIRECTIVE}\n`);
     for (const fragment of [
+      'class="embed-wrap embed-wrap--inline"',
       'class="embed embed--inline"',
       'style="--embed-ratio:auto"',
       'class="embed__launch"',

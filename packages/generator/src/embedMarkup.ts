@@ -167,7 +167,13 @@ export function embedTree(spec: EmbedSpec): EmbedElement | undefined {
   );
 
   const inline = mode === 'inline';
-  return el(
+  // The facade is wrapped, and the wrapper reserves a gutter on *both* sides for an
+  // inline embed: the close control lives in the right one, and the left one balances
+  // it so the embed stays centred in the column. Reserving the space up front — rather
+  // than adding a strip when someone clicks — is what keeps activating an embed from
+  // moving anything on the page. A `newtab` embed never grows a control, so it gets no
+  // gutters and the full column.
+  const box = el(
     'div',
     {
       class: `embed embed--${mode}`,
@@ -198,6 +204,8 @@ export function embedTree(spec: EmbedSpec): EmbedElement | undefined {
       ),
     ],
   );
+
+  return el('div', { class: `embed-wrap embed-wrap--${mode}` }, [box]);
 }
 
 /** Elements the facade uses that carry no children and close themselves. */

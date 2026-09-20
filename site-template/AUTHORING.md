@@ -202,9 +202,10 @@ If the thing you are embedding wants a different shape from the image standing i
 That shows a wide banner, and reshapes to a 640px 4:3 box when someone clicks play. Leave
 the `frame*` ones out and the embed keeps the poster's shape.
 
-Once something is playing, a small cross appears just above it, at the top right. Clicking
-that closes the embed and brings the poster back — which also stops whatever was running
-inside it.
+Once something is playing, a small cross appears in the margin to its right, level with
+the top. Clicking that closes the embed and brings the poster back — which also stops
+whatever was running inside it. The space for it is held on both sides from the start, so
+clicking play doesn't shift the page around.
 
 The editor shows the directive as the text you typed; the Preview pane shows the real
 thing. A URL that could not be embedded will fail validation and say why.

@@ -209,6 +209,19 @@ describe('injected styling and script', () => {
   });
 });
 
+describe('embedHtml — the reserved gutters', () => {
+  it('wraps the facade, so the space the close control needs exists from the start', () => {
+    const html = embedHtml({ url: GAME, poster: 'game.webp' });
+    expect(html.startsWith('<div class="embed-wrap embed-wrap--inline">')).toBe(true);
+    expect(html).toContain('<div class="embed embed--inline"');
+  });
+
+  it('reserves nothing for a newtab embed, which never grows a control', () => {
+    const html = embedHtml({ url: GAME, poster: 'game.webp', mode: 'newtab' });
+    expect(html).toContain('class="embed-wrap embed-wrap--newtab"');
+  });
+});
+
 describe('embedHtml — an omitted ratio means the poster’s own shape', () => {
   it('lets a poster of your own set the shape, rather than cropping it to 16/9', () => {
     expect(embedHtml({ url: GAME, poster: 'game.webp' })).toContain(

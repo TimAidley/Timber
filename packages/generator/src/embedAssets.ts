@@ -39,13 +39,17 @@ const EMBED_CSS =
   // is dropping this class, with nothing to restore.
   `.embed--playing{aspect-ratio:var(--embed-frame-ratio,var(--embed-ratio,16/9));` +
   `max-width:var(--embed-frame-width,var(--embed-width,none))}` +
-  // The way back to the poster sits just above the embed, at its top-right corner,
-  // rather than floating over it: an iframe swallows the page's mouse events, so a
-  // control overlaying it is a control whose hover state the page can only half see —
-  // and it would cover the thing someone just asked to look at. Out here it is always
-  // visible while playing, and needs no hover to find.
-  `.embed__bar{display:flex;justify-content:flex-end;width:100%;margin-inline:auto;` +
-  `padding-block-end:.4rem}` +
+  // An inline embed reserves a gutter each side, and the way back to the poster lives
+  // in the right one, level with the embed's top edge. Beside rather than over it: an
+  // iframe swallows the page's mouse events, so a control laid over one has a hover
+  // state the page can only half see, and it would cover the thing someone just asked
+  // to look at. Reserved on both sides and at all times, so the embed stays centred and
+  // *nothing moves* when someone clicks play — the control appears in space the page
+  // was already holding for it.
+  `.embed-wrap{position:relative}` +
+  `.embed-wrap--inline{padding-inline:var(--embed-gutter,2.25rem)}` +
+  `.embed__bar{position:absolute;top:0;right:0;display:flex;justify-content:center;` +
+  `width:var(--embed-gutter,2.25rem)}` +
   `.embed__close{display:inline-flex;align-items:center;justify-content:center;padding:0;` +
   `border:0;cursor:pointer;background:var(--embed-close-bg,transparent);` +
   `width:var(--embed-close-size,1.75rem);height:var(--embed-close-size,1.75rem);` +
@@ -76,14 +80,12 @@ const EMBED_JS =
   `L176 189.3 75.9 89.2c-12.3-12.3-32.2-12.3-44.5 0L9.2 111.4c-12.3 12.3-12.3 32.2 0 44.5L109.3 256` +
   ` 9.2 356.1c-12.3 12.3-12.3 32.2 0 44.5l22.2 22.2c12.3 12.3 32.2 12.3 44.5 0L176 322.7l100.1 100.1` +
   `c12.3 12.3 32.2 12.3 44.5 0l22.2-22.2c12.3-12.3 12.3-32.2 0-44.5L242.7 256z"/></svg>';` +
-  // The bar is a sibling of the box, not a child: it has to sit outside the frame, and
-  // `.embed` clips its contents. It mirrors the box's own max-width so its right edge
-  // lines up with the embed's top-right corner, whatever width the embed was given.
-  `function closeBar(box,label){` +
+  // The bar goes in the wrapper, not the box: `.embed` clips its contents, and the
+  // gutter it sits in belongs to the wrapper. Positioned by the stylesheet, so there is
+  // nothing to measure here.
+  `function closeBar(label){` +
   `var bar=document.createElement('div');` +
   `bar.className='embed__bar';` +
-  `var width=window.getComputedStyle?window.getComputedStyle(box).maxWidth:'';` +
-  `if(width)bar.style.maxWidth=width;` +
   `var b=document.createElement('button');` +
   `b.type='button';` +
   `b.className='embed__close';` +
@@ -99,11 +101,9 @@ const EMBED_JS =
   // never match it, but the order says which gesture wins if that ever changes.
   `var closer=t.closest('.embed__bar .embed__close');` +
   `if(closer){` +
-  // The bar is inserted directly before its box and removed with it, so the box is
-  // always the element after it.
   `var bar=closer.closest('.embed__bar');` +
-  `var open=bar.nextElementSibling;` +
-  `if(!open||!open.classList.contains('embed'))return;` +
+  `var open=bar.parentNode.querySelector('.embed');` +
+  `if(!open)return;` +
   `var frame=open.querySelector('.embed__frame');` +
   `var facade=open.querySelector('.embed__launch');` +
   `e.preventDefault();` +
@@ -149,7 +149,7 @@ const EMBED_JS =
   // decoded by the browser — instead of building a new one and fetching it again.
   `launch.style.display='none';` +
   `box.appendChild(frame);` +
-  `if(box.parentNode)box.parentNode.insertBefore(closeBar(box,label),box);` +
+  `if(box.parentNode)box.parentNode.appendChild(closeBar(label));` +
   // A game or a video wants the keys the page would otherwise take, and the click that
   // swapped the frame in landed on an element that is no longer showing.
   `frame.focus();` +

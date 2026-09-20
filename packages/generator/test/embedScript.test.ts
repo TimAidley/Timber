@@ -215,14 +215,22 @@ describe.skipIf(!hasDom)('closing a loaded embed', () => {
   const closeButton = (): HTMLElement =>
     document.querySelector('.embed__close') as HTMLElement;
 
-  it('offers a way back, just above the embed rather than over it', () => {
+  it('offers a way back in the gutter beside the embed, not over it', () => {
     const bar = document.querySelector('.embed__bar')!;
     const box = document.querySelector('.embed')!;
     // Outside the box — `.embed` clips its contents, and a control over an iframe is
-    // one the page can only half see.
+    // one the page can only half see. It belongs to the wrapper, whose reserved gutter
+    // it is positioned into.
     expect(box.contains(bar)).toBe(false);
-    expect(box.previousElementSibling).toBe(bar);
+    expect(bar.parentElement).toBe(document.querySelector('.embed-wrap'));
+    expect(bar.parentElement!.contains(box)).toBe(true);
     expect(closeButton().getAttribute('aria-label')).toBe('Close Red Baron');
+  });
+
+  it('appears in space the page was already holding, so nothing moves', () => {
+    // The gutters are on the wrapper from the start, whether or not anything is playing.
+    const wrap = document.querySelector('.embed-wrap')!;
+    expect(wrap.className).toContain('embed-wrap--inline');
   });
 
   it('unloads the third party, which is the point of closing it', () => {

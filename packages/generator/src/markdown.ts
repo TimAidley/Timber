@@ -85,7 +85,7 @@ const sanitizeSchema: SanitizeSchema = {
       ['className', /^(wordmark(__tim)?|embed__play)$/],
     ]),
     div: extend(defaultSchema.attributes?.div as AttributeRule[], [
-      ['className', /^embed(--(inline|newtab))?$/],
+      ['className', /^(embed|embed-wrap)(--(inline|newtab))?$/],
       [
         'style',
         /^--embed-ratio:(auto|[\d.\s/]+)(;--embed-width:[\d.]+(px|rem|em|ch|%|vw|vh))?$/,
