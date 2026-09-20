@@ -1,0 +1,43 @@
+{
+  "name": "@timber/fake-github",
+  "version": "0.0.0",
+  "description": "An in-memory fake of the GitHub REST subset Timber's RepoClient uses — real git object hashing, refs, compare, and a simulated Actions deploy — so the editor can be driven end to end (in tests or by a virtual user) without the network.",
+  "type": "module",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "default": "./dist/node.js"
+    },
+    "./playwright": {
+      "types": "./dist/playwright.d.ts",
+      "default": "./dist/playwright.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "peerDependencies": {
+    "playwright": ">=1.40"
+  },
+  "peerDependenciesMeta": {
+    "playwright": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@timber/github": "workspace:*",
+    "@types/node": "^22.10.2",
+    "playwright": "1.56.0"
+  }
+}
