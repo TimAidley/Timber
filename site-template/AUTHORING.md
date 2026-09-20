@@ -187,8 +187,13 @@ URL in a new tab than load it in place. `label` names the play button for anyone
 screen reader.
 
 `ratio` and `width` set the shape of the poster — an aspect ratio like `16 / 9` or `4 / 3`,
-and a width like `640px` or `80%`. If the thing you are embedding wants a different shape
-from the image standing in for it, `frameRatio` and `frameWidth` apply once it loads:
+and a width like `640px` or `80%`. **Leave `ratio` out and your poster keeps its own
+shape**, which is usually what you want: the page is laid out around the image as it is,
+and clicking play keeps that shape rather than jumping to something else. Set `ratio` when
+you want the poster cropped to a shape it isn't — a wide banner out of a square image.
+
+If the thing you are embedding wants a different shape from the image standing in for it,
+`frameRatio` and `frameWidth` apply once it loads:
 
 ```markdown
 ::embed{url="https://example.com/game/" poster="wide-banner.webp" ratio="21 / 9" frameRatio="4 / 3" frameWidth="640px"}

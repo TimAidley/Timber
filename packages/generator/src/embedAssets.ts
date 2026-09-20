@@ -19,6 +19,9 @@
  */
 const EMBED_CSS =
   `@layer timber.embed{` +
+  // `--embed-ratio:auto` is the poster-shaped case: with no ratio on the box there is
+  // no definite height for the percentages below to resolve against, so they fall back
+  // to `auto` and the image's own dimensions size everything.
   `.embed{position:relative;display:block;width:100%;max-width:var(--embed-width,none);` +
   `margin-inline:auto;aspect-ratio:var(--embed-ratio,16/9);` +
   `overflow:hidden;background:var(--embed-backdrop,#000)}` +
@@ -65,6 +68,15 @@ const EMBED_JS =
   // The poster and the iframe share one box, so a different shape for the loaded embed
   // is that box being re-sized as they swap. Absent attributes leave the poster's.
   `var r=box.getAttribute('data-embed-frame-ratio');` +
+  // An iframe has no intrinsic size, so a poster-shaped box has to be given a real
+  // ratio before the poster it was measuring leaves the page. Measuring the poster
+  // itself — rather than falling back to 16/9 — is what stops the page jumping when
+  // someone clicks play.
+  `if(!r&&box.style.getPropertyValue('--embed-ratio').trim()==='auto'){` +
+  `var p=launch.querySelector('.embed__poster');` +
+  `if(p&&p.naturalWidth&&p.naturalHeight)r=p.naturalWidth+'/'+p.naturalHeight;` +
+  `else if(launch.offsetWidth&&launch.offsetHeight)r=launch.offsetWidth+'/'+launch.offsetHeight;` +
+  `else r='16/9';}` +
   `if(r)box.style.setProperty('--embed-ratio',r);` +
   `var w=box.getAttribute('data-embed-frame-width');` +
   `if(w)box.style.setProperty('--embed-width',w);` +

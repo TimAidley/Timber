@@ -88,7 +88,7 @@ const sanitizeSchema: SanitizeSchema = {
       ['className', /^embed(--(inline|newtab))?$/],
       [
         'style',
-        /^--embed-ratio:[\d.\s/]+(;--embed-width:[\d.]+(px|rem|em|ch|%|vw|vh))?$/,
+        /^--embed-ratio:(auto|[\d.\s/]+)(;--embed-width:[\d.]+(px|rem|em|ch|%|vw|vh))?$/,
       ],
       ['data-embed-src', /^https:\/\//],
       'data-embed-title',

@@ -209,6 +209,41 @@ describe('injected styling and script', () => {
   });
 });
 
+describe('embedHtml — an omitted ratio means the poster’s own shape', () => {
+  it('lets a poster of your own set the shape, rather than cropping it to 16/9', () => {
+    expect(embedHtml({ url: GAME, poster: 'game.webp' })).toContain(
+      'style="--embed-ratio:auto"',
+    );
+  });
+
+  it('still takes an explicit ratio, which crops the poster to it', () => {
+    expect(embedHtml({ url: GAME, poster: 'game.webp', ratio: '21 / 9' })).toContain(
+      'style="--embed-ratio:21 / 9"',
+    );
+  });
+
+  it('keeps the default for a provider thumbnail, whose bars are meant to be cropped', () => {
+    // YouTube's poster is a 4:3 image with a 16:9 frame letterboxed inside it.
+    expect(embedHtml({ url: VIDEO })).toContain('style="--embed-ratio:16 / 9"');
+  });
+
+  it('keeps the default when there is no poster to take a shape from', () => {
+    expect(embedHtml({ url: GAME })).toContain('style="--embed-ratio:16 / 9"');
+  });
+
+  it('leaves the frame ratio unset, for the script to measure at the swap', () => {
+    expect(embedHtml({ url: GAME, poster: 'game.webp' })).not.toContain(
+      'data-embed-frame-ratio',
+    );
+  });
+
+  it('still takes an explicit frame ratio over the poster’s', () => {
+    expect(embedHtml({ url: GAME, poster: 'game.webp', frameRatio: '4 / 3' })).toContain(
+      'data-embed-frame-ratio="4 / 3"',
+    );
+  });
+});
+
 describe('embedHtml — the loaded iframe can differ from the poster', () => {
   it('carries a frame ratio for the script to apply on activation', () => {
     const html = embedHtml({ url: GAME, ratio: '16 / 9', frameRatio: '4 / 3' });

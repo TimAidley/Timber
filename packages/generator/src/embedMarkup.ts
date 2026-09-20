@@ -27,11 +27,14 @@ export interface EmbedSpec {
   label?: string;
   /** `inline` swaps in the iframe on click; `newtab` opens the URL in a new tab. */
   mode?: 'inline' | 'newtab';
-  /** CSS `aspect-ratio` for the poster. Defaults to 16 / 9. */
+  /** CSS `aspect-ratio` for the poster. Omit to let the poster image set its own. */
   ratio?: string;
   /** Maximum width for the poster, as a CSS length. Defaults to the column width. */
   width?: string;
-  /** `aspect-ratio` once the iframe is loaded. Defaults to {@link EmbedSpec.ratio}. */
+  /**
+   * `aspect-ratio` once the iframe is loaded. Defaults to {@link EmbedSpec.ratio}, or —
+   * when that is the poster's own — to the shape the poster turned out to be.
+   */
   frameRatio?: string;
   /** Maximum width once the iframe is loaded. Defaults to {@link EmbedSpec.width}. */
   frameWidth?: string;
@@ -119,7 +122,12 @@ export function embedTree(spec: EmbedSpec): EmbedElement | undefined {
     value: string | undefined,
     ok: (v: string) => boolean,
   ): string | undefined => (value && ok(value) ? value.trim() : undefined);
-  const ratio = pick(spec.ratio, isEmbedRatio) ?? DEFAULT_RATIO;
+  // No ratio and a poster of your own means "this shape": the box takes the image's
+  // own, rather than cropping it to a 16/9 letterbox. A *provider's* thumbnail is not
+  // that — YouTube's is a 4:3 image with the video letterboxed inside it, so the
+  // default crops the bars off, which is why it applies to a borrowed poster and an
+  // embed with no poster at all (nothing to take a shape from).
+  const ratio = pick(spec.ratio, isEmbedRatio) ?? (spec.poster ? 'auto' : DEFAULT_RATIO);
   const width = pick(spec.width, isEmbedWidth);
   // The poster and the iframe share one box, so "different settings for the two" is that
   // box being re-sized as the script swaps them. Only a *difference* is carried, so the
@@ -166,6 +174,9 @@ export function embedTree(spec: EmbedSpec): EmbedElement | undefined {
       style: `--embed-ratio:${ratio}` + (width ? `;--embed-width:${width}` : ''),
       'data-embed-src': inline ? activationSrc(ref.src, ref.provider) : undefined,
       'data-embed-title': inline ? name : undefined,
+      // Nothing when the frame matches the poster. With a poster-shaped box that
+      // includes leaving it *unset*: the script measures the poster it is replacing, so
+      // the swap keeps the shape the page was already laid out for.
       'data-embed-frame-ratio':
         inline && frameRatio && frameRatio !== ratio ? frameRatio : undefined,
       'data-embed-frame-width':

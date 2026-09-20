@@ -134,6 +134,51 @@ describe.skipIf(!hasDom)('resizing on activation', () => {
   });
 });
 
+describe.skipIf(!hasDom)('a poster-shaped embed', () => {
+  /** jsdom reports no intrinsic image size, so state it the way a loaded image would. */
+  function posterSize(width: number, height: number): void {
+    const img = document.querySelector('.embed__poster')!;
+    Object.defineProperty(img, 'naturalWidth', { value: width, configurable: true });
+    Object.defineProperty(img, 'naturalHeight', { value: height, configurable: true });
+  }
+
+  beforeEach(async () => {
+    const html = await renderPage({
+      markdown: `---\ntitle: t\ngame: ${GAME}\n---\n`,
+      template:
+        `<html><head></head><body>` +
+        `{% embed url: page.game, poster: 'game.webp', label: page.title %}` +
+        `</body></html>`,
+    });
+    document.body.innerHTML = bodyOf(html);
+    new Function(scriptOf(html))();
+  });
+
+  it('starts with no ratio of its own, so the image sizes the box', () => {
+    const box = document.querySelector('.embed') as HTMLElement;
+    expect(box.style.getPropertyValue('--embed-ratio').trim()).toBe('auto');
+  });
+
+  it('takes the poster’s shape at the swap, so the page does not jump', () => {
+    posterSize(800, 600);
+    click(document.querySelector('.embed__poster')!);
+
+    const box = document.querySelector('.embed') as HTMLElement;
+    expect(box.style.getPropertyValue('--embed-ratio')).toBe('800/600');
+    expect(document.querySelector('iframe.embed__frame')).not.toBeNull();
+  });
+
+  it('falls back to a real ratio when the poster never loaded', () => {
+    // An iframe has no intrinsic size: leaving the box on `auto` would collapse it.
+    posterSize(0, 0);
+    click(document.querySelector('.embed__poster')!);
+
+    const box = document.querySelector('.embed') as HTMLElement;
+    expect(box.style.getPropertyValue('--embed-ratio')).not.toBe('auto');
+    expect(box.style.getPropertyValue('--embed-ratio')).toBeTruthy();
+  });
+});
+
 describe.skipIf(!hasDom)('a newtab embed', () => {
   it('is left alone by the script — it is already a working link', async () => {
     const inline = await renderedPage('inline');

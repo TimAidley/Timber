@@ -55,7 +55,7 @@ describe('the ::embed body directive', () => {
     const html = await renderMarkdown(`${DIRECTIVE}\n`);
     for (const fragment of [
       'class="embed embed--inline"',
-      'style="--embed-ratio:16 / 9"',
+      'style="--embed-ratio:auto"',
       'class="embed__launch"',
       'class="embed__poster"',
       'class="embed__play"',
