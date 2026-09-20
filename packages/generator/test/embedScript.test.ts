@@ -215,13 +215,13 @@ describe.skipIf(!hasDom)('closing a loaded embed', () => {
   const closeButton = (): HTMLElement =>
     document.querySelector('.embed__close') as HTMLElement;
 
-  it('offers a way back, beside the embed rather than over it', () => {
+  it('offers a way back, just above the embed rather than over it', () => {
     const bar = document.querySelector('.embed__bar')!;
     const box = document.querySelector('.embed')!;
     // Outside the box — `.embed` clips its contents, and a control over an iframe is
     // one the page can only half see.
     expect(box.contains(bar)).toBe(false);
-    expect(box.nextElementSibling).toBe(bar);
+    expect(box.previousElementSibling).toBe(bar);
     expect(closeButton().getAttribute('aria-label')).toBe('Close Red Baron');
   });
 
