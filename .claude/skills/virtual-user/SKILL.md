@@ -41,18 +41,24 @@ is implemented; do not "help" it mid-run. If it gets stuck, that is a finding.
    second tab at a given moment — that is how "someone else pushed" or "the host failed"
    is staged.
 
-3. **Spawn the tester** with the `Agent` tool, `subagent_type: virtual-user`. The prompt
-   is ONLY: the scenario file's contents, the editor URL, the token, and the report path
-   `testing/virtual-user/findings/<YYYY-MM-DD>-<scenario>.md`. Nothing about the code.
-   Run it in the foreground if you have nothing else to do; it typically takes a few
-   minutes.
+3. **Ask which model to run the tester on**, in a plain sentence (no picker widget), e.g.
+   _"Run the tester on the same model as this session, or a cheaper one such as Sonnet?"_
+   Default to the session's model if the user has no preference. Effort can't be chosen
+   per run — it is inherited from the session (or pinned in the agent file); say so if the
+   user asks.
 
-4. **Get ground truth** before reading the report's conclusions:
+4. **Spawn the tester** with the `Agent` tool, `subagent_type: virtual-user`, passing the
+   chosen `model`. The prompt is ONLY: the scenario file's contents, the editor URL, the
+   token, and the report path `testing/virtual-user/findings/<YYYY-MM-DD>-<scenario>.md`.
+   Nothing about the code. Run it in the foreground if you have nothing else to do; it
+   typically takes a few minutes.
+
+5. **Get ground truth** before reading the report's conclusions:
    `curl -s http://127.0.0.1:5198/__control/state` — branches, files and commit log per
    branch, deploy runs, and any request the fake didn't model (`unhandled`, which is a
    fake-github gap to fix, not an app bug).
 
-5. **Triage each finding** against the state and the source:
+6. **Triage each finding** against the state and the source:
    - _Confirmed bug_ → reproduce it as a deterministic test first (an `*.e2e.ts` on the
      harness in `packages/app/test/e2e/`, or a unit test if the cause is local), then fix
      it, in separate commits. Note the test's path in the finding.
@@ -61,7 +67,7 @@ is implemented; do not "help" it mid-run. If it gets stuck, that is a finding.
    - _Cannot tell_ → leave it for the user with what you did establish.
      Append a `## Triage` section to the report with a verdict per finding.
 
-6. **Report to the user**: the confirmed bugs (with repro test paths), the rest in a line
+7. **Report to the user**: the confirmed bugs (with repro test paths), the rest in a line
    each, and a link to the report file. Stop the environment (`Ctrl-C` / kill the
    background task).
 
@@ -73,4 +79,4 @@ is implemented; do not "help" it mid-run. If it gets stuck, that is a finding.
 - A finding is more trustworthy when its repro is from a fresh sign-in and the state file
   agrees. Prefer confirming by re-running the steps in the harness over reasoning.
 - The virtual user is a bug _discovery_ tool. It never becomes the regression suite — that
-  is what the deterministic test in step 5 is for.
+  is what the deterministic test in step 6 is for.
