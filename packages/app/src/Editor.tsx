@@ -55,7 +55,10 @@ import { PublishDialog } from './components/PublishDialog.js';
 import { ChangesPanel, type ChangeEntry } from './components/ChangesPanel.js';
 import { DiagnosticsPanel } from './components/DiagnosticsPanel.js';
 import { diagnostics } from './state/diagnostics.js';
-import { ForeignChangesBanner, ForeignChangesDialog } from './components/ForeignChanges.js';
+import {
+  ForeignChangesBanner,
+  ForeignChangesDialog,
+} from './components/ForeignChanges.js';
 import { useForeignChanges } from './state/foreignChanges.js';
 import { kindOf } from './advanced/loadAdvancedFiles.js';
 import { objectChangeState, siteFileChanges, summarizeChanges } from './state/changes.js';
@@ -136,9 +139,23 @@ export function Editor({
   // Once a flush lands staged assets on the branch, their local byte copies (the
   // crash-safety net; see persistStagedAsset) are no longer needed — the branch is
   // the durable copy. Device-only assets never commit, so theirs live on.
-  const autosave = useAutosave(session, assetStore, isDeviceOnlyPath, (paths) => {
-    for (const p of paths) void draftStore.current?.deleteAsset(repoKey, p);
-  });
+  const autosave = useAutosave(
+    session,
+    assetStore,
+    isDeviceOnlyPath,
+    (paths) => {
+      for (const p of paths) void draftStore.current?.deleteAsset(repoKey, p);
+    },
+    // A draft's job ends when the commit carrying it lands — the branch is the durable
+    // copy (SPEC §11). Kept past that, it is re-queued by load-time recovery over
+    // whatever the branch has gained since, which is how a page's front matter got
+    // reverted to its creation-time state and a template fix pushed from elsewhere was
+    // silently undone. Guarded on `since` so keystrokes typed during the commit survive.
+    (paths, since) => {
+      for (const p of paths)
+        void draftStore.current?.deleteIfUnchangedSince(repoKey, p, since);
+    },
+  );
   // Repo visibility (SPEC §5), for the honest "backed up = visible to whom" wording. Read
   // once through the host port; `unknown` (the default) stays conservative if it can't tell.
   const [repoVisibility, setRepoVisibility] = useState<RepoVisibility>('unknown');
@@ -178,7 +195,8 @@ export function Editor({
     const byTranslation = new Map<string, Map<string, ContentObject>>();
     for (const o of objects) {
       if (!o.translationKey) continue;
-      const group = byTranslation.get(o.translationKey) ?? new Map<string, ContentObject>();
+      const group =
+        byTranslation.get(o.translationKey) ?? new Map<string, ContentObject>();
       const lang = o.lang ?? '';
       if (!group.has(lang)) group.set(lang, o);
       byTranslation.set(o.translationKey, group);
@@ -197,11 +215,15 @@ export function Editor({
   const siteI18n = useMemo(() => {
     const settings = model.objects.find((o) => model.schemas.get(o.type)?.page === false);
     const languages = Array.isArray(settings?.data.languages)
-      ? settings.data.languages.filter((l): l is string => typeof l === 'string' && l.length > 0)
+      ? settings.data.languages.filter(
+          (l): l is string => typeof l === 'string' && l.length > 0,
+        )
       : [];
     const declared = settings?.data.defaultLanguage;
     const defaultLanguage =
-      typeof declared === 'string' && declared.length > 0 ? declared : (languages[0] ?? '');
+      typeof declared === 'string' && declared.length > 0
+        ? declared
+        : (languages[0] ?? '');
     return { languages, defaultLanguage, enabled: languages.length > 0 };
   }, [model]);
 
@@ -260,7 +282,9 @@ export function Editor({
   // Within the advanced view, `files` is the text-file editor; `assets` is the binary asset
   // manager; `themes` is the theme switcher/delete panel (SPEC §13). Selecting a template/config
   // file returns to `files`.
-  const [advancedMode, setAdvancedMode] = useState<'files' | 'assets' | 'themes'>('files');
+  const [advancedMode, setAdvancedMode] = useState<'files' | 'assets' | 'themes'>(
+    'files',
+  );
   // Only load advanced files once the user first opens that view (lazy). Once seen,
   // the hook keeps its state so switching back and forth is instant.
   const [advancedSeen, setAdvancedSeen] = useState(false);
@@ -403,7 +427,9 @@ export function Editor({
     } catch (err) {
       if (ticket !== refreshTicket.current) return;
       const isNotFound =
-        typeof err === 'object' && err !== null && 'status' in err &&
+        typeof err === 'object' &&
+        err !== null &&
+        'status' in err &&
         (err as { status: unknown }).status === 404;
       if (isNotFound) {
         // Benign: the WIP branch doesn't exist yet, so nothing is published-pending.
@@ -413,7 +439,12 @@ export function Editor({
         // A real host failure. Keep the last-known state rather than zeroing it —
         // a transient network blip must not erase every "Saved" badge and (via the
         // counts gate) hide the Publish button for changes that are still pending.
-        diagnostics.record('warn', 'changes', 'could not compare branches for the change counts', err);
+        diagnostics.record(
+          'warn',
+          'changes',
+          'could not compare branches for the change counts',
+          err,
+        );
       }
       setSaveSeq((s) => s + 1);
     }
@@ -493,10 +524,14 @@ export function Editor({
         // copy is local) and — the reload-safety case — a create/promote whose commit hadn't
         // landed yet. A non-device orphan is then re-queued so it reaches WIP; a device-only
         // one stays local. (An orphan already on the branch is skipped — the branch wins.)
-        const orphanDrafts = drafts.filter((d) => !model.objects.some((o) => o.path === d.path));
+        const orphanDrafts = drafts.filter(
+          (d) => !model.objects.some((o) => o.path === d.path),
+        );
         if (orphanDrafts.length > 0) {
           const snapshot = new Map(
-            orphanDrafts.map((d) => [d.path, reassembleDocument(d.data, d.body)] as const),
+            orphanDrafts.map(
+              (d) => [d.path, reassembleDocument(d.data, d.body)] as const,
+            ),
           );
           const assembled = assembleContent(snapshot, model.schemas);
           if (assembled.objects.length > 0) {
@@ -506,7 +541,8 @@ export function Editor({
             });
           }
           for (const d of orphanDrafts) {
-            if (!devicePaths.has(d.path)) autosave.markObjectDirty(d.path, d.data, d.body);
+            if (!devicePaths.has(d.path))
+              autosave.markObjectDirty(d.path, d.data, d.body);
           }
         }
 
@@ -602,11 +638,17 @@ export function Editor({
   // matter, persisted to IndexedDB. The author picks its **storage level** at creation
   // (SPEC §5/§8): `backed-up` commits its index.md to WIP like any other edit; `device`
   // keeps it on this machine only (never queued to WIP), the tradeoff shown in the dialog.
-  function createObject(schema: ContentTypeSchema, title: string, storage: StorageLevel): void {
+  function createObject(
+    schema: ContentTypeSchema,
+    title: string,
+    storage: StorageLevel,
+  ): void {
     // On an i18n site a new collection object gets the default language (front matter +
     // lang-prefixed path); singletons and single-language sites get none (SPEC §5 → ML).
     const lang =
-      siteI18n.enabled && schema.kind === 'collection' ? siteI18n.defaultLanguage : undefined;
+      siteI18n.enabled && schema.kind === 'collection'
+        ? siteI18n.defaultLanguage
+        : undefined;
     const taken = new Set(
       objects
         .filter((o) => o.type === schema.name && (!lang || o.lang === lang))
@@ -650,15 +692,28 @@ export function Editor({
     const newDir = translation.path.replace(/\/index\.md$/, '');
     const moves = session.treeEntries
       .filter(
-        (e) => e.type === 'blob' && e.path.startsWith(`${oldDir}/`) && e.path !== selected.path,
+        (e) =>
+          e.type === 'blob' &&
+          e.path.startsWith(`${oldDir}/`) &&
+          e.path !== selected.path,
       )
       .map((e) => {
         const to = `${newDir}/${e.path.slice(oldDir.length + 1)}`;
         return { from: to, to, sha: e.sha };
       });
 
-    autosave.markObjectCreated(translation.path, translation.data, translation.body, moves);
-    void draftStore.current?.put(repoKey, translation.path, translation.data, translation.body);
+    autosave.markObjectCreated(
+      translation.path,
+      translation.data,
+      translation.body,
+      moves,
+    );
+    void draftStore.current?.put(
+      repoKey,
+      translation.path,
+      translation.data,
+      translation.body,
+    );
 
     // Backfill the shared key onto the source (in its live buffer, so the selection-change
     // fold carries it into `objects`, and mark it dirty so the link is committed too).
@@ -691,7 +746,9 @@ export function Editor({
     }
     return [...langs];
   }, [selected, selectedTranslationKey, objects]);
-  const missingLanguages = siteI18n.languages.filter((l) => !existingLanguages.includes(l));
+  const missingLanguages = siteI18n.languages.filter(
+    (l) => !existingLanguages.includes(l),
+  );
   // "Add translation" applies to a language-bearing collection page with a language still
   // to fill (so single-language sites and lang-less objects never see it).
   const canAddTranslation =
@@ -732,7 +789,8 @@ export function Editor({
       // Drop the bundle's locally-persisted images too — nothing on the host to schedule.
       const bundleDir = target.path.replace(/\/index\.md$/, '') + '/';
       for (const asset of assetStore.all()) {
-        if (asset.path.startsWith(bundleDir)) void draftStore.current?.deleteAsset(repoKey, asset.path);
+        if (asset.path.startsWith(bundleDir))
+          void draftStore.current?.deleteAsset(repoKey, asset.path);
       }
       if (selectedPath === target.path) setSelectedPath('');
       setDeleteTarget(null);
@@ -818,7 +876,12 @@ export function Editor({
       } catch (err) {
         // No WIP branch yet → nothing committed to revert; only local edits to drop.
         // A *real* failure here silently narrows the discard, so record it.
-        diagnostics.record('warn', 'discard', 'could not list the bundle’s committed changes', err);
+        diagnostics.record(
+          'warn',
+          'discard',
+          'could not list the bundle’s committed changes',
+          err,
+        );
       }
 
       // Is there a published version to revert to?
@@ -835,7 +898,8 @@ export function Editor({
         const store = draftStore.current;
         if (!store) return;
         for (const a of await store.allAssetsForRepo(repoKey)) {
-          if (a.path.startsWith(`${bundleDir}/`)) await store.deleteAsset(repoKey, a.path);
+          if (a.path.startsWith(`${bundleDir}/`))
+            await store.deleteAsset(repoKey, a.path);
         }
       };
 
@@ -1032,7 +1096,8 @@ export function Editor({
       void draftStore.current?.put(repoKey, m.to, m.data, m.body);
     }
     for (const r of plan.objectRewrites) {
-      if (!deviceOnlyPaths.has(r.object.path)) autosave.markObjectDirty(r.object.path, r.data, r.object.body);
+      if (!deviceOnlyPaths.has(r.object.path))
+        autosave.markObjectDirty(r.object.path, r.data, r.object.body);
       void draftStore.current?.put(repoKey, r.object.path, r.data, r.object.body);
     }
     setDeviceOnlyPaths(devicePaths);
@@ -1082,7 +1147,9 @@ export function Editor({
     const data: FrontMatter = { ...(dirty?.data ?? settings.data), activeTheme: name };
     autosave.markObjectDirty(settings.path, data, body);
     void draftStore.current?.put(repoKey, settings.path, data, body);
-    setObjects((prev) => prev.map((o) => (o.path === settings.path ? { ...o, data } : o)));
+    setObjects((prev) =>
+      prev.map((o) => (o.path === settings.path ? { ...o, data } : o)),
+    );
     // If the settings page is open in the form, fold the change into the live buffer
     // so the next autosave of that buffer carries it too.
     if (editingPath === settings.path) {
@@ -1126,7 +1193,9 @@ export function Editor({
   // Objects kept On this device (SPEC §5/§8) — shown in the header, but not "pending
   // publish" (they're not on the host), so they don't feed `hasChanges`.
   const deviceCount = useMemo(
-    () => objects.filter((o) => deviceOnlyPaths.has(o.path) && !deletedPaths.has(o.path)).length,
+    () =>
+      objects.filter((o) => deviceOnlyPaths.has(o.path) && !deletedPaths.has(o.path))
+        .length,
     [objects, deviceOnlyPaths, deletedPaths],
   );
 
@@ -1218,7 +1287,9 @@ export function Editor({
         return;
       }
       try {
-        const latest = await session.client.deploy?.getLatestDeploy(session.defaultBranch);
+        const latest = await session.client.deploy?.getLatestDeploy(
+          session.defaultBranch,
+        );
         setDeploySince(latest?.createdAt);
       } catch {
         setDeploySince(undefined);
@@ -1290,12 +1361,7 @@ export function Editor({
   const changeEntries: ChangeEntry[] = useMemo(() => {
     const entries: ChangeEntry[] = [];
     for (const o of objects) {
-      const state = objectChangeState(
-        o.path,
-        editingPaths,
-        savedPaths,
-        deletedPaths,
-      );
+      const state = objectChangeState(o.path, editingPaths, savedPaths, deletedPaths);
       if (state === 'clean') continue;
       entries.push({
         path: o.path,
@@ -1713,7 +1779,9 @@ export function Editor({
         <UpdateBanner
           behindBy={update.behindBy}
           phase={updatePhase}
-          {...(updateDeployStatus.progress ? { progress: updateDeployStatus.progress } : {})}
+          {...(updateDeployStatus.progress
+            ? { progress: updateDeployStatus.progress }
+            : {})}
           onUpdate={() => void startUpdate()}
           onReload={() => window.location.reload()}
         />
@@ -1935,7 +2003,9 @@ export function Editor({
                   ) : (
                     <AdvancedList
                       files={advanced.files}
-                      selectedPath={advancedMode === 'files' ? advanced.selectedPath : undefined}
+                      selectedPath={
+                        advancedMode === 'files' ? advanced.selectedPath : undefined
+                      }
                       editingPaths={editingPaths}
                       savedPaths={savedPaths}
                       onSelect={(path) => {
@@ -2033,7 +2103,11 @@ export function Editor({
           onClose={() => setShowNew(false)}
           onCreate={createObject}
           repoPublic={
-            repoVisibility === 'public' ? true : repoVisibility === 'private' ? false : undefined
+            repoVisibility === 'public'
+              ? true
+              : repoVisibility === 'private'
+                ? false
+                : undefined
           }
         />
       ) : null}
@@ -2159,6 +2233,12 @@ export function Editor({
           onClose={() => setShowPublish(false)}
           onPublished={(sha) => {
             setBaseSha(sha);
+            // Publishing makes the branch the agreed truth and resets WIP onto it, so any
+            // draft still lying around can only be a stale shadow of what just shipped —
+            // the other half of what `runPublish`'s contract already describes ("the
+            // caller updates `session.baseSha` and clears local drafts"). Device-only
+            // objects are spared: their draft is the only copy, not a cache.
+            void draftStore.current?.clearBackedUp(repoKey);
             setShowPublish(false);
             setPublishPhase('building'); // hand off to the button morph; deploy poll takes over
             void refreshSaved(); // WIP reset to the new main → "Saved" clears immediately

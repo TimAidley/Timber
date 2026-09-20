@@ -15,7 +15,12 @@ interface DirtyObject {
 
 export interface AutosaverDeps {
   /** Land one coalesced commit of all dirty files (writes, deletions, moves) on the WIP branch. */
-  commit: (files: FileWrite[], message: string, deletions: string[], moves: MoveEntry[]) => Promise<void>;
+  commit: (
+    files: FileWrite[],
+    message: string,
+    deletions: string[],
+    moves: MoveEntry[],
+  ) => Promise<void>;
   /** Fetch a staged asset's bytes for committing. */
   assetBytes: (path: string) => Promise<Uint8Array | undefined>;
   /** Notified whenever the sync state changes (drives the indicator). */
@@ -56,6 +61,16 @@ export interface AutosaverDeps {
    */
   onAssetsCommitted?: (paths: string[]) => void;
   /**
+   * Notified with the object + raw-file paths a WIP commit just landed, and the instant
+   * the flush took them. Their local drafts have served their purpose (the branch now
+   * carries the work) and should be dropped — a draft that outlives its commit becomes,
+   * on the next load, indistinguishable from unsaved work and gets re-queued over
+   * whatever the branch has since gained. `since` lets the caller skip a draft the
+   * author has touched while the commit was in flight. Device-only paths never appear
+   * here; their draft IS the durable copy.
+   */
+  onObjectsCommitted?: (paths: string[], since: number) => void;
+  /**
    * Whether an object path is parked **On this device** (SPEC §5/§8 storage axis).
    * Device-only objects are held out of the WIP commit entirely — their durable copy
    * is the IndexedDB draft, not the branch. Editing routes them around the autosaver,
@@ -80,7 +95,12 @@ export interface AutosaverDeps {
 
 /** A bundle name from an index.md path, e.g. `content/events/fete/index.md` → `fete`. */
 function bundleName(path: string): string {
-  return path.replace(/\/index\.md$/, '').split('/').pop() ?? path;
+  return (
+    path
+      .replace(/\/index\.md$/, '')
+      .split('/')
+      .pop() ?? path
+  );
 }
 
 function describeCommit(
@@ -98,11 +118,15 @@ function describeCommit(
   if (edits.length === 1) clauses.push(`edit ${edits[0]}`);
   else if (edits.length > 1) clauses.push(`edit ${edits.length} items`);
   if (renamedBundles.length === 1) clauses.push(`rename ${renamedBundles[0]}`);
-  else if (renamedBundles.length > 1) clauses.push(`rename ${renamedBundles.length} items`);
+  else if (renamedBundles.length > 1)
+    clauses.push(`rename ${renamedBundles.length} items`);
   if (deletedBundles.length === 1) clauses.push(`delete ${deletedBundles[0]}`);
-  else if (deletedBundles.length > 1) clauses.push(`delete ${deletedBundles.length} items`);
+  else if (deletedBundles.length > 1)
+    clauses.push(`delete ${deletedBundles.length} items`);
   const head = clauses.length ? clauses.join(', ') : 'add assets';
-  const assets = assetPaths.length ? ` (+${assetPaths.length} asset${assetPaths.length > 1 ? 's' : ''})` : '';
+  const assets = assetPaths.length
+    ? ` (+${assetPaths.length} asset${assetPaths.length > 1 ? 's' : ''})`
+    : '';
   return `${head}${assets}`;
 }
 
@@ -229,7 +253,13 @@ export class Autosaver {
    * and colocated assets move by **reusing their blob SHAs** (no re-upload). All land
    * in the next coalesced WIP commit, summarised as "rename …".
    */
-  markObjectRenamed(oldPath: string, newPath: string, data: FrontMatter, body: string, moves: MoveEntry[]): void {
+  markObjectRenamed(
+    oldPath: string,
+    newPath: string,
+    data: FrontMatter,
+    body: string,
+    moves: MoveEntry[],
+  ): void {
     this.dirtyObjects.delete(oldPath);
     this.dirtyObjects.set(newPath, { data, body });
     this.dirtyDeletions.add(oldPath);
@@ -262,7 +292,12 @@ export class Autosaver {
    * moved — no deletion. The `index.md` write + the copies land in the next coalesced
    * WIP commit. (A create with no assets is just {@link markObjectDirty}.)
    */
-  markObjectCreated(path: string, data: FrontMatter, body: string, moves: MoveEntry[]): void {
+  markObjectCreated(
+    path: string,
+    data: FrontMatter,
+    body: string,
+    moves: MoveEntry[],
+  ): void {
     this.dirtyObjects.set(path, { data, body });
     for (const move of moves) this.dirtyMoves.set(move.to, move);
     this.notifyDirtyPaths();
@@ -277,7 +312,12 @@ export class Autosaver {
    * Uniform whether or not the delete already reached WIP; if it hadn't flushed yet the
    * rewrite is identical to the branch (a harmless no-op the publish squash collapses).
    */
-  markObjectRestored(path: string, data: FrontMatter, body: string, moves: MoveEntry[]): void {
+  markObjectRestored(
+    path: string,
+    data: FrontMatter,
+    body: string,
+    moves: MoveEntry[],
+  ): void {
     const bundleDir = path.replace(/\/index\.md$/, '') + '/';
     for (const p of [...this.dirtyDeletions]) {
       if (p === path || p.startsWith(bundleDir)) this.dirtyDeletions.delete(p);
@@ -298,12 +338,17 @@ export class Autosaver {
   forgetBundle(bundleDir: string): void {
     const pref = `${bundleDir}/`;
     const inBundle = (p: string): boolean => p.startsWith(pref);
-    for (const p of [...this.dirtyObjects.keys()]) if (inBundle(p)) this.dirtyObjects.delete(p);
-    for (const p of [...this.dirtyFiles.keys()]) if (inBundle(p)) this.dirtyFiles.delete(p);
+    for (const p of [...this.dirtyObjects.keys()])
+      if (inBundle(p)) this.dirtyObjects.delete(p);
+    for (const p of [...this.dirtyFiles.keys()])
+      if (inBundle(p)) this.dirtyFiles.delete(p);
     for (const p of [...this.dirtyAssets]) if (inBundle(p)) this.dirtyAssets.delete(p);
-    for (const p of [...this.dirtyDeletions]) if (inBundle(p)) this.dirtyDeletions.delete(p);
-    for (const p of [...this.dirtyMoves.keys()]) if (inBundle(p)) this.dirtyMoves.delete(p);
-    for (const p of [...this.dirtyRenames.keys()]) if (inBundle(p)) this.dirtyRenames.delete(p);
+    for (const p of [...this.dirtyDeletions])
+      if (inBundle(p)) this.dirtyDeletions.delete(p);
+    for (const p of [...this.dirtyMoves.keys()])
+      if (inBundle(p)) this.dirtyMoves.delete(p);
+    for (const p of [...this.dirtyRenames.keys()])
+      if (inBundle(p)) this.dirtyRenames.delete(p);
     this.notifyDirtyPaths();
     if (!this.hasPending()) this.deps.onState('idle');
   }
@@ -399,7 +444,12 @@ export class Autosaver {
     // (SPEC §5/§8) are dropped here — never committed, never re-queued; their durable
     // copy is the IndexedDB draft.
     const isDeviceOnly = this.deps.isDeviceOnly ?? (() => false);
-    const objects = [...this.dirtyObjects.entries()].filter(([path]) => !isDeviceOnly(path));
+    // Stamped before the dirty set is taken, so a draft written *during* the commit is
+    // strictly newer than this and survives the post-commit cleanup below.
+    const takenAt = Date.now();
+    const objects = [...this.dirtyObjects.entries()].filter(
+      ([path]) => !isDeviceOnly(path),
+    );
     const rawFiles = [...this.dirtyFiles.entries()];
     // Colocated assets of a device-only bundle are dropped too — same rule as its index.md.
     const assets = [...this.dirtyAssets].filter((path) => !isDeviceOnly(path));
@@ -449,14 +499,19 @@ export class Autosaver {
             // Dropping the file silently would land a commit whose page is simply
             // missing its image — a "successful" save that lost data. It can't fail the
             // commit (the rest of the edit is fine), so it must at least be diagnosable.
-            this.deps.onWarn?.('staged asset bytes unavailable — not committed', { path });
+            this.deps.onWarn?.('staged asset bytes unavailable — not committed', {
+              path,
+            });
             return null;
           }
           return { path, bytes };
         }),
       );
       const files: FileWrite[] = [
-        ...objects.map(([path, o]): FileWrite => ({ path, content: reassembleDocument(o.data, o.body) })),
+        ...objects.map(([path, o]): FileWrite => ({
+          path,
+          content: reassembleDocument(o.data, o.body),
+        })),
         ...rawFiles.map(([path, content]): FileWrite => ({ path, content })),
         ...assetFiles.filter((f): f is FileWrite => f !== null),
       ];
@@ -472,25 +527,44 @@ export class Autosaver {
         .map(bundleName);
       await this.deps.commit(
         files,
-        describeCommit(editPaths, rawFiles.map(([p]) => p), assets, deletedBundles, renamedBundles),
+        describeCommit(
+          editPaths,
+          rawFiles.map(([p]) => p),
+          assets,
+          deletedBundles,
+          renamedBundles,
+        ),
         deletions,
         moves,
       );
       if (this.failures > 0) this.deps.onRecovered?.(this.failures);
       this.failures = 0; // success resets the backoff
       if (assets.length > 0) this.deps.onAssetsCommitted?.(assets);
+      // The branch now carries this work, so the local drafts backing it are spent.
+      // Renames commit under the NEW path — that's the draft that exists, and the old
+      // path's was already dropped when the rename was queued.
+      const committedPaths = [
+        ...objects.map(([path]) => path),
+        ...rawFiles.map(([path]) => path),
+      ];
+      if (committedPaths.length > 0)
+        this.deps.onObjectsCommitted?.(committedPaths, takenAt);
       this.flushingPaths = new Set(); // landed → these become "saved", not "editing"
       this.notifyDirtyPaths();
       const stillDirty = this.hasPending();
       this.deps.onState(stillDirty ? 'dirty' : 'saved');
       if (stillDirty) this.schedule();
     } catch (err) {
-      for (const [path, o] of objects) if (!this.dirtyObjects.has(path)) this.dirtyObjects.set(path, o);
-      for (const [path, content] of rawFiles) if (!this.dirtyFiles.has(path)) this.dirtyFiles.set(path, content);
+      for (const [path, o] of objects)
+        if (!this.dirtyObjects.has(path)) this.dirtyObjects.set(path, o);
+      for (const [path, content] of rawFiles)
+        if (!this.dirtyFiles.has(path)) this.dirtyFiles.set(path, content);
       for (const path of assets) this.dirtyAssets.add(path);
       for (const path of deletions) this.dirtyDeletions.add(path);
-      for (const move of moves) if (!this.dirtyMoves.has(move.to)) this.dirtyMoves.set(move.to, move);
-      for (const [newP, oldP] of renames) if (!this.dirtyRenames.has(newP)) this.dirtyRenames.set(newP, oldP);
+      for (const move of moves)
+        if (!this.dirtyMoves.has(move.to)) this.dirtyMoves.set(move.to, move);
+      for (const [newP, oldP] of renames)
+        if (!this.dirtyRenames.has(newP)) this.dirtyRenames.set(newP, oldP);
       this.flushingPaths = new Set(); // back in the dirty maps → still "editing"
       this.notifyDirtyPaths();
       this.failures += 1;
@@ -522,9 +596,25 @@ export interface Autosave {
   markAssetDirty: (path: string) => void;
   markPathsDeleted: (paths: string[]) => void;
   markPathsMoved: (moves: MoveEntry[]) => void;
-  markObjectCreated: (path: string, data: FrontMatter, body: string, moves: MoveEntry[]) => void;
-  markObjectRenamed: (oldPath: string, newPath: string, data: FrontMatter, body: string, moves: MoveEntry[]) => void;
-  markObjectRestored: (path: string, data: FrontMatter, body: string, moves: MoveEntry[]) => void;
+  markObjectCreated: (
+    path: string,
+    data: FrontMatter,
+    body: string,
+    moves: MoveEntry[],
+  ) => void;
+  markObjectRenamed: (
+    oldPath: string,
+    newPath: string,
+    data: FrontMatter,
+    body: string,
+    moves: MoveEntry[],
+  ) => void;
+  markObjectRestored: (
+    path: string,
+    data: FrontMatter,
+    body: string,
+    moves: MoveEntry[],
+  ) => void;
   forgetBundle: (bundleDir: string) => void;
   forgetFile: (path: string) => void;
   getDirtyObject: (path: string) => DirtyObject | undefined;
@@ -549,6 +639,7 @@ export function useAutosave(
   assetStore: AssetStore,
   isDeviceOnly?: (path: string) => boolean,
   onAssetsCommitted?: (paths: string[]) => void,
+  onObjectsCommitted?: (paths: string[], since: number) => void,
 ): Autosave {
   const [syncState, setSyncState] = useState<SyncState>('idle');
   const [editingPaths, setEditingPaths] = useState<ReadonlySet<string>>(new Set());
@@ -558,6 +649,8 @@ export function useAutosave(
   isDeviceOnlyRef.current = isDeviceOnly;
   const onAssetsCommittedRef = useRef(onAssetsCommitted);
   onAssetsCommittedRef.current = onAssetsCommitted;
+  const onObjectsCommittedRef = useRef(onObjectsCommitted);
+  onObjectsCommittedRef.current = onObjectsCommitted;
 
   const saver = useMemo(
     () =>
@@ -575,14 +668,21 @@ export function useAutosave(
         assetBytes: (path) => assetStore.bytes(path),
         isDeviceOnly: (path) => isDeviceOnlyRef.current?.(path) ?? false,
         onAssetsCommitted: (paths) => onAssetsCommittedRef.current?.(paths),
+        onObjectsCommitted: (paths, since) =>
+          onObjectsCommittedRef.current?.(paths, since),
         onError: (error) => {
           // Normalise + record the cause, and keep the verdict for the UI: a 401 means
           // the retry loop can never succeed, and the header should say so rather than
           // showing "retrying" forever.
-          setLastError(diagnostics.error('autosave', 'save to your branch failed', error));
+          setLastError(
+            diagnostics.error('autosave', 'save to your branch failed', error),
+          );
         },
         onRecovered: (failedAttempts) => {
-          diagnostics.info('autosave', `save succeeded after ${failedAttempts} failed attempt(s)`);
+          diagnostics.info(
+            'autosave',
+            `save succeeded after ${failedAttempts} failed attempt(s)`,
+          );
         },
         onWarn: (message, detail) => {
           diagnostics.warn('autosave', message, detail);
@@ -618,10 +718,12 @@ export function useAutosave(
     markAssetDirty: (path) => saver.markAssetDirty(path),
     markPathsDeleted: (paths) => saver.markPathsDeleted(paths),
     markPathsMoved: (moves) => saver.markPathsMoved(moves),
-    markObjectCreated: (path, data, body, moves) => saver.markObjectCreated(path, data, body, moves),
+    markObjectCreated: (path, data, body, moves) =>
+      saver.markObjectCreated(path, data, body, moves),
     markObjectRenamed: (oldPath, newPath, data, body, moves) =>
       saver.markObjectRenamed(oldPath, newPath, data, body, moves),
-    markObjectRestored: (path, data, body, moves) => saver.markObjectRestored(path, data, body, moves),
+    markObjectRestored: (path, data, body, moves) =>
+      saver.markObjectRestored(path, data, body, moves),
     forgetBundle: (bundleDir) => saver.forgetBundle(bundleDir),
     forgetFile: (path) => saver.forgetFile(path),
     getDirtyObject: (path) => saver.getDirtyObject(path),

@@ -2,14 +2,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FileWrite, MoveEntry } from '@timber/github';
 import { Autosaver, type SyncState } from '../src/state/autosave.js';
 
-type CommitFn = (files: FileWrite[], message: string, deletions: string[], moves: MoveEntry[]) => Promise<void>;
+type CommitFn = (
+  files: FileWrite[],
+  message: string,
+  deletions: string[],
+  moves: MoveEntry[],
+) => Promise<void>;
 
 function setup(commit: CommitFn) {
   const states: SyncState[] = [];
   const dirtyPathSets: string[][] = [];
   const saver = new Autosaver({
     commit,
-    assetBytes: async (path) => (path.endsWith('.webp') ? new Uint8Array([1, 2, 3]) : undefined),
+    assetBytes: async (path) =>
+      path.endsWith('.webp') ? new Uint8Array([1, 2, 3]) : undefined,
     onState: (s) => states.push(s),
     onDirtyPaths: (paths) => dirtyPathSets.push([...paths].sort()),
     idleMs: 2000,
@@ -126,7 +132,10 @@ describe('Autosaver', () => {
     // "blipped once and went through" — which is exactly the question the header's
     // "Save failed — retrying" raises. Both edges are reported.
     const boom = Object.assign(new Error('HTTP 401'), { status: 401 });
-    const commit = vi.fn<CommitFn>().mockRejectedValueOnce(boom).mockResolvedValueOnce(undefined);
+    const commit = vi
+      .fn<CommitFn>()
+      .mockRejectedValueOnce(boom)
+      .mockResolvedValueOnce(undefined);
     const errors: unknown[] = [];
     const recovered: number[] = [];
     const saver = new Autosaver({
@@ -157,7 +166,8 @@ describe('Autosaver', () => {
       commit,
       assetBytes: async () => undefined, // staged bytes gone (reload between stage + flush)
       onState: () => undefined,
-      onWarn: (message, detail) => warnings.push({ message, ...(detail ? { detail } : {}) }),
+      onWarn: (message, detail) =>
+        warnings.push({ message, ...(detail ? { detail } : {}) }),
       idleMs: 2000,
     });
 
@@ -223,14 +233,20 @@ describe('Autosaver', () => {
     // Edit one object, then delete another object's whole bundle.
     saver.markObjectDirty('content/events/keep/index.md', { title: 'Keep' }, 'body');
     saver.markObjectDirty('content/events/gone/index.md', { title: 'Gone' }, 'x');
-    saver.markPathsDeleted(['content/events/gone/index.md', 'content/events/gone/hero.webp']);
+    saver.markPathsDeleted([
+      'content/events/gone/index.md',
+      'content/events/gone/hero.webp',
+    ]);
     await vi.advanceTimersByTimeAsync(2000);
 
     expect(commit).toHaveBeenCalledTimes(1);
     const [files, message, deletions] = commit.mock.calls[0]!;
     // The deleted object's pending edit is superseded — only the kept object is written.
     expect(files.map((f) => f.path)).toEqual(['content/events/keep/index.md']);
-    expect(deletions!.sort()).toEqual(['content/events/gone/hero.webp', 'content/events/gone/index.md']);
+    expect(deletions!.sort()).toEqual([
+      'content/events/gone/hero.webp',
+      'content/events/gone/index.md',
+    ]);
     expect(message).toBe('edit keep, delete gone');
   });
 
@@ -257,7 +273,13 @@ describe('Autosaver', () => {
       'content/events/new/index.md',
       { id: 'e1', title: 'E', aliases: ['old'] },
       'body',
-      [{ from: 'content/events/old/hero.webp', to: 'content/events/new/hero.webp', sha: 'ASSET' }],
+      [
+        {
+          from: 'content/events/old/hero.webp',
+          to: 'content/events/new/hero.webp',
+          sha: 'ASSET',
+        },
+      ],
     );
     await vi.advanceTimersByTimeAsync(2000);
 
@@ -269,7 +291,11 @@ describe('Autosaver', () => {
     expect(deletions).toEqual(['content/events/old/index.md']);
     // …the asset moves by reusing its blob SHA…
     expect(moves).toEqual([
-      { from: 'content/events/old/hero.webp', to: 'content/events/new/hero.webp', sha: 'ASSET' },
+      {
+        from: 'content/events/old/hero.webp',
+        to: 'content/events/new/hero.webp',
+        sha: 'ASSET',
+      },
     ]);
     // …and the summary reads as a rename, not an edit+delete.
     expect(message).toBe('rename new');
@@ -282,7 +308,10 @@ describe('Autosaver', () => {
     saver.markObjectDirty('content/events/a/index.md', { title: 'A' }, 'body');
     saver.markObjectDirty('content/people/b/index.md', { title: 'B' }, 'body');
     // Latest notification lists both dirty objects.
-    expect(dirtyPathSets.at(-1)).toEqual(['content/events/a/index.md', 'content/people/b/index.md']);
+    expect(dirtyPathSets.at(-1)).toEqual([
+      'content/events/a/index.md',
+      'content/people/b/index.md',
+    ]);
 
     await vi.advanceTimersByTimeAsync(2000);
     // After a successful flush they're on the branch → editing set is empty.
@@ -301,7 +330,10 @@ describe('Autosaver', () => {
     expect(dirtyPathSets.at(-1)).toEqual(['assets/logo.webp']);
 
     saver.markPathsDeleted(['themes/acme/assets/old.css']);
-    expect(dirtyPathSets.at(-1)).toEqual(['assets/logo.webp', 'themes/acme/assets/old.css']);
+    expect(dirtyPathSets.at(-1)).toEqual([
+      'assets/logo.webp',
+      'themes/acme/assets/old.css',
+    ]);
 
     await vi.advanceTimersByTimeAsync(2000);
     // Landed → no longer local-only.
@@ -331,7 +363,10 @@ describe('Autosaver', () => {
   // failure, when the local copy is still the only copy.
   it('reports committed asset paths on success, never on failure', async () => {
     const committed: string[][] = [];
-    const commit = vi.fn<CommitFn>().mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce(undefined);
+    const commit = vi
+      .fn<CommitFn>()
+      .mockRejectedValueOnce(new Error('network'))
+      .mockResolvedValueOnce(undefined);
     const saver = new Autosaver({
       commit,
       assetBytes: async () => new Uint8Array([1]),
@@ -351,7 +386,10 @@ describe('Autosaver', () => {
   });
 
   it('keeps an object in the editing set while a failing commit retries', async () => {
-    const commit = vi.fn<CommitFn>().mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce(undefined);
+    const commit = vi
+      .fn<CommitFn>()
+      .mockRejectedValueOnce(new Error('network'))
+      .mockResolvedValueOnce(undefined);
     const { saver, dirtyPathSets } = setup(commit);
 
     saver.markObjectDirty('content/events/a/index.md', { title: 'A' }, 'body');
@@ -365,7 +403,9 @@ describe('Autosaver', () => {
 
   it('settle() waits out an in-flight flush without starting a new one', async () => {
     let release: () => void = () => undefined;
-    const commit = vi.fn<CommitFn>(() => new Promise<void>((resolve) => (release = resolve)));
+    const commit = vi.fn<CommitFn>(
+      () => new Promise<void>((resolve) => (release = resolve)),
+    );
     const { saver } = setup(commit);
 
     await saver.settle(); // idle → resolves immediately, commits nothing
@@ -478,7 +518,9 @@ describe('Autosaver.saveNow — resolves only once everything queued has landed'
     await expect(pending).resolves.toBe(true);
 
     expect(commit).toHaveBeenCalledTimes(2);
-    expect(commit.mock.calls[1]![0].map((f) => f.path)).toEqual(['themes/acme/assets/theme.css']);
+    expect(commit.mock.calls[1]![0].map((f) => f.path)).toEqual([
+      'themes/acme/assets/theme.css',
+    ]);
   });
 
   it('resolves false when the flush failed, leaving the edits queued for the retry', async () => {
@@ -497,5 +539,80 @@ describe('Autosaver.saveNow — resolves only once everything queued has landed'
 
     await expect(saver.saveNow()).resolves.toBe(true);
     expect(commit).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Draft lifetime at the commit boundary. A local draft exists to survive a crash before
+ * the WIP commit lands; once it has landed the draft is spent, and keeping it is what let
+ * load-time recovery re-queue stale content over newer work on the branch.
+ */
+describe('Autosaver — reporting landed work so its drafts can be dropped', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('reports object and raw-file paths once the commit succeeds', async () => {
+    const committed: { paths: string[]; since: number }[] = [];
+    const saver = new Autosaver({
+      commit: async () => undefined,
+      assetBytes: async () => undefined,
+      onState: () => undefined,
+      onObjectsCommitted: (paths, since) =>
+        committed.push({ paths: [...paths].sort(), since }),
+      idleMs: 2000,
+      retryMs: 5000,
+    });
+
+    saver.markObjectDirty('content/posts/a/index.md', { title: 'A' }, 'body');
+    saver.markFileDirty(
+      'themes/anatole/templates/projects.liquid',
+      '{% block main %}{% endblock %}',
+    );
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect(committed).toHaveLength(1);
+    expect(committed[0]!.paths).toEqual([
+      'content/posts/a/index.md',
+      'themes/anatole/templates/projects.liquid',
+    ]);
+  });
+
+  it('says nothing when the commit fails, so the draft survives to retry', async () => {
+    const committed: string[][] = [];
+    const saver = new Autosaver({
+      commit: async () => {
+        throw new Error('network down');
+      },
+      assetBytes: async () => undefined,
+      onState: () => undefined,
+      onError: () => undefined,
+      onObjectsCommitted: (paths) => committed.push([...paths]),
+      idleMs: 2000,
+      retryMs: 5000,
+    });
+
+    saver.markObjectDirty('content/posts/a/index.md', { title: 'A' }, 'body');
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect(committed).toEqual([]);
+  });
+
+  it('never reports a device-only object, whose draft is its only copy', async () => {
+    const committed: string[][] = [];
+    const saver = new Autosaver({
+      commit: async () => undefined,
+      assetBytes: async () => undefined,
+      onState: () => undefined,
+      isDeviceOnly: (path) => path === 'content/posts/local/index.md',
+      onObjectsCommitted: (paths) => committed.push([...paths].sort()),
+      idleMs: 2000,
+      retryMs: 5000,
+    });
+
+    saver.markObjectDirty('content/posts/local/index.md', { title: 'L' }, 'local only');
+    saver.markObjectDirty('content/posts/a/index.md', { title: 'A' }, 'body');
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect(committed).toEqual([['content/posts/a/index.md']]);
   });
 });
