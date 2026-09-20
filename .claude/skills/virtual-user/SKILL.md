@@ -7,9 +7,10 @@ description: Run a virtual-user test of the Timber editor — a blind tester age
 
 Two roles, kept apart on purpose:
 
-- **The tester** (`virtual-user` subagent) is blind: it has only the Playwright MCP tools
-  and `Write`. It cannot read the repo, run a shell, or see this conversation. It plays a
-  persona against the live editor and reports _what happened vs. what it expected_.
+- **The tester** (`virtual-user` subagent) is a QA engineer who is blind to the code: it
+  has only the Playwright MCP tools and `Write`. It cannot read the repo, run a shell, or
+  see this conversation. It works a test charter against the live editor **and the built
+  site**, and reports _what happened vs. what it expected_.
 - **You** are the sighted triager: you start the environment, brief the tester, then check
   its report against the fake's ground truth and the source, and turn confirmed bugs into
   deterministic tests.
@@ -34,16 +35,18 @@ is implemented; do not "help" it mid-run. If it gets stuck, that is a finding.
    pnpm virtual-user
    ```
 
-   It prints the editor URL (`http://127.0.0.1:5199/`), the fake GitHub URL
+   It prints the editor URL (`http://127.0.0.1:5199/`), the **live site** URL
+   (`http://127.0.0.1:5197` — rebuilt by the real Node generator on every deploy and
+   served from the latest _successful_ deploy, like Pages), the fake GitHub URL
    (`http://127.0.0.1:5198`), the sign-in token, and the control API. The fake repo is
-   seeded fresh from `site-template/` on every start — restart it between scenarios (it
+   seeded fresh from `site-template/` on every start — restart it between charters (it
    stops any previous instance itself).
 
-2. **Pick a scenario** from `testing/virtual-user/scenarios/`, or write one in the same
-   shape (persona · goal · what the environment will do · what to check). Scenarios name
-   goals, not click paths; they may tell the tester to open a `/__control/...` URL in a
-   second tab at a given moment — that is how "someone else pushed" or "the host failed"
-   is staged.
+2. **Pick a charter** from `testing/virtual-user/scenarios/`, or write one in the same
+   shape (scope · steps · checks · environment). Charters say what to exercise and what
+   must hold, not which control to click; they may tell the tester to open a
+   `/__control/...` URL in a second tab at a given moment — that is how "someone else
+   pushed" or "the host failed" is staged.
 
 3. **Ask which model to run the tester on**, in a plain sentence (no picker widget), e.g.
    _"Run the tester on the same model as this session, or a cheaper one such as Sonnet?"_
@@ -52,20 +55,19 @@ is implemented; do not "help" it mid-run. If it gets stuck, that is a finding.
    user asks.
 
 4. **Spawn the tester** with the `Agent` tool, `subagent_type: virtual-user`, passing the
-   chosen `model`. The prompt is ONLY: the scenario file's contents, the editor URL, the
-   token, and the report path `testing/virtual-user/findings/<YYYY-MM-DD>-<scenario>.md`.
-   Nothing about the code. Run it in the foreground if you have nothing else to do; it
-   typically takes a few minutes.
+   chosen `model`. The prompt is ONLY: the charter file's contents, the editor URL, the
+   live-site URL, the token, and the report path
+   `testing/virtual-user/findings/<YYYY-MM-DD>-<charter>.md`. Nothing about the code. Run
+   it in the foreground if you have nothing else to do; it typically takes a few minutes.
    - The report path must not already exist: the tester has no `Read` tool, so it cannot
-     overwrite a file. Re-running a scenario the same day → add a `-2`, `-3` suffix.
-   - Tell the tester in one line that in this environment the "View live" / "View site"
-     links open a placeholder page (the site isn't served), so it judges a publish by what
-     the editor reports and by reloading, not by following those links.
+     overwrite a file. Re-running a charter the same day → add a `-2`, `-3` suffix.
 
 5. **Get ground truth** before reading the report's conclusions:
    `curl -s http://127.0.0.1:5198/__control/state` — branches, files and commit log per
    branch, deploy runs, and any request the fake didn't model (`unhandled`, which is a
-   fake-github gap to fix, not an app bug).
+   fake-github gap to fix, not an app bug) — and `/__control/builds` for each site build's
+   status and generator log, plus the sha the site is serving. A generator warning or a
+   failed build there is a finding in its own right.
 
 6. **Triage each finding** against the state and the source:
    - _Confirmed bug_ → reproduce it as a deterministic test first (an `*.e2e.ts` on the
@@ -85,9 +87,13 @@ is implemented; do not "help" it mid-run. If it gets stuck, that is a finding.
 
 ## Judgement notes
 
-- The tester is fluent and patient; it under-reports _comprehension_ problems and
-  over-reports timing ("didn't save" after 2s when autosave takes ~4s). Check timing claims
-  against `/__control/requests` before believing either the tester or the app.
+- The tester over-reports timing ("didn't save" after 2s when autosave takes ~4s; "site
+  not updated" before the ~10s deploy finished). Check timing claims against
+  `/__control/requests` and `/__control/builds` before believing either the tester or the
+  app.
+- An editor-vs-site mismatch is the highest-value class of finding this setup can
+  produce: the site is built by the real generator from the real committed content, so a
+  mismatch is either a publish bug, a preview≡build bug, or a template bug — never noise.
 - A finding is more trustworthy when its repro is from a fresh sign-in and the state file
   agrees. Prefer confirming by re-running the steps in the harness over reasoning.
 - The virtual user is a bug _discovery_ tool. It never becomes the regression suite — that

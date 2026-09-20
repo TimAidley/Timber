@@ -118,8 +118,16 @@ export class FakeRepo {
     this.refs.delete(FakeRepo.refName(ref));
   }
 
+  /**
+   * Listeners told after any ref moves (`refs/heads/x`, new sha) — however it moved: the
+   * REST API, `writeFiles`, or `createRef`. A launcher uses this to build the site when
+   * the default branch changes, the way a push would trigger CI.
+   */
+  readonly onRefMove: ((ref: string, sha: string) => void)[] = [];
+
   /** A push to the default branch is what triggers the deploy workflow (`on: push: [main]`). */
   private afterRefMove(name: string, sha: string, event: 'push'): void {
+    for (const listener of this.onRefMove) listener(name, sha);
     if (name !== `refs/heads/${this.defaultBranch}`) return;
     this.actions.createRun({
       workflowFile: this.deployWorkflow,

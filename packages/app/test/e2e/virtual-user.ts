@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { FakeGitHub } from '@timber/fake-github';
 import { seedRepoFromDir, serveFakeGitHub } from '@timber/fake-github/node';
+import { join } from 'node:path';
 import {
   LOGIN,
   OWNER,
@@ -9,6 +10,7 @@ import {
   startEditorServer,
   TOKEN,
 } from './support/harness.js';
+import { startSiteServer, type SiteServer } from './support/siteServer.js';
 
 /**
  * The virtual-user launcher: the real editor on a fixed local port, backed by a fake
@@ -26,6 +28,10 @@ import {
  */
 const EDITOR_PORT = Number(process.env.TIMBER_VU_EDITOR_PORT ?? 5199);
 const API_PORT = Number(process.env.TIMBER_VU_API_PORT ?? 5198);
+const SITE_PORT = Number(process.env.TIMBER_VU_SITE_PORT ?? 5197);
+const SITE_URL = `http://127.0.0.1:${SITE_PORT}`;
+/** The Node generator's CLI — the exact entry point the deploy workflow runs. */
+const CLI_ENTRY = join(SITE_TEMPLATE, '..', 'packages', 'cli', 'dist', 'index.js');
 
 const fake = new FakeGitHub();
 fake.addUser(LOGIN, TOKEN);
@@ -37,6 +43,13 @@ const repo = fake.addRepo({
 });
 await seedRepoFromDir(repo, SITE_TEMPLATE, {
   message: 'Seed site from Timber site-template',
+  // The template ships `baseUrl: https://example.com` for the owner to replace at install
+  // time; here the "live site" is the local build server, so the editor's View live links
+  // — composed from this same setting — land on the real built pages.
+  transform: (path, text) =>
+    path === 'content/settings/index.md'
+      ? text.replace(/^baseUrl:.*$/m, `baseUrl: ${SITE_URL}`)
+      : text,
 });
 
 function json(res: ServerResponse, status: number, body: unknown): void {
@@ -96,6 +109,13 @@ async function control(req: IncomingMessage, res: ServerResponse): Promise<boole
     }
     case 'requests':
       json(res, 200, fake.served.slice(-Number(q('tail') ?? 50)));
+      return true;
+    case 'builds':
+      json(res, 200, {
+        serving: site.servingSha(),
+        siteUrl: SITE_URL,
+        builds: site.builds(),
+      });
       return true;
     case 'push': {
       const branch = q('branch');
@@ -201,6 +221,10 @@ async function stopPreviousInstance(): Promise<void> {
 }
 
 await stopPreviousInstance();
+// The site server first: `control()` reads it, and it depends on nothing else.
+const site: SiteServer = await orExplainPortInUse(SITE_PORT, () =>
+  startSiteServer(repo, { port: SITE_PORT, cliEntry: CLI_ENTRY }),
+);
 const api = await orExplainPortInUse(API_PORT, () =>
   serveFakeGitHub(fake, { port: API_PORT, onRequest: control }),
 );
@@ -215,6 +239,7 @@ const editor = await orExplainPortInUse(EDITOR_PORT, () =>
 console.log(`
 Timber virtual-user environment
   Editor:      ${editor.url}
+  Live site:   ${SITE_URL}   (rebuilt by the real generator on every deploy)
   Fake GitHub: ${api.url}   (repo ${OWNER}/${REPO}, seeded from site-template/)
   Sign in:     paste the token  ${TOKEN}
   Control API: ${api.url}/__control
@@ -223,6 +248,7 @@ Press Ctrl-C to stop.
 
 async function shutdown(): Promise<void> {
   await editor.close();
+  await site.close();
   await api.close();
   process.exit(0);
 }

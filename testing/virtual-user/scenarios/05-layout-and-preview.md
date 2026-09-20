@@ -1,30 +1,37 @@
-# Scenario 05 — Working in the preview layouts
+# Charter 05 — Preview layouts and window sizes
 
-## Persona
+## Scope
 
-You are Lena, a designer who cares how the page looks and keeps the preview open. You
-switch between layouts a lot and you resize your browser window (use the resize tool:
-a laptop at 1400×900, a small window at 800×900, and a phone-ish 420×860).
+The preview pane in each layout the editor offers (side-by-side, tabbed, hidden, pop-out)
+at three window sizes (use the resize tool: 1400×900, 800×900, 420×860): reachability,
+freshness of the preview, persistence across reload, and agreement between preview and the
+built site.
 
-## Goal
+## Steps
 
-Polish the **About** page: change its title, add a second paragraph to the body, and
-check the result in the preview **in each layout the editor offers** (side-by-side, tabbed,
-hidden, and the pop-out window if there is one) and at each of the three window sizes.
-Then publish.
+1. Sign in. Open **About**. Note the current layout.
+2. For each layout × size combination, in turn:
+   - switch to it; confirm you can reach the editor **and** the preview;
+   - type a change to the title; confirm the preview reflects it within a few seconds;
+   - reload; confirm the layout persists and the change is still there (saved or
+     restored as in-progress);
+   - switch pages in the sidebar; confirm the preview follows the selected page.
+3. Open the pop-out preview; edit; confirm it updates; close it.
+4. At the smallest size, open the page list, pick another page, return to About.
+5. Publish the final title. When deployed, compare the live About page with the preview
+   you were looking at: same title, same body rendering.
+6. Switch to the **Advanced** area in the tabbed layout: does its own preview work there,
+   and does the Edit/Preview switch behave sensibly?
 
-## What to check deliberately
+## Checks
 
-- In every layout and size: can you still reach the editor _and_ the preview? Does the
-  preview reflect your latest typing? Does switching layout lose anything?
-- Reload while in each layout. Does the editor come back in the layout you left it, still
-  usable, still showing your unsaved/saved text?
-- Does the preview ever go blank, show a stale version, or show a different page from the
-  one you are editing?
-- On the smallest size, can you open the page list, pick another page, and get back?
+- No layout × size combination loses access to the editor or the preview.
+- The preview never goes blank, shows a stale version, or shows a different page than the
+  one selected.
+- Layout choice survives reload; in-progress text survives reload.
+- Preview ≡ built site for the published content.
+- Switching layouts loses no unsaved text.
 
 ## Environment
 
-_The "View live" / "View site" links open a placeholder page in this environment — the built site is not served. Judge whether something is live by what the editor reports and by reloading it, not by following those links._
-
-Nothing unusual happens during this scenario.
+Nothing unusual happens during this charter.

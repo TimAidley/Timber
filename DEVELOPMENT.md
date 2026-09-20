@@ -130,8 +130,10 @@ pnpm virtual-user     # editor at http://127.0.0.1:5199/, fake GitHub at :5198, 
 
 Runs the real editor against the fake GitHub over plain HTTP (the editor is pointed at it
 through `apiBaseUrl`, the same knob GitHub Enterprise uses), so **any** browser can use it —
-yours, or the one Playwright MCP launches for the `virtual-user` agent. A `/__control` API
-on the fake stages events (another device pushing, a failing save, a failing deploy) and
-exposes the repo's ground truth. `/virtual-user` in Claude Code runs a scenario from
-`testing/virtual-user/scenarios/` with a blind tester agent and triages the result; see
-`testing/virtual-user/README.md`.
+yours, or the one Playwright MCP launches for the `virtual-user` agent. It also serves the
+**built site** at `http://127.0.0.1:5197`: every move of `main` is built with the real Node
+CLI and served once the (simulated) deploy completes, so "View live" opens the real
+generated page. A `/__control` API on the fake stages events (another device pushing, a
+failing save, a failing deploy) and exposes the repo's ground truth and the build log.
+`/virtual-user` in Claude Code runs a charter from `testing/virtual-user/scenarios/` with a
+blind QA-tester agent and triages the result; see `testing/virtual-user/README.md`.

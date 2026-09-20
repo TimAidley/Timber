@@ -1,38 +1,39 @@
-# Scenario 04 — The host has a bad day
+# Charter 04 — Host failures during save and deploy
 
-## Persona
+## Scope
 
-You are Dev, a volunteer who maintains a running club's site in the evenings on a
-flaky home connection. You are used to things failing and retrying; what you cannot stand
-is losing work silently.
+Error handling on the write path: saves the host rejects, and a deploy that fails after a
+successful publish. Nothing may be lost, the editor must say what happened, and recovery
+must be possible from the UI.
 
-## Goal
+## Steps
 
-Make three small edits (title tweaks or a sentence each) to the **About**, **Welcome** and
-**site settings** pages, and get all three live — while the hosting service misbehaves
-twice along the way. At the end, every one of your three edits must be live and the
-editor must agree that nothing is left unpublished.
-
-## Environment — follow these steps at the moments given
-
-_The "View live" / "View site" links open a placeholder page in this environment — the built site is not served. Judge whether something is live by what the editor reports and by reloading it, not by following those links._
-
-1. Sign in and make the first edit (About). Wait until the editor says it is saved.
-2. Before the second edit, open a **second tab** and visit:
+1. Sign in. Edit **About** (a title tweak). Wait until saved.
+2. In a **second tab**, open
    `http://127.0.0.1:5198/__control/fail-next?method=PATCH&path=refs&status=500&times=2`
-   (the next two saves the editor attempts will be rejected by the host). Close the tab.
-3. Make the second edit (Welcome). Watch what the editor tells you. Keep going as Dev
-   would: wait, retry if offered, do not refresh yet. Then make the third edit (settings).
-4. Before publishing, open a second tab and visit:
-   `http://127.0.0.1:5198/__control/deploy-fail-next`
-   (the website build after your publish will fail). Close the tab.
-5. Publish. Watch what happens to the publish status. Do whatever the editor offers to
-   recover. If it offers nothing, say so.
+   — the next two branch updates the editor attempts will be rejected with a 500. Close it.
+3. Edit **Welcome** (a sentence in the body). Watch the header and any badges: record the
+   exact wording of whatever failure is reported and when. Do not reload yet. Wait and see
+   whether it recovers on its own (it retries); note how long that took.
+4. Edit the **site settings** page (site title). Confirm all three edits are now saved.
+   Reload and confirm they persist.
+5. In a second tab, open `http://127.0.0.1:5198/__control/deploy-fail-next`. Close it.
+6. Publish. Watch the deploy status: it should complete as **failed**. Record what the
+   editor shows and offers.
+7. Use whatever the editor offers to re-run the deploy **without publishing again**. Watch
+   it complete. On the live site, confirm all three edits are present.
+8. Reload the editor. Confirm it reports nothing unpublished and no failure lingering.
 
-## What to check deliberately
+## Checks
 
-- Was any edit lost? Reload after everything settles and inspect all three pages.
-- When a save failed, did the editor say so, and did it recover on its own or need you?
-- When the build failed, did the editor say so, and could you get the site built without
-  publishing again?
-- At the end, does "nothing unpublished" match reality? (Reload to check.)
+- A rejected save is reported clearly and recovers (automatically or via an offered
+  retry) with no edit lost — verify by reload.
+- Edits made _while_ a save was failing are not lost either.
+- A failed deploy after a successful publish is reported as a deploy failure, not a
+  publish failure, and the site keeps serving the previous build meanwhile.
+- The re-run path works and the live site ends up with everything.
+- Final editor state is clean.
+
+## Environment
+
+The two `/__control` URLs above are the staged events.

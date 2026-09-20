@@ -1,7 +1,7 @@
-import { readdir, readFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { join, relative, sep } from 'node:path';
+import { dirname, join, relative, sep } from 'node:path';
 import type { CommitObject } from './objects.js';
 import type { FakeRepo } from './repo.js';
 import type { FakeGitHub } from './router.js';
@@ -73,6 +73,9 @@ export async function serveFakeGitHub(
 /** Directory names never seeded — a `.git` from a real checkout would poison the tree. */
 const SKIP_DIRS = new Set(['.git', 'node_modules']);
 
+/** Files a seed `transform` is offered — text formats the content model and theme use. */
+const TEXT_FILE = /\.(md|ya?ml|json|liquid|html|css|scss|js|txt|xml|svg)$/i;
+
 /**
  * Commit every file under `dir` onto a branch of the fake repo — the way a test or a
  * virtual-user run gets a realistic content repo: point it at `site-template/` and the
@@ -82,7 +85,15 @@ const SKIP_DIRS = new Set(['.git', 'node_modules']);
 export async function seedRepoFromDir(
   repo: FakeRepo,
   dir: string,
-  options: { branch?: string; message?: string } = {},
+  options: {
+    branch?: string;
+    message?: string;
+    /**
+     * Adjust a file's text before it is committed (e.g. point the site's `baseUrl` at a
+     * local server). Return the text unchanged to keep it. Binary files are not offered.
+     */
+    transform?: (path: string, text: string) => string;
+  } = {},
 ): Promise<CommitObject> {
   const files: Record<string, Uint8Array> = {};
   const walk = async (current: string): Promise<void> => {
@@ -92,9 +103,14 @@ export async function seedRepoFromDir(
       if (entry.isDirectory()) {
         if (!SKIP_DIRS.has(entry.name)) await walk(full);
       } else if (entry.isFile()) {
-        files[relative(dir, full).split(sep).join('/')] = new Uint8Array(
-          await readFile(full),
-        );
+        const path = relative(dir, full).split(sep).join('/');
+        let bytes = new Uint8Array(await readFile(full));
+        if (options.transform && TEXT_FILE.test(path)) {
+          const text = new TextDecoder().decode(bytes);
+          const next = options.transform(path, text);
+          if (next !== text) bytes = new TextEncoder().encode(next);
+        }
+        files[path] = bytes;
       }
     }
   };
@@ -104,4 +120,24 @@ export async function seedRepoFromDir(
     files,
     options.message ?? `Seed from ${dir}`,
   );
+}
+
+/**
+ * Write a branch's (or commit's) full tree to a directory on disk — the input the Node
+ * generator (`timber build <dir> <out>`) takes. A launcher does this on every move of the
+ * default branch to build the site exactly as the deploy workflow would.
+ */
+export async function writeRepoToDir(
+  repo: FakeRepo,
+  ref: string,
+  dir: string,
+): Promise<void> {
+  await mkdir(dir, { recursive: true });
+  for (const path of repo.listFiles(ref)) {
+    const bytes = repo.readBytes(path, ref);
+    if (!bytes) continue;
+    const full = join(dir, ...path.split('/'));
+    await mkdir(dirname(full), { recursive: true });
+    await writeFile(full, bytes);
+  }
 }

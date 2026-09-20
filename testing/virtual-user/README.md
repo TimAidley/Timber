@@ -7,33 +7,42 @@ find those is to have someone **use** the editor. This folder is the tooling for
 agent do it.
 
 ```
-pnpm virtual-user          # real editor + fake GitHub on localhost, seeded from site-template/
-/virtual-user              # in Claude Code: run a scenario with the blind tester agent
+pnpm virtual-user          # editor + fake GitHub + live built site on localhost, seeded from site-template/
+/virtual-user              # in Claude Code: run a charter with the blind QA-tester agent
 ```
 
 How it fits together:
 
-| Piece         | Where                                   | Role                                                                                                                           |
-| ------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Fake GitHub   | `packages/fake-github`                  | In-memory git + Actions behind the REST subset the editor uses. No network, resettable, can stage failures.                    |
-| Launcher      | `packages/app/test/e2e/virtual-user.ts` | Serves the editor pointed at the fake (via `apiBaseUrl`), plus a `/__control` API for staging events and reading ground truth. |
-| Tester agent  | `.claude/agents/virtual-user.md`        | Blind by construction: Playwright MCP tools + `Write` only. Plays a persona, reports expected-vs-actual.                       |
-| Orchestration | `.claude/skills/virtual-user/SKILL.md`  | The sighted side: brief the tester, check its report against `/__control/state` and the code, turn bugs into tests.            |
-| Scenarios     | `scenarios/*.md`                        | Persona + goal, written as intentions rather than click paths.                                                                 |
-| Findings      | `findings/*.md`                         | One report per run, with a triage section appended.                                                                            |
+| Piece         | Where                                   | Role                                                                                                                                                                                             |
+| ------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Fake GitHub   | `packages/fake-github`                  | In-memory git + Actions behind the REST subset the editor uses. No network, resettable, can stage failures.                                                                                      |
+| Launcher      | `packages/app/test/e2e/virtual-user.ts` | Serves the editor pointed at the fake (via `apiBaseUrl`), the **live site** (rebuilt by the real generator on every deploy), and a `/__control` API for staging events and reading ground truth. |
+| Tester agent  | `.claude/agents/virtual-user.md`        | A QA engineer blind to the code by construction: Playwright MCP tools + `Write` only. Works a charter, holds the editor to account against the built site, reports expected-vs-actual.           |
+| Orchestration | `.claude/skills/virtual-user/SKILL.md`  | The sighted side: brief the tester, check its report against `/__control/state` and the code, turn bugs into tests.                                                                              |
+| Charters      | `scenarios/*.md`                        | Scope · steps · checks · environment — what to exercise and what must hold, not which control to click.                                                                                          |
+| Findings      | `findings/*.md`                         | One report per run, with a triage section appended.                                                                                                                                              |
 
 You can use the environment yourself too: start it, open the editor URL, paste the token
 it prints. Everything you do lands in the in-memory repo; `GET /__control/state` shows it.
 
-## Why blind, and why it isn't enough on its own
+## Why blind, and why the tester is a QA engineer rather than a "user"
 
-Telling a model "don't read the source" does not make it a user: the repo's own
-instructions describe the content model and workflow, and the model's fluency with
-software makes it recover from confusion faster than a real site owner would. So the
-tester is restricted _structurally_ (no file, shell or repo tools) and the persona is
-written to be naïve. Even so, it is good at **logic** bugs — lost data, wrong state,
-controls that misbehave — and weaker at spotting what would _confuse_ a person. That is the
-trade this project wants right now.
+Telling a model "don't read the source" does not make it ignorant of the source: the
+repo's own instructions describe the content model and workflow, and a model that has just
+worked on a feature knows its happy path. So the tester is restricted _structurally_ — no
+file, shell or repo tools — and every claim in its report is about observed behaviour.
+
+It is deliberately **not** asked to play a non-technical user. The bugs this project wants
+to find right now are logic bugs a technical owner would hit — lost edits, state that
+disagrees with itself, the built site not matching the editor — and a tester who knows the
+product's model (WIP branch, squash publish, deploy) finds those faster and checks them more
+thoroughly than a persona pretending not to understand the UI. Comprehension/UX testing is
+a different exercise with a different brief; it is not what these charters do.
+
+The environment serves the **built site**, generated by the same Node CLI the deploy
+workflow runs, from the latest successful deploy. That is the oracle: after a publish, the
+tester compares the live page to what it edited, so an editor-vs-site mismatch — a publish
+bug, a preview≡build bug, or a template bug — is caught here rather than in production.
 
 Every confirmed bug becomes a deterministic test (`packages/app/test/e2e/*.e2e.ts` on the
 same harness, or a unit test) before it is fixed. The virtual user finds bugs; it is not

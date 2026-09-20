@@ -1,35 +1,40 @@
-# Scenario 03 — Editing from two devices
+# Charter 03 — A foreign write to the WIP branch
 
-## Persona
+## Scope
 
-You are Ama, a school secretary who updates the school site from the office computer and
-sometimes from her phone on the bus. You are methodical and you notice when things
-disagree with each other.
+Another device (or tab) commits to the same per-user branch while this session has edits.
+The editor should notice, tell the user, and let them choose what wins — and what wins must
+be what reaches the live site.
 
-## Goal
+## Steps
 
-Update the **"Welcome"** page's description field to "Welcome to Hillside Primary", and
-get it live. While you are working, an edit you made earlier on your phone arrives.
-
-## Environment — follow these steps at the moments given
-
-_The "View live" / "View site" links open a placeholder page in this environment — the built site is not served. Judge whether something is live by what the editor reports and by reloading it, not by following those links._
-
-1. Sign in and open the Welcome page. Change its description as above, and wait until the
-   editor indicates the change has been saved.
-2. Now simulate the phone's earlier edit arriving. Open a **second tab** and visit this URL
-   exactly (it commits a change to the same page as if from another device):
+1. Sign in. Open **Welcome**. Change the description to `Welcome to Hillside Primary`. Wait
+   for it to be saved.
+2. Stage the foreign write: in a **second tab**, open exactly
 
    `http://127.0.0.1:5198/__control/push?branch=alice_wip&path=content/pages/welcome/index.md&message=Edit%20from%20phone&content=---%0Aid%3A%20PAGE-HOME%0Atitle%3A%20Welcome%0Adescription%3A%20Edited%20on%20the%20bus%0Apublic%3A%20true%0A---%0A%0AThis%20is%20the%20phone%20version.%0A`
 
-   Close that tab and go back to the editor.
+   (it commits a different description and body for the same page to your branch, as
+   another device would). Close that tab; return to the editor.
 
-3. Continue as Ama would: notice whatever the editor tells you, decide what should end up
-   on the live site (you want **your office wording** for the description), and publish.
+3. Wait up to a minute. Record exactly how and when the editor tells you something changed
+   underneath you, and what choices it offers.
+4. Choose to keep **your** description. Then check the body: the foreign write changed it
+   too — what does the editor show, and what will be published?
+5. Publish. On the live site's Welcome page, compare description and body with what you
+   intended to keep.
+6. Reload the editor: does it agree everything is published, and does Welcome show the
+   same content as the site?
+7. Repeat steps 1–2 with the roles reversed: make NO local edit first, stage the push, and
+   observe what the editor does with a purely foreign change on a page you have open.
 
-## What to check deliberately
+## Checks
 
-- Did the editor tell you that something had changed underneath you? How clearly?
-- After publishing, reload. Which description is live? Which body text? Is that what you
-  chose?
-- Does the editor now consider everything published, and does the Welcome page look right?
+- The foreign change is surfaced (not silently overwritten, not silently adopted).
+- Whatever the editor says will be published is what the live site shows.
+- No edit is lost without the user having chosen to lose it.
+- Editor state after publish is consistent with the branch and the site.
+
+## Environment
+
+The `/__control/push` URL above is the staged event; nothing else is unusual.
