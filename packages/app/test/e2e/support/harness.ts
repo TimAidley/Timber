@@ -27,22 +27,54 @@ export interface EditorServer {
   close(): Promise<void>;
 }
 
-export async function startEditorServer(): Promise<EditorServer> {
+export interface StartEditorServerOptions {
+  /**
+   * A runtime config to serve as `/config.js` (`window.__TIMBER_CONFIG__`) in place of
+   * the checkout's own — how the editor is pointed at a fake repo. Default: the one the
+   * e2e tests use (owner/repo above, requests routed through Playwright).
+   */
+  config?: Record<string, unknown>;
+  /** Default: a free port. */
+  port?: number;
+  /** Default: launch a headless browser. `false` when someone else brings the browser. */
+  browser?: boolean;
+}
+
+export async function startEditorServer(
+  options: StartEditorServerOptions = {},
+): Promise<EditorServer> {
+  const config = options.config ?? { owner: OWNER, repo: REPO };
   const server: ViteDevServer = await createServer({
     configFile: join(APP_ROOT, 'vite.config.ts'),
     root: APP_ROOT,
-    server: { port: 0 },
+    server: { port: options.port ?? 0, strictPort: options.port !== undefined },
     logLevel: 'warn',
+    plugins: [
+      {
+        // Serve the harness's config ahead of Vite's static `public/config.js`.
+        name: 'timber-e2e-config',
+        configureServer(vite) {
+          vite.middlewares.use((req, res, next) => {
+            if (req.url?.split('?')[0] !== '/config.js') return next();
+            res.setHeader('content-type', 'application/javascript');
+            res.end(`window.__TIMBER_CONFIG__ = ${JSON.stringify(config)};`);
+          });
+        },
+      },
+    ],
   });
   await server.listen();
   const url = server.resolvedUrls?.local[0];
   if (!url) throw new Error('Vite did not report a local URL');
-  const browser = await chromium.launch();
+  const browser = options.browser === false ? undefined : await chromium.launch();
   return {
     url,
-    browser,
+    get browser() {
+      if (!browser) throw new Error('startEditorServer was called with browser: false');
+      return browser;
+    },
     async close() {
-      await browser.close();
+      await browser?.close();
       await server.close();
     },
   };
@@ -68,8 +100,7 @@ export interface OpenEditorOptions {
 /**
  * A fresh fake repo seeded from `site-template/`, a fresh browser context whose
  * `api.github.com` traffic is routed to it, and a page that has pasted the fake PAT and
- * reached the loaded editor. The site's `config.js` is also intercepted so the editor
- * targets the fake repo whatever the checkout's own config says.
+ * reached the loaded editor. (The server's `/config.js` already names the fake repo.)
  */
 export async function openEditor(
   server: EditorServer,
@@ -88,12 +119,6 @@ export async function openEditor(
 
   const context = await server.browser.newContext();
   await routeFakeGitHub(context, fake);
-  await context.route('**/config.js', (route) =>
-    route.fulfill({
-      contentType: 'application/javascript',
-      body: `window.__TIMBER_CONFIG__ = ${JSON.stringify({ owner: OWNER, repo: REPO })};`,
-    }),
-  );
 
   const page = await context.newPage();
   const browserErrors: string[] = [];
@@ -110,7 +135,10 @@ export async function openEditor(
   if (options.signIn !== false) {
     await page.getByLabel('GitHub personal access token').fill(TOKEN);
     await page.getByRole('button', { name: 'Connect' }).click();
-    await page.getByRole('button', { name: /^Publish/ }).waitFor();
+    await page
+      .getByRole('banner')
+      .getByRole('button', { name: /^Publish/ })
+      .waitFor();
   }
 
   return {

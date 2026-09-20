@@ -42,7 +42,12 @@ describe('editor against FakeGitHub in headless Chromium', () => {
     expect(await page.getByRole('textbox', { name: 'title *' }).inputValue()).toBe(
       'About',
     );
-    expect(await page.getByRole('button', { name: 'Publish' }).isDisabled()).toBe(true);
+    expect(
+      await page
+        .getByRole('banner')
+        .getByRole('button', { name: 'Publish' })
+        .isDisabled(),
+    ).toBe(true);
 
     // The fake modelled everything the editor asked for.
     expect(fake.unhandled).toEqual([]);
@@ -73,8 +78,10 @@ describe('editor against FakeGitHub in headless Chromium', () => {
     expect(repo.log(WIP_BRANCH).at(-1)!.sha).toBe(repo.log('main').at(-1)!.sha);
 
     // Publish → the dialog lists the change; confirming squash-merges WIP onto main.
-    // (`click` auto-waits for the button to be enabled, which follows the autosave's refresh.)
-    await page.getByRole('button', { name: 'Publish' }).click();
+    // Scoped to the banner: the dialog that opens has its own "Publish" button, and a click
+    // retried while the header button morphs would otherwise find both. (`click` auto-waits
+    // for the button to be enabled, which follows the autosave's refresh.)
+    await page.getByRole('banner').getByRole('button', { name: 'Publish' }).click();
     const dialog = page.getByRole('dialog', { name: 'Publish' });
     await dialog
       .getByRole('button', { name: /^modified content\/pages\/about\/index\.md/ })
@@ -98,7 +105,10 @@ describe('editor against FakeGitHub in headless Chromium', () => {
     expect(
       repo.actions.list().some((r) => r.event === 'push' && r.headSha === published!.sha),
     ).toBe(true);
-    await page.getByRole('button', { name: 'Published ✓' }).waitFor({ timeout: 20_000 });
+    await page
+      .getByRole('banner')
+      .getByRole('button', { name: 'Published ✓' })
+      .waitFor({ timeout: 20_000 });
 
     expect(fake.unhandled).toEqual([]);
     expect(session.browserErrors).toEqual([]);

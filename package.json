@@ -21,6 +21,7 @@
     "test:live": "vitest run --project live",
     "test:browser": "vitest run --config packages/app/vitest.browser.config.ts",
     "test:e2e": "vitest run --config packages/app/vitest.e2e.config.ts",
+    "virtual-user": "pnpm --filter @timber/app exec vite-node test/e2e/virtual-user.ts",
     "lint": "eslint .",
     "format": "prettier --write ."
   },

@@ -20,3 +20,7 @@ packages/cli/out/
 
 # vitest browser failure screenshots
 packages/app/test/__screenshots__/
+
+# virtual-user run screenshots (the reports stand without them)
+testing/virtual-user/findings/**/*.png
+testing/virtual-user/findings/*.png

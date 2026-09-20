@@ -370,14 +370,12 @@ export class FakeGitHub {
           const recursive = url.searchParams.has('recursive');
           const entries = recursive
             ? store.flattenTree(s!)
-            : store
-                .getTree(s!)!
-                .entries.map((e) => ({
-                  path: e.name,
-                  mode: e.mode,
-                  type: e.type,
-                  sha: e.sha,
-                }));
+            : store.getTree(s!)!.entries.map((e) => ({
+                path: e.name,
+                mode: e.mode,
+                type: e.type,
+                sha: e.sha,
+              }));
           return json(200, { sha: s, truncated: false, tree: entries });
         },
       },

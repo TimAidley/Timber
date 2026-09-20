@@ -118,6 +118,20 @@ the authoritative design.
 | `pnpm test:live`    | `RepoClient` against the real GitHub API and a sandbox repo                                                                                                            | `TIMBER_SANDBOX_*` env          |
 
 The e2e harness (`packages/app/test/e2e/support/harness.ts`) is also the starting point for
-driving the editor by hand or by an agent: it gives you a seeded fake repo, a browser
-context routed to it, and a signed-in page. `packages/fake-github/README.md` covers
-staging failures (`failNext`) and foreign pushes (`repo.writeFiles`).
+further browser tests: it gives you a seeded fake repo, a browser context routed to it, and
+a signed-in page. `packages/fake-github/README.md` covers staging failures (`failNext`) and
+foreign pushes (`repo.writeFiles`).
+
+## Virtual-user testing
+
+```sh
+pnpm virtual-user     # editor at http://127.0.0.1:5199/, fake GitHub at :5198, token printed
+```
+
+Runs the real editor against the fake GitHub over plain HTTP (the editor is pointed at it
+through `apiBaseUrl`, the same knob GitHub Enterprise uses), so **any** browser can use it —
+yours, or the one Playwright MCP launches for the `virtual-user` agent. A `/__control` API
+on the fake stages events (another device pushing, a failing save, a failing deploy) and
+exposes the repo's ground truth. `/virtual-user` in Claude Code runs a scenario from
+`testing/virtual-user/scenarios/` with a blind tester agent and triages the result; see
+`testing/virtual-user/README.md`.
