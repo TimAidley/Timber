@@ -31,6 +31,7 @@ import {
   type ContentTypeSchema,
 } from '@timber/content';
 import { buildSnapshotFromDir } from './snapshot.node.js';
+import { figureStyleWarnings, type RenderedPage } from './figureCss.node.js';
 
 export interface BuildResult {
   pages: number;
@@ -196,6 +197,7 @@ export async function buildSite(repoDir: string, outDir: string): Promise<BuildR
   let redirects = 0;
   const warnings: string[] = [];
   const sitemapUrls: string[] = [];
+  const figurePages: RenderedPage[] = [];
 
   // Every URL a real page will occupy, so a redirect stub can never overwrite one
   // (SPEC §5): an alias is only a memory of an old address, and if a live page has since
@@ -204,7 +206,8 @@ export async function buildSite(repoDir: string, outDir: string): Promise<BuildR
   const pageUrls = new Set<string>();
   for (const object of model.objects) {
     const schema = schemas.get(object.type);
-    if (schema && schema.page !== false && isPublic(object)) pageUrls.add(effectiveUrl(object, schema));
+    if (schema && schema.page !== false && isPublic(object))
+      pageUrls.add(effectiveUrl(object, schema));
   }
 
   // Site assets → <out>/assets/**. The active theme's own assets (`themes/<name>/assets/**`)
@@ -323,6 +326,9 @@ export async function buildSite(repoDir: string, outDir: string): Promise<BuildR
       await writeFile(join(outDir, pageDir, 'index.html'), html, 'utf8');
       pages += 1;
       sitemapUrls.push(seo.canonical);
+      // Kept for the figure-styling check below, which needs the theme's compiled CSS —
+      // written by the asset pass above — alongside the finished markup.
+      if (html.includes('fig--')) figurePages.push({ url: pageUrl, dir: pageDir, html });
     }
 
     // Aliases and colocated assets belong to the *object*, so they're emitted once — next
@@ -353,6 +359,18 @@ export async function buildSite(repoDir: string, outDir: string): Promise<BuildR
       assets += 1;
     }
   }
+
+  // Figure styling (SPEC §7 → Images): the generator emits only classes, so a theme whose
+  // `.fig` rules don't reach them yields a page that looks broken while everything
+  // validates. Advisory, and run last, once both the markup and the theme's compiled CSS
+  // are on disk.
+  warnings.push(
+    ...(await figureStyleWarnings(
+      outDir,
+      typeof site.basePath === 'string' ? site.basePath : '',
+      figurePages,
+    )),
+  );
 
   // SEO artifacts (SPEC §13): sitemap of every rendered page + robots pointing to it.
   await writeFile(join(outDir, 'sitemap.xml'), buildSitemap(sitemapUrls), 'utf8');
