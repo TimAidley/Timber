@@ -3,6 +3,7 @@ import { LEGACY_THEME, type ThemePaths } from '@timber/content';
 import type { RepoSession } from '../state/repoSession.js';
 import type { Autosave } from '../state/autosave.js';
 import { LocalDraftStore } from '../state/localDraft.js';
+import { diagnostics } from '../state/diagnostics.js';
 import { repoConfig } from '../host/config.js';
 import { kindOf, loadAdvancedFiles, type AdvancedFile } from './loadAdvancedFiles.js';
 import { validateAdvancedFile, type AdvancedValidation } from './validate.js';
@@ -52,6 +53,15 @@ export interface Advanced {
    * entirely. Resolves once the branch (and local state) are reconciled.
    */
   revert: (path: string) => Promise<void>;
+  /**
+   * Paths whose local draft was set aside because the branch moved past it. Not applied
+   * and not committed — the loaded file is what the author sees and saves.
+   */
+  staleDraftPaths: string[];
+  /** Keep the branch copy: drop those drafts for good. */
+  discardStaleDrafts: () => void;
+  /** Take the set-aside drafts after all, queueing them to WIP as recovery would have. */
+  restoreStaleDrafts: () => void;
 }
 
 function isNotFound(err: unknown): boolean {
@@ -86,7 +96,9 @@ export function useAdvanced(
   // The working text per file (draft/dirty/committed), keyed by path.
   const [text, setText] = useState<Map<string, string>>(new Map());
   // Differing-but-invalid drafts (see Advanced.invalidDraftPaths).
-  const [invalidDraftPaths, setInvalidDraftPaths] = useState<ReadonlySet<string>>(new Set());
+  const [invalidDraftPaths, setInvalidDraftPaths] = useState<ReadonlySet<string>>(
+    new Set(),
+  );
 
   function setInvalidDraft(path: string, isInvalid: boolean): void {
     setInvalidDraftPaths((prev) => {
@@ -100,6 +112,20 @@ export function useAdvanced(
 
   const repoKey = `${repoConfig.owner}/${repoConfig.repo}`;
   const draftStore = useRef<LocalDraftStore | null>(null);
+  /** Advanced-file drafts recovery declined to apply — see the reconcile call below. */
+  const [staleDraftPaths, setStaleDraftPaths] = useState<string[]>([]);
+  /**
+   * Blob SHA per path on the branch as loaded, stamped onto each draft written here so
+   * the next session can tell an uncommitted edit from one the branch has moved past.
+   */
+  const shaByPath = useMemo(
+    () =>
+      new Map(
+        session.treeEntries.filter((e) => e.type === 'blob').map((e) => [e.path, e.sha]),
+      ),
+    [session.treeEntries],
+  );
+  const baseShaOf = (path: string): string | undefined => shaByPath.get(path);
   const loaded = useRef(false);
 
   useEffect(() => {
@@ -109,17 +135,39 @@ export function useAdvanced(
     void (async () => {
       try {
         const store = await LocalDraftStore.open();
-        const loadedFiles = await loadAdvancedFiles(session.client, session.loadedRef, theme);
+        const loadedFiles = await loadAdvancedFiles(
+          session.client,
+          session.loadedRef,
+          theme,
+        );
         if (cancelled) return;
         draftStore.current = store;
         const drafts = await store.allForRepo(repoKey);
-        const { files, text, requeue, invalid } = reconcileAdvancedDrafts(loadedFiles, drafts, theme);
+        // Blob SHAs of the branch as loaded, so a draft written against a version the
+        // branch has since moved past is set aside rather than silently re-queued over
+        // it (SPEC §5 base-SHA check). A template draft from an earlier session doing
+        // exactly that is how a pushed fix got reverted three times.
+        const { files, text, requeue, invalid, stale } = reconcileAdvancedDrafts(
+          loadedFiles,
+          drafts,
+          theme,
+          shaByPath,
+        );
+        if (stale.length > 0) {
+          diagnostics.record(
+            'warn',
+            'drafts',
+            `${stale.length} advanced-file draft(s) set aside — the branch moved on since they were written`,
+            { paths: stale },
+          );
+        }
         // Re-queue any uncommitted valid drafts (in-progress edits + resurrected files).
         for (const { path, content } of requeue) autosave.markFileDirty(path, content);
         if (cancelled) return;
         setFiles(files);
         setText(text);
         setInvalidDraftPaths(new Set(invalid));
+        setStaleDraftPaths(stale);
         setSelectedPath((prev) => prev || files[0]?.path || '');
       } catch (e) {
         if (!cancelled) setLoadError(e instanceof Error ? e.message : String(e));
@@ -149,7 +197,13 @@ export function useAdvanced(
     // Always keep a local draft (nothing is lost); only commit valid files. An
     // invalid edit still counts as pending work (it resurfaces on reload), so it's
     // tracked for the editing badges even though autosave won't take it.
-    void draftStore.current?.put(repoKey, selected.path, {}, next);
+    void draftStore.current?.put(
+      repoKey,
+      selected.path,
+      {},
+      next,
+      baseShaOf(selected.path),
+    );
     if (validateAdvancedFile({ ...selected, content: next }).valid) {
       autosave.markFileDirty(selected.path, next);
       setInvalidDraft(selected.path, false);
@@ -174,13 +228,24 @@ export function useAdvanced(
 
   function applyTypeRename(plan: RenameTypePlan): void {
     const fileMoves = [plan.schema, ...plan.templateMoves];
-    const rewrites = new Map(plan.schemaRewrites.map((r) => [r.path, r.content] as const));
+    const rewrites = new Map(
+      plan.schemaRewrites.map((r) => [r.path, r.content] as const),
+    );
 
     setFiles((prev) =>
       (prev ?? [])
         .filter((f) => !fileMoves.some((m) => m.from === f.path))
-        .concat(fileMoves.map((m) => ({ path: m.to, kind: kindOf(m.to, theme) ?? 'config', content: m.content })))
-        .sort((a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || a.path.localeCompare(b.path)),
+        .concat(
+          fileMoves.map((m) => ({
+            path: m.to,
+            kind: kindOf(m.to, theme) ?? 'config',
+            content: m.content,
+          })),
+        )
+        .sort(
+          (a, b) =>
+            KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || a.path.localeCompare(b.path),
+        ),
     );
     setText((prev) => {
       const next = new Map(prev);
@@ -344,5 +409,38 @@ export function useAdvanced(
     applyTypeRename,
     createFile,
     revert,
+    staleDraftPaths,
+    /** Keep the branch copy for a set-aside draft: drop it for good. */
+    discardStaleDrafts: (): void => {
+      for (const path of staleDraftPaths) void draftStore.current?.delete(repoKey, path);
+      setStaleDraftPaths([]);
+    },
+    /**
+     * The author's "mine wins": re-read each set-aside draft, make it the working text,
+     * and queue it like any edit — re-stamping it against the version now on the branch
+     * so it isn't set aside again on the next load. Invalid files stay local (never
+     * committed), exactly as an ordinary edit to one would.
+     */
+    restoreStaleDrafts: (): void => {
+      const paths = staleDraftPaths;
+      setStaleDraftPaths([]);
+      void (async () => {
+        const store = draftStore.current;
+        if (!store) return;
+        const drafts = await store.allForRepo(repoKey);
+        for (const path of paths) {
+          const draft = drafts.find((d) => d.path === path);
+          const file = files?.find((f) => f.path === path);
+          if (!draft || !file) continue;
+          setText((prev) => new Map(prev).set(path, draft.body));
+          void store.put(repoKey, path, {}, draft.body, baseShaOf(path));
+          if (validateAdvancedFile({ ...file, content: draft.body }).valid) {
+            autosave.markFileDirty(path, draft.body);
+          } else {
+            setInvalidDraft(path, true);
+          }
+        }
+      })();
+    },
   };
 }

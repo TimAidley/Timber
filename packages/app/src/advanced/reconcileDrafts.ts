@@ -1,6 +1,7 @@
 import { LEGACY_THEME, type ThemePaths } from '@timber/content';
 import { kindOf, type AdvancedFile, type AdvancedKind } from './loadAdvancedFiles.js';
 import { validateAdvancedFile } from './validate.js';
+import { isStaleDraft } from '../state/draftFreshness.js';
 
 /** Sort key for the advanced file list: templates → styles → schemas → config, by path. */
 export const KIND_ORDER: Record<AdvancedKind, number> = {
@@ -14,6 +15,8 @@ export const KIND_ORDER: Record<AdvancedKind, number> = {
 export interface DraftInput {
   path: string;
   body: string;
+  /** Blob SHA the draft was started from — see {@link isStaleDraft}. */
+  baseSha?: string | undefined;
 }
 
 export interface ReconcileResult {
@@ -30,6 +33,13 @@ export interface ReconcileResult {
    * draft that would nonetheless resurface on the next reload.
    */
   invalid: string[];
+  /**
+   * Drafts the branch has moved past: NOT applied to `text` and never re-queued, so the
+   * loaded (newer) file is what the author sees and what their next save preserves.
+   * Surfaced for the set-aside banner to offer back — a template draft from an earlier
+   * session is exactly how a pushed fix got silently reverted.
+   */
+  stale: string[];
 }
 
 /**
@@ -50,17 +60,26 @@ export function reconcileAdvancedDrafts(
   loadedFiles: AdvancedFile[],
   drafts: DraftInput[],
   theme: ThemePaths = LEGACY_THEME,
+  /** Current blob SHA per path on the loaded branch; omit to skip the staleness check. */
+  shaByPath?: ReadonlyMap<string, string>,
 ): ReconcileResult {
   const byPath = new Map(loadedFiles.map((f) => [f.path, f] as const));
   const text = new Map(loadedFiles.map((f) => [f.path, f.content]));
   const requeue: { path: string; content: string }[] = [];
   const invalid: string[] = [];
   const extra: AdvancedFile[] = [];
+  const stale: string[] = [];
 
   for (const draft of drafts) {
     const existing = byPath.get(draft.path);
     if (existing) {
       if (draft.body !== existing.content) {
+        // The branch moved under this draft; the loaded file wins (SPEC §5 base-SHA
+        // check) and the draft waits for the author to ask for it back.
+        if (isStaleDraft(draft, shaByPath?.get(draft.path))) {
+          stale.push(draft.path);
+          continue;
+        }
         text.set(draft.path, draft.body);
         if (validateAdvancedFile({ ...existing, content: draft.body }).valid) {
           requeue.push({ path: draft.path, content: draft.body });
@@ -88,5 +107,5 @@ export function reconcileAdvancedDrafts(
       )
     : loadedFiles;
 
-  return { files, text, requeue, invalid };
+  return { files, text, requeue, invalid, stale };
 }

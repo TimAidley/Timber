@@ -22,6 +22,8 @@ import { AssetStore } from './state/assets.js';
 import { repoAssetLoader } from './state/assetLoader.js';
 import { useAutosave } from './state/autosave.js';
 import { LocalDraftStore } from './state/localDraft.js';
+import { isStaleDraft } from './state/draftFreshness.js';
+import { StaleDraftsBanner, type SetAsideDraft } from './components/StaleDrafts.js';
 import { reassembleDocument } from './content/document.js';
 import { mergeEditIntoObjects } from './content/editState.js';
 import { livePageUrl, siteHomeUrl } from './content/liveUrl.js';
@@ -136,6 +138,29 @@ export function Editor({
   // commit callback can reference it.
   const repoKey = `${repoConfig.owner}/${repoConfig.repo}`;
   const draftStore = useRef<LocalDraftStore | null>(null);
+  /**
+   * Drafts load-time recovery declined to restore because the branch had moved past
+   * them (see the recovery effect). Held so the banner can offer them back — they are
+   * still in IndexedDB until the author restores or discards them.
+   */
+  const [staleDrafts, setStaleDrafts] = useState<SetAsideDraft[]>([]);
+  /**
+   * Blob SHA per path on the branch as loaded, stamped onto each draft so the next
+   * session can tell "not yet committed" from "the branch has moved on". A ref, not
+   * state: it is read inside callbacks and never drives rendering.
+   */
+  const blobShaAt = useRef(new Map<string, string>());
+  blobShaAt.current = useMemo(
+    () =>
+      new Map(
+        session.treeEntries.filter((e) => e.type === 'blob').map((e) => [e.path, e.sha]),
+      ),
+    [session.treeEntries],
+  );
+  /** Persist a draft, recording the branch version it was started from. */
+  function saveDraft(path: string, data: FrontMatter, body: string): void {
+    void draftStore.current?.put(repoKey, path, data, body, blobShaAt.current.get(path));
+  }
   // Once a flush lands staged assets on the branch, their local byte copies (the
   // crash-safety net; see persistStagedAsset) are no longer needed — the branch is
   // the durable copy. Device-only assets never commit, so theirs live on.
@@ -291,6 +316,15 @@ export function Editor({
   // Advanced/admin state (templates + config), lazily loaded on first visit. Its file
   // list renders in the shared sidebar and its editor/preview in the shared work area.
   const advanced = useAdvanced(session, autosave, advancedSeen, theme);
+  /**
+   * Everything load-time recovery set aside, content objects and advanced files
+   * together — one banner, because to the author it is one question: a local draft
+   * predates what is on the branch, keep theirs or take mine?
+   */
+  const staleDraftPaths = useMemo(
+    () => [...staleDrafts.map((d) => d.path), ...advanced.staleDraftPaths],
+    [staleDrafts, advanced.staleDraftPaths],
+  );
 
   // Publish dialog + the conflict base SHA, which advances each time we publish.
   const [showPublish, setShowPublish] = useState(false);
@@ -567,6 +601,14 @@ export function Editor({
 
         // Recover backed-up drafts (already on the branch) as unsaved edits; autosave
         // re-commits them to WIP. Device-only and orphan drafts are handled above.
+        //
+        // A draft the branch has moved past is NOT recovered (SPEC §5 base-SHA check):
+        // restoring it would overwrite whatever changed the file — another device, a
+        // direct push — silently, on a page the author may not have open. The branch
+        // copy wins by default and the draft is set aside, not deleted, for the banner
+        // to offer back. A draft whose SHA still matches is ordinary unsaved work and
+        // is restored exactly as before.
+        const setAside: SetAsideDraft[] = [];
         for (const draft of drafts) {
           if (devicePaths.has(draft.path)) continue;
           const committed = model.objects.find((o) => o.path === draft.path);
@@ -574,13 +616,25 @@ export function Editor({
           const changed =
             reassembleDocument(draft.data, draft.body) !==
             reassembleDocument(committed.data, committed.body);
-          if (changed) {
-            autosave.markObjectDirty(draft.path, draft.data, draft.body);
-            if (draft.path === selectedPath) {
-              setEdit({ data: { ...draft.data }, body: draft.body });
-              setBodySeed((s) => s + 1); // external re-seed → re-mount the body editor
-            }
+          if (!changed) continue;
+          if (isStaleDraft(draft, blobShaAt.current.get(draft.path))) {
+            setAside.push({ path: draft.path, data: draft.data, body: draft.body });
+            continue;
           }
+          autosave.markObjectDirty(draft.path, draft.data, draft.body);
+          if (draft.path === selectedPath) {
+            setEdit({ data: { ...draft.data }, body: draft.body });
+            setBodySeed((s) => s + 1); // external re-seed → re-mount the body editor
+          }
+        }
+        if (setAside.length > 0 && !cancelled) {
+          diagnostics.record(
+            'warn',
+            'drafts',
+            `${setAside.length} local draft(s) set aside — the branch moved on since they were written`,
+            { paths: setAside.map((d) => d.path) },
+          );
+          setStaleDrafts(setAside);
         }
       })
       .catch((err: unknown) => {
@@ -602,7 +656,7 @@ export function Editor({
     if (!deviceOnlyPaths.has(selectedPath)) {
       autosave.markObjectDirty(selectedPath, next.data, next.body);
     }
-    void draftStore.current?.put(repoKey, selectedPath, next.data, next.body);
+    saveDraft(selectedPath, next.data, next.body);
   }
 
   // A colocated image was staged for the selected object. The bytes are persisted
@@ -625,6 +679,34 @@ export function Editor({
     if (!blob) return;
     const bytes = new Uint8Array(await blob.arrayBuffer());
     await draftStore.current?.putAsset(repoKey, toPath, bytes, blob.type);
+  }
+
+  /**
+   * Take the set-aside drafts after all — the author's "mine wins". Queues each to WIP
+   * exactly as recovery would have, reseeds the open page, and re-stamps the draft
+   * against the version now on the branch so it isn't set aside again next load.
+   */
+  function restoreStaleDrafts(): void {
+    advanced.restoreStaleDrafts();
+    for (const draft of staleDrafts) {
+      autosave.markObjectDirty(draft.path, draft.data, draft.body);
+      saveDraft(draft.path, draft.data, draft.body);
+      setObjects((prev) =>
+        mergeEditIntoObjects(prev, draft.path, draft.data, draft.body),
+      );
+      if (draft.path === selectedPath) {
+        setEdit({ data: { ...draft.data }, body: draft.body });
+        setBodySeed((s) => s + 1);
+      }
+    }
+    setStaleDrafts([]);
+  }
+
+  /** Keep the branch copy: drop the set-aside drafts for good. */
+  function discardStaleDrafts(): void {
+    advanced.discardStaleDrafts();
+    for (const draft of staleDrafts) void draftStore.current?.delete(repoKey, draft.path);
+    setStaleDrafts([]);
   }
 
   function updateField(key: string, value: unknown): void {
@@ -657,7 +739,7 @@ export function Editor({
     const created = newObject(schema.name, title, schema, taken, lang);
     setObjects((prev) => [...prev, created]);
     setSelectedPath(created.path);
-    void draftStore.current?.put(repoKey, created.path, created.data, created.body);
+    saveDraft(created.path, created.data, created.body);
     if (storage === 'device') {
       setDeviceOnlyPaths((prev) => new Set(prev).add(created.path));
       void draftStore.current?.setStorage(repoKey, created.path, 'device');
@@ -721,7 +803,7 @@ export function Editor({
       const srcData = { ...edit.data, translationKey };
       setEdit((e) => ({ ...e, data: srcData }));
       autosave.markObjectDirty(selected.path, srcData, edit.body);
-      void draftStore.current?.put(repoKey, selected.path, srcData, edit.body);
+      saveDraft(selected.path, srcData, edit.body);
     }
 
     setObjects((prev) => [...prev, translation]);
@@ -819,7 +901,7 @@ export function Editor({
     });
     void draftStore.current?.setStorage(repoKey, path, 'backed-up');
     autosave.markObjectDirty(path, data, body);
-    void draftStore.current?.put(repoKey, path, data, body);
+    saveDraft(path, data, body);
     // Re-queue the bundle's colocated images (persisted locally while device-only) so they
     // ride the WIP commit now. Their IndexedDB copies are left as a safety net until the
     // object is confirmed on the branch — harmless if redundant.
@@ -840,7 +922,7 @@ export function Editor({
     const assets = deletedAssets.get(target.path) ?? bundleAssetEntries(target);
     const moves = assets.map((e) => ({ from: e.path, to: e.path, sha: e.sha }));
     autosave.markObjectRestored(target.path, target.data, target.body, moves);
-    void draftStore.current?.put(repoKey, target.path, target.data, target.body);
+    saveDraft(target.path, target.data, target.body);
     setDeletedPaths((prev) => {
       const next = new Set(prev);
       next.delete(target.path);
@@ -993,7 +1075,7 @@ export function Editor({
             : v;
       }
       void draftStore.current?.delete(repoKey, oldPath);
-      void draftStore.current?.put(repoKey, newPath, data, edit.body);
+      saveDraft(newPath, data, edit.body);
       void draftStore.current?.deleteStorage(repoKey, oldPath);
       void draftStore.current?.setStorage(repoKey, newPath, 'device');
       // Move the bundle's locally-persisted images to the new path (in memory + IndexedDB),
@@ -1051,7 +1133,7 @@ export function Editor({
 
     autosave.markObjectRenamed(oldPath, newPath, data, edit.body, moves);
     void draftStore.current?.delete(repoKey, oldPath);
-    void draftStore.current?.put(repoKey, newPath, data, edit.body);
+    saveDraft(newPath, data, edit.body);
 
     const renamed: ContentObject = { ...selected, slug: newSlug, path: newPath, data };
     setObjects((prev) => prev.map((o) => (o.path === oldPath ? renamed : o)));
@@ -1075,7 +1157,7 @@ export function Editor({
       const newDir = m.to.slice(0, -'/index.md'.length);
       if (deviceOnlyPaths.has(m.from)) {
         void draftStore.current?.delete(repoKey, m.from);
-        void draftStore.current?.put(repoKey, m.to, m.data, m.body);
+        saveDraft(m.to, m.data, m.body);
         void draftStore.current?.deleteStorage(repoKey, m.from);
         void draftStore.current?.setStorage(repoKey, m.to, 'device');
         for (const asset of assetStore.all()) {
@@ -1093,12 +1175,12 @@ export function Editor({
       }
       autosave.markObjectRenamed(m.from, m.to, m.data, m.body, m.moves);
       void draftStore.current?.delete(repoKey, m.from);
-      void draftStore.current?.put(repoKey, m.to, m.data, m.body);
+      saveDraft(m.to, m.data, m.body);
     }
     for (const r of plan.objectRewrites) {
       if (!deviceOnlyPaths.has(r.object.path))
         autosave.markObjectDirty(r.object.path, r.data, r.object.body);
-      void draftStore.current?.put(repoKey, r.object.path, r.data, r.object.body);
+      saveDraft(r.object.path, r.data, r.object.body);
     }
     setDeviceOnlyPaths(devicePaths);
     advanced.applyTypeRename(plan);
@@ -1146,7 +1228,7 @@ export function Editor({
     const body = dirty?.body ?? settings.body;
     const data: FrontMatter = { ...(dirty?.data ?? settings.data), activeTheme: name };
     autosave.markObjectDirty(settings.path, data, body);
-    void draftStore.current?.put(repoKey, settings.path, data, body);
+    saveDraft(settings.path, data, body);
     setObjects((prev) =>
       prev.map((o) => (o.path === settings.path ? { ...o, data } : o)),
     );
@@ -1791,6 +1873,13 @@ export function Editor({
           change={foreign.change}
           onReview={() => setShowForeign(true)}
           onDismiss={foreign.dismiss}
+        />
+      ) : null}
+      {staleDraftPaths.length > 0 ? (
+        <StaleDraftsBanner
+          paths={staleDraftPaths}
+          onRestore={restoreStaleDrafts}
+          onDiscard={discardStaleDrafts}
         />
       ) : null}
       <header className="app__banner">

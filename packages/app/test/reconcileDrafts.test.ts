@@ -91,3 +91,75 @@ describe('reconcileAdvancedDrafts', () => {
     expect(requeue).toEqual([]);
   });
 });
+
+/**
+ * The base-SHA guard on advanced files. A stale template draft re-queued over a newer
+ * commit is exactly how a pushed fix got silently reverted, so a draft written against
+ * a version the branch has moved past is set aside rather than applied.
+ */
+describe('reconcileAdvancedDrafts — drafts the branch has moved past', () => {
+  const loaded = [
+    {
+      path: 'templates/projects.liquid',
+      kind: 'template' as const,
+      content: '{% block main %}new{% endblock %}',
+    },
+  ];
+
+  it('sets aside a draft whose base SHA no longer matches, keeping the loaded file', () => {
+    const result = reconcileAdvancedDrafts(
+      loaded,
+      [
+        {
+          path: 'templates/projects.liquid',
+          body: '{% block main %}old{% endblock %}',
+          baseSha: 'old',
+        },
+      ],
+      undefined,
+      new Map([['templates/projects.liquid', 'new']]),
+    );
+
+    expect(result.stale).toEqual(['templates/projects.liquid']);
+    // The loaded file is what the author sees and what their next save preserves.
+    expect(result.text.get('templates/projects.liquid')).toBe(
+      '{% block main %}new{% endblock %}',
+    );
+    expect(result.requeue).toEqual([]);
+  });
+
+  it('still restores an uncommitted edit whose base SHA matches', () => {
+    const result = reconcileAdvancedDrafts(
+      loaded,
+      [
+        {
+          path: 'templates/projects.liquid',
+          body: '{% block main %}mine{% endblock %}',
+          baseSha: 'new',
+        },
+      ],
+      undefined,
+      new Map([['templates/projects.liquid', 'new']]),
+    );
+
+    expect(result.stale).toEqual([]);
+    expect(result.text.get('templates/projects.liquid')).toBe(
+      '{% block main %}mine{% endblock %}',
+    );
+    expect(result.requeue).toEqual([
+      {
+        path: 'templates/projects.liquid',
+        content: '{% block main %}mine{% endblock %}',
+      },
+    ]);
+  });
+
+  it('restores a draft with no base SHA, as before', () => {
+    const result = reconcileAdvancedDrafts(loaded, [
+      { path: 'templates/projects.liquid', body: '{% block main %}mine{% endblock %}' },
+    ]);
+
+    expect(result.stale).toEqual([]);
+    expect(result.requeue).toHaveLength(1);
+  });
+});

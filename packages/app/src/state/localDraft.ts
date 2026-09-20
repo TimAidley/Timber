@@ -12,6 +12,15 @@ export interface LocalDraft {
   data: FrontMatter;
   body: string;
   updatedAt: number;
+  /**
+   * Blob SHA of the branch copy this draft was started from, when there was one. It is
+   * what lets load-time recovery tell "unsaved work" from "a draft the branch has since
+   * moved past" — without it the two are identical in shape and the draft always wins,
+   * which is how newer commits came to be silently overwritten. Absent for a draft with
+   * no branch copy yet (a freshly created object) and for drafts written before this
+   * was recorded; both are treated as fresh, since neither indicates a conflict.
+   */
+  baseSha?: string;
 }
 
 const DB_NAME = 'timber-drafts';
@@ -130,9 +139,11 @@ export class LocalDraftStore {
     path: string,
     data: FrontMatter,
     body: string,
+    baseSha?: string,
   ): Promise<void> {
     const tx = this.db.transaction(STORE, 'readwrite');
     const draft: LocalDraft = { repoKey, path, data, body, updatedAt: Date.now() };
+    if (baseSha !== undefined) draft.baseSha = baseSha;
     tx.objectStore(STORE).put({ key: keyOf(repoKey, path), ...draft });
     await txDone(tx);
   }
