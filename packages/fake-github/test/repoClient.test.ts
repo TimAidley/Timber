@@ -70,6 +70,40 @@ describe('RepoClient against FakeGitHub', () => {
     expect(fake.unhandled).toEqual([]);
   });
 
+  it('loadSnapshot lists files in tree order whatever order the blobs arrive in', async () => {
+    // Blob fetches are concurrent; over a real network the LAST file in the tree can be the
+    // FIRST to answer. Insertion order must still follow the tree, because the content
+    // model — and so which page the editor opens first — is built by iterating the Map.
+    let delay = 200;
+    const slowestFirst: typeof fetch = async (input, init) => {
+      const url =
+        typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (/\/git\/blobs\//.test(url)) {
+        // Each successive blob request waits LESS than the one before → they resolve in
+        // reverse request order.
+        const wait = (delay = Math.max(0, delay - 20));
+        await new Promise((r) => setTimeout(r, wait));
+      }
+      return fake.fetch(input, init);
+    };
+    const slow = new RepoClient({
+      owner: OWNER,
+      repo: REPO,
+      getToken: async () => TOKEN,
+      fetchImpl: slowestFirst,
+    });
+
+    const { snapshot, tree } = await slow.loadSnapshotWithTree('main');
+
+    const treeOrder = tree.entries
+      .filter(
+        (e) => e.type === 'blob' && /^(content|config)\/.*\.(md|ya?ml)$/.test(e.path),
+      )
+      .map((e) => e.path);
+    expect(treeOrder.length).toBeGreaterThan(2);
+    expect([...snapshot.keys()]).toEqual(treeOrder);
+  });
+
   it('readFile / readBlob / readBinaryBlob round-trip bytes exactly', async () => {
     const bytes = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0, 255, 10, 13]);
     await repo.writeFiles('main', {

@@ -65,7 +65,11 @@ async function giteaResponseError(
     res.status,
     `Gitea ${method} ${path} -> ${res.status}${detail ? `: ${detail}` : ''}`,
   );
-  error.response = { status: res.status, headers: res.headers, data: { message: detail } };
+  error.response = {
+    status: res.status,
+    headers: res.headers,
+    data: { message: detail },
+  };
   return error;
 }
 
@@ -285,12 +289,15 @@ export class GiteaClient implements HostProvider {
     const textEntries = tree.entries.filter(
       (e) => e.type === 'blob' && SNAPSHOT_FILE.test(e.path),
     );
-    const snapshot: RepoSnapshot = new Map();
-    await Promise.all(
-      textEntries.map(async (entry) => {
-        snapshot.set(entry.path, await this.readBlob(entry.sha));
-      }),
+    // Fetch concurrently, but insert in TREE order once everything has arrived: the
+    // content model is built by iterating this Map, so insertion order decides object
+    // order — and with it which page the editor opens first. Inserting as each blob
+    // resolved made that depend on network timing.
+    const contents = await Promise.all(
+      textEntries.map((entry) => this.readBlob(entry.sha)),
     );
+    const snapshot: RepoSnapshot = new Map();
+    textEntries.forEach((entry, i) => snapshot.set(entry.path, contents[i]!));
     return { snapshot, tree };
   }
 

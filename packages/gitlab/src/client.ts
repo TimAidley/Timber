@@ -76,7 +76,11 @@ async function gitlabResponseError(
     res.status,
     `GitLab ${method} ${path} -> ${res.status}${detail ? `: ${detail}` : ''}`,
   );
-  error.response = { status: res.status, headers: res.headers, data: { message: detail } };
+  error.response = {
+    status: res.status,
+    headers: res.headers,
+    data: { message: detail },
+  };
   return error;
 }
 
@@ -110,7 +114,11 @@ function pipelineOutcome(status: string): { status: string; conclusion: string |
   // indeterminate "waiting for a runner" rather than a bar creeping along against time
   // the pipeline hasn't actually spent building. Still "not completed", so `deployState`
   // reads it as building exactly as before.
-  if (status === 'created' || status === 'waiting_for_resource' || status === 'preparing') {
+  if (
+    status === 'created' ||
+    status === 'waiting_for_resource' ||
+    status === 'preparing'
+  ) {
     return { status: 'queued', conclusion: null };
   }
   if (status === 'pending' || status === 'scheduled' || status === 'manual') {
@@ -148,7 +156,8 @@ export function summarizePipelineJobs(
   const active = jobs.find((job) => job.status === 'running');
   if (active) return { phase: 'running', label: active.name };
   const started = jobs.some(
-    (job) => job.status === 'success' || job.status === 'failed' || job.status === 'canceled',
+    (job) =>
+      job.status === 'success' || job.status === 'failed' || job.status === 'canceled',
   );
   return { phase: started ? 'running' : 'queued' };
 }
@@ -341,12 +350,15 @@ export class GitLabClient implements HostProvider {
     const textEntries = tree.entries.filter(
       (e) => e.type === 'blob' && SNAPSHOT_FILE.test(e.path),
     );
-    const snapshot: RepoSnapshot = new Map();
-    await Promise.all(
-      textEntries.map(async (entry) => {
-        snapshot.set(entry.path, await this.readBlob(entry.sha));
-      }),
+    // Fetch concurrently, but insert in TREE order once everything has arrived: the
+    // content model is built by iterating this Map, so insertion order decides object
+    // order — and with it which page the editor opens first. Inserting as each blob
+    // resolved made that depend on network timing.
+    const contents = await Promise.all(
+      textEntries.map((entry) => this.readBlob(entry.sha)),
     );
+    const snapshot: RepoSnapshot = new Map();
+    textEntries.forEach((entry, i) => snapshot.set(entry.path, contents[i]!));
     return { snapshot, tree };
   }
 
@@ -590,13 +602,18 @@ export class GitLabClient implements HostProvider {
    * Since {@link getLatestPipeline} also measures from `created_at`, estimate and elapsed
    * include queue time alike, so the comparison stays honest.
    */
-  private async getTypicalPipelineDurationMs(branch?: string): Promise<number | undefined> {
+  private async getTypicalPipelineDurationMs(
+    branch?: string,
+  ): Promise<number | undefined> {
     const q = `?status=success&per_page=${TIMING_SAMPLE_SIZE}&order_by=id&sort=desc${
       branch ? `&ref=${encodeURIComponent(branch)}` : ''
     }`;
     const list = await this.json<PipelineSummary[]>(this.repoPath(`/pipelines${q}`));
     return medianDurationMs(
-      list.map((p) => ({ startedAt: p.created_at, endedAt: p.updated_at ?? p.created_at })),
+      list.map((p) => ({
+        startedAt: p.created_at,
+        endedAt: p.updated_at ?? p.created_at,
+      })),
     );
   }
 
