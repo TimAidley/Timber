@@ -9,7 +9,9 @@ export interface RepoConfig {
   host: HostKind;
   /**
    * For `gitea`/`gitlab`: the instance origin, e.g. `https://codeberg.org` or
-   * `https://gitlab.com` (the adapter appends its API root). Unused by `github`.
+   * `https://gitlab.com` (the adapter appends its API root). For `github` it is optional
+   * and is the REST API root itself — `https://ghe.example.com/api/v3` for GitHub
+   * Enterprise Server, or a local `@timber/fake-github` server; unset ⇒ `api.github.com`.
    */
   apiBaseUrl: string | undefined;
   owner: string;
@@ -90,7 +92,8 @@ function str(value: unknown): string | undefined {
 export function resolveConfig(runtime: RuntimeConfig, env: EnvLike): RepoConfig {
   // `gitea`/`gitlab` opt out of the GitHub default; anything else resolves to `github`.
   const rawHost = str(runtime.host) ?? str(env.VITE_TIMBER_HOST);
-  const host: HostKind = rawHost === 'gitea' ? 'gitea' : rawHost === 'gitlab' ? 'gitlab' : 'github';
+  const host: HostKind =
+    rawHost === 'gitea' ? 'gitea' : rawHost === 'gitlab' ? 'gitlab' : 'github';
   return {
     host,
     apiBaseUrl: str(runtime.apiBaseUrl) ?? str(env.VITE_TIMBER_API_BASE_URL),
@@ -104,7 +107,10 @@ export function resolveConfig(runtime: RuntimeConfig, env: EnvLike): RepoConfig 
       // and only fall back on a truly-absent value. The default is host-specific —
       // GitHub's `repo` scope; Gitea/GitLab have their own scope vocabularies (their OAuth
       // app carries granted scopes), so default those to empty and let the instance decide.
-      scope: runtime.oauth?.scope ?? env.VITE_TIMBER_OAUTH_SCOPE ?? (host === 'github' ? 'repo' : ''),
+      scope:
+        runtime.oauth?.scope ??
+        env.VITE_TIMBER_OAUTH_SCOPE ??
+        (host === 'github' ? 'repo' : ''),
       redirectUri:
         str(runtime.oauth?.redirectUri) ?? str(env.VITE_TIMBER_OAUTH_REDIRECT_URI),
       flow: str(runtime.oauth?.flow) ?? str(env.VITE_TIMBER_OAUTH_FLOW),

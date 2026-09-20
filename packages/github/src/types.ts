@@ -42,6 +42,12 @@ export interface RepoClientOptions {
    * `noStore.ts`). Defaults to the global `fetch`; injected in tests.
    */
   fetchImpl?: typeof fetch;
+  /**
+   * The REST API root to talk to. Unset ⇒ `https://api.github.com`. Set it for GitHub
+   * Enterprise Server (`https://ghe.example.com/api/v3`), or to point the editor at a
+   * local stand-in such as `@timber/fake-github` served over HTTP.
+   */
+  baseUrl?: string;
 }
 
 /**

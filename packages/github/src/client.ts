@@ -182,7 +182,10 @@ export class RepoClient implements HostProvider {
       options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
     // Reads must not come from the browser's HTTP cache — a cached branch tip makes
     // every commit target a stale parent for a full minute (see `noStore.ts`).
-    this.octokit = new Octokit({ request: { fetch: noStoreFetch(options.fetchImpl) } });
+    this.octokit = new Octokit({
+      request: { fetch: noStoreFetch(options.fetchImpl) },
+      ...(options.baseUrl ? { baseUrl: options.baseUrl.replace(/\/+$/, '') } : {}),
+    });
     this.octokit.hook.before('request', async (requestOptions) => {
       const token = await options.getToken();
       requestOptions.headers.authorization = `Bearer ${token}`;
@@ -353,12 +356,15 @@ export class RepoClient implements HostProvider {
     const textEntries = tree.entries.filter(
       (e) => e.type === 'blob' && SNAPSHOT_FILE.test(e.path),
     );
-    const snapshot: RepoSnapshot = new Map();
-    await Promise.all(
-      textEntries.map(async (entry) => {
-        snapshot.set(entry.path, await this.readBlob(entry.sha));
-      }),
+    // Fetch concurrently, but insert in TREE order once everything has arrived: the
+    // content model is built by iterating this Map, so insertion order decides object
+    // order — and with it which page the editor opens first. Inserting as each blob
+    // resolved made that depend on network timing.
+    const contents = await Promise.all(
+      textEntries.map((entry) => this.readBlob(entry.sha)),
     );
+    const snapshot: RepoSnapshot = new Map();
+    textEntries.forEach((entry, i) => snapshot.set(entry.path, contents[i]!));
     return { snapshot, tree };
   }
 

@@ -16,9 +16,15 @@ import type { HostKind } from './config.js';
  * additionally takes a `projectPath` for nested groups).
  */
 export type HostTarget =
-  | { host: 'github'; owner: string; repo: string }
+  | { host: 'github'; owner: string; repo: string; apiBaseUrl?: string }
   | { host: 'gitea'; apiBaseUrl: string; owner: string; repo: string }
-  | { host: 'gitlab'; apiBaseUrl: string; owner: string; repo: string; projectPath?: string };
+  | {
+      host: 'gitlab';
+      apiBaseUrl: string;
+      owner: string;
+      repo: string;
+      projectPath?: string;
+    };
 
 export function createHostProvider(target: HostTarget, getToken: GetToken): HostProvider {
   if (target.host === 'gitea') {
@@ -38,7 +44,12 @@ export function createHostProvider(target: HostTarget, getToken: GetToken): Host
       getToken,
     });
   }
-  return new RepoClient({ owner: target.owner, repo: target.repo, getToken });
+  return new RepoClient({
+    owner: target.owner,
+    repo: target.repo,
+    getToken,
+    ...(target.apiBaseUrl ? { baseUrl: target.apiBaseUrl } : {}),
+  });
 }
 
 /**
@@ -54,7 +65,9 @@ export function hostTargetFromConfig(config: {
 }): HostTarget {
   if (config.host === 'gitea') {
     if (!config.apiBaseUrl) {
-      throw new Error('Gitea host requires an apiBaseUrl (e.g. https://codeberg.org) in config');
+      throw new Error(
+        'Gitea host requires an apiBaseUrl (e.g. https://codeberg.org) in config',
+      );
     }
     return {
       host: 'gitea',
@@ -65,7 +78,9 @@ export function hostTargetFromConfig(config: {
   }
   if (config.host === 'gitlab') {
     if (!config.apiBaseUrl) {
-      throw new Error('GitLab host requires an apiBaseUrl (e.g. https://gitlab.com) in config');
+      throw new Error(
+        'GitLab host requires an apiBaseUrl (e.g. https://gitlab.com) in config',
+      );
     }
     return {
       host: 'gitlab',
@@ -75,5 +90,11 @@ export function hostTargetFromConfig(config: {
       ...(config.projectPath ? { projectPath: config.projectPath } : {}),
     };
   }
-  return { host: 'github', owner: config.owner, repo: config.repo };
+  // GitHub's apiBaseUrl is optional: GitHub Enterprise Server, or a local stand-in.
+  return {
+    host: 'github',
+    owner: config.owner,
+    repo: config.repo,
+    ...(config.apiBaseUrl ? { apiBaseUrl: config.apiBaseUrl } : {}),
+  };
 }
