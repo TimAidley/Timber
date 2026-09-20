@@ -30,8 +30,8 @@ export { redirectStubHtml, aliasUrls, shadowedAliases } from './redirects.js';
 export type { ShadowedAlias } from './redirects.js';
 export { isPublic, canPublish, resolvePublic, withPublic } from './visibility.js';
 export { FIELD_KINDS, isFieldKind, fieldToJsonSchema } from './fields.js';
-export { parseVideoUrl } from './video.js';
-export type { VideoRef } from './video.js';
+export { parseEmbedUrl, embedUrlProblem } from './embed.js';
+export type { EmbedRef, EmbedProvider } from './embed.js';
 export { validateFigureBlocks } from './figures.js';
 export {
   siteContext,

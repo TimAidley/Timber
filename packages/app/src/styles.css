@@ -1858,7 +1858,7 @@ button.langmenu__row {
    Media fields
    ----------------------------------------------------------------------------- */
 .image-field,
-.video-field {
+.embed-field {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
@@ -1885,7 +1885,7 @@ button.langmenu__row {
 }
 
 .image-field__error,
-.video-field__error {
+.embed-field__error {
   font-size: 0.8rem;
   color: var(--danger);
 }
@@ -1935,14 +1935,14 @@ button.langmenu__row {
   text-decoration: underline;
 }
 
-.video-field__facade {
+.embed-field__facade {
   max-width: 200px;
   border-radius: var(--radius);
   display: block;
   margin-top: 0.3rem;
 }
 
-.video-field__ok {
+.embed-field__ok {
   font-size: 0.78rem;
   color: var(--text-muted);
 }

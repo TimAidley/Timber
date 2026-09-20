@@ -7,7 +7,6 @@ import {
   canPublish,
   detectDanglingReferences,
   loadSchemas,
-  parseVideoUrl,
   resolvePublic,
   urlFor,
   Validator,
@@ -146,7 +145,7 @@ describe('Validator', () => {
     expect(blob).toMatch(/title/); // required missing
     expect(blob).toMatch(/enum|category/); // bad enum
     expect(blob).toMatch(/capacity/); // out of range
-    expect(blob).toMatch(/video/); // disallowed provider
+    expect(blob).toMatch(/embed/); // not an https URL
   });
 
   it('rejects a dangling reference', () => {
@@ -195,38 +194,5 @@ describe('references', () => {
   it('builds a default URL from type and slug', () => {
     const fete = objectAt('content/events/summer-fete/index.md');
     expect(urlFor(fete, model.schemas.get('events')!)).toBe('/events/summer-fete/');
-  });
-});
-
-describe('parseVideoUrl', () => {
-  it('accepts allow-listed providers and extracts the id', () => {
-    expect(parseVideoUrl('https://www.youtube.com/watch?v=dQw4w9WgXcQ')).toEqual({
-      provider: 'youtube',
-      id: 'dQw4w9WgXcQ',
-    });
-    expect(parseVideoUrl('https://youtu.be/aBc_1-2XyZ0')).toEqual({
-      provider: 'youtube',
-      id: 'aBc_1-2XyZ0',
-    });
-    expect(parseVideoUrl('https://vimeo.com/123456789')).toEqual({
-      provider: 'vimeo',
-      id: '123456789',
-    });
-  });
-
-  it('rejects non-allow-listed hosts and malformed URLs', () => {
-    expect(parseVideoUrl('https://evil.example.com/embed/xyz')).toBeUndefined();
-    expect(parseVideoUrl('not a url')).toBeUndefined();
-  });
-
-  it('rejects a YouTube id that is not 11 url-safe chars (injection guard)', () => {
-    // The id is interpolated into a template-built embed URL, so an id carrying
-    // quotes/brackets must never pass the allowlist boundary.
-    expect(parseVideoUrl('https://www.youtube.com/watch?v="><script>')).toBeUndefined();
-    expect(parseVideoUrl('https://youtu.be/short')).toBeUndefined();
-  });
-
-  it('rejects plaintext http (mixed content)', () => {
-    expect(parseVideoUrl('http://www.youtube.com/watch?v=dQw4w9WgXcQ')).toBeUndefined();
   });
 });

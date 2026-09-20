@@ -4,7 +4,7 @@ import { fieldToJsonSchema } from './fields.js';
 import { validateFigureBlocks } from './figures.js';
 import { validatePaginate } from './pagination.js';
 import { shadowedAliases } from './redirects.js';
-import { parseVideoUrl } from './video.js';
+import { embedUrlProblem } from './embed.js';
 import type {
   ContentModel,
   ContentObject,
@@ -92,11 +92,15 @@ export class Validator {
         }
       }
 
-      if (field.type === 'video' && typeof value === 'string' && !parseVideoUrl(value)) {
-        errors.push({
-          field: name,
-          message: `video URL "${value}" is not from an allowed provider`,
-        });
+      // `video` is the deprecated spelling of `embed` and resolves identically.
+      if (
+        (field.type === 'embed' || field.type === 'video') &&
+        typeof value === 'string'
+      ) {
+        const problem = embedUrlProblem(value);
+        if (problem) {
+          errors.push({ field: name, message: `embed URL "${value}" ${problem}` });
+        }
       }
     }
 

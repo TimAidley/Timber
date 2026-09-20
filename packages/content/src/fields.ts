@@ -13,6 +13,7 @@ export const FIELD_KINDS: readonly FieldKind[] = [
   'color',
   'image',
   'reference',
+  'embed',
   'video',
 ];
 
@@ -28,8 +29,8 @@ export type JsonSchemaFragment = Record<string, unknown>;
  * fragment Ajv validates against. This is an internal detail — schema authors write
  * `{ type: reference, referenceType: people }`, never JSON Schema.
  *
- * `reference`/`video`/`image` translate to plain strings here; their Timber-specific
- * semantics (id existence, provider allowlist) are separate passes in validate.ts,
+ * `reference`/`embed`/`image` translate to plain strings here; their Timber-specific
+ * semantics (id existence, embeddable URL) are separate passes in validate.ts,
  * because they can't be expressed in single-document JSON Schema.
  */
 export function fieldToJsonSchema(field: FieldSchema): JsonSchemaFragment {
@@ -67,6 +68,7 @@ export function fieldToJsonSchema(field: FieldSchema): JsonSchemaFragment {
       return { type: 'string', minLength: 1 };
     case 'reference':
       return { type: 'string', minLength: 1 };
+    case 'embed':
     case 'video':
       return { type: 'string', format: 'uri' };
   }

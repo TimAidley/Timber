@@ -19,7 +19,7 @@ a site* see **`INSTALL.md`**.
 | Package | What it is | Runs in |
 |---|---|---|
 | `@timber/generator` | remark/rehype → LiquidJS render core (one page) | browser **and** Node (isomorphic) |
-| `@timber/content` | Content model: schemas, id→object index, reference resolution, validation, SEO, navigation, redirects, video allowlist, visibility | browser and Node |
+| `@timber/content` | Content model: schemas, id→object index, reference resolution, validation, SEO, navigation, redirects, embed URL resolution, visibility | browser and Node |
 | `@timber/jekyll-compat` | **Theme-import core + Jekyll engine** (SPEC §2 → Tier A): the shared, engine-pluggable `planThemeImport` (theme files → repo write-set) + the `ThemeEngine` seam + `setFrontMatterScalar`, plus the Jekyll engine (`importJekyllTheme` transform, `registerJekyllCompat` ecosystem filters/tags). Reads `page.*` | browser and Node |
 | `@timber/eleventy-compat` | **Eleventy engine + the runtime dispatch** (SPEC §2 → Tier A): the `importEleventyTemplate` transform, `eleventyEngine` (collects `_includes/**` at any input-dir prefix, parses `_data/*.json` globals), `registerEleventyCompat` (`url`/`slugify`/…), `detectEngine`, and `themeRuntime`/`parseThemeManifest` (the one place that maps a theme's `theme.json` → render mode for *both* engines, so it depends on jekyll-compat). Only **Liquid**-authored Eleventy themes | browser and Node |
 | `@timber/sass` | **Isomorphic SCSS compiler** (SPEC §6): `compileScss` — dart-sass driven by an **in-memory importer** over the repo snapshot, so the browser preview and the Node build compile stylesheets identically (preview ≡ build). dart-sass is pure JS; lazy-loaded in the browser | browser and Node |

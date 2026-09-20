@@ -2,7 +2,7 @@ import type { ContentModel, ContentTypeSchema } from '@timber/content';
 import type { FrontMatter } from '@timber/generator';
 import { FieldWidget, type ReferenceOption } from './widgets.js';
 import { ImageField } from './ImageField.js';
-import { VideoField } from './VideoField.js';
+import { EmbedField } from './EmbedField.js';
 import { ReferenceField } from './ReferenceField.js';
 import type { AssetStore } from '../state/assets.js';
 
@@ -29,7 +29,7 @@ function referenceOptionsFor(model: ContentModel, referenceType: string | undefi
 
 /**
  * Render a content type's front matter as a structured form (SPEC §8): one labeled
- * widget per declared field, driven entirely by the schema. `image` and `video`
+ * widget per declared field, driven entirely by the schema. `image` and `embed`
  * fields get first-class media widgets (upload/process pipeline; allowlist-validated
  * URL); the plain kinds go through the generic {@link FieldWidget}.
  */
@@ -62,8 +62,8 @@ export function SchemaForm({
               bundleDir={bundleDir}
               onStaged={onAssetStaged}
             />
-          ) : field.type === 'video' ? (
-            <VideoField fieldKey={key} value={data[key]} onChange={(v) => onChange(key, v)} />
+          ) : field.type === 'embed' || field.type === 'video' ? (
+            <EmbedField fieldKey={key} value={data[key]} onChange={(v) => onChange(key, v)} />
           ) : field.type === 'reference' ? (
             <ReferenceField
               fieldKey={key}

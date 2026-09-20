@@ -67,8 +67,13 @@ export const FIELD_REFERENCE: readonly FieldDoc[] = [
     options: [...COMMON, 'referenceType'],
   },
   {
+    kind: 'embed',
+    summary: 'External https URL shown as an embed (video, game, map…)',
+    options: [...COMMON],
+  },
+  {
     kind: 'video',
-    summary: 'External video URL (allow-listed provider)',
+    summary: 'Deprecated spelling of embed — use embed',
     options: [...COMMON],
   },
 ];

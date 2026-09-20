@@ -6,7 +6,7 @@ import type { RepoSnapshot } from '@timber/content';
  * from GitHub via `RepoClient.loadTree` — same `RepoSnapshot` shape, so swapping
  * the source later touches nothing downstream. Deliberately exercises a spread of
  * field kinds (text, multiline, number, boolean, date, enum, tags, reference,
- * video) so the form widgets are all reachable.
+ * embed) so the form widgets are all reachable.
  */
 export const demoRepo: RepoSnapshot = new Map([
   [
@@ -38,7 +38,7 @@ fields:
     type: reference
     referenceType: people
   video:
-    type: video
+    type: embed
 `,
   ],
   [

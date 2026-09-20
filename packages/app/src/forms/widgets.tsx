@@ -118,7 +118,7 @@ function DatetimeField({
 
 /**
  * A schema-driven widget: one control per {@link FieldSchema} kind (SPEC §8). This
- * covers the plain kinds; `image`, `video`, and `reference` have dedicated
+ * covers the plain kinds; `image`, `embed`, and `reference` have dedicated
  * components ({@link ReferenceField} is the search-and-pick picker) that
  * {@link SchemaForm} dispatches to before reaching here.
  */
@@ -216,13 +216,14 @@ export function FieldWidget({
     case 'tags':
       return <TagsField id={id} value={value} onChange={onChange} />;
 
+    case 'embed':
     case 'video':
       return (
         <input
           id={id}
           type="url"
           value={asString(value)}
-          placeholder="https://youtube.com/watch?v=…"
+          placeholder="https://…"
           onChange={(e) => onChange(e.target.value)}
         />
       );

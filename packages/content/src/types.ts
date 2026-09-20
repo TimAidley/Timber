@@ -20,7 +20,8 @@ export type FieldKind =
   | 'color' // CSS colour (hex), edited with a picker
   | 'image' // bundle-relative path to a colocated image (or `/assets/…` site-wide)
   | 'reference' // stores a target object's id, displays its title
-  | 'video'; // external URL, provider-allowlisted
+  | 'embed' // external URL rendered as an iframe (video, game, map, …)
+  | 'video'; // deprecated alias for `embed`, kept so existing schemas keep loading
 
 /** One field's declaration within a content type's schema. */
 export interface FieldSchema {
